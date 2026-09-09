@@ -1,0 +1,3 @@
+# Python dependencies for Vercel Serverless Functions
+# The extractor and resolver use the Python standard library (urllib, re, json, http.server, base64)
+# No external pip packages required
