@@ -14,6 +14,7 @@ import { ExtractedItem, ExtractionResponse } from "../types";
 import { parseHTMLClientSide, isBlockedTestLink } from "../utils/pythonExtractor";
 import { SAMPLES } from "../data/samples";
 import { ArrowUpRight } from "lucide-react";
+import { EpisodeButtonsGenerator } from "./EpisodeButtonsGenerator";
 
 interface ExtractorCardProps {
   onNotify: (text: string, type?: "success" | "error" | "info") => void;
@@ -451,8 +452,19 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
           </div>
         </div>
 
+        {/* Generated Episode Buttons (HTML) Section */}
+        {items.length > 0 && (
+          <EpisodeButtonsGenerator items={items} onNotify={onNotify} />
+        )}
+
         {/* Results List - strictly vertical stacking */}
         <div id="results" className="grid gap-2.5 mt-3 w-full max-w-full">
+          {items.length > 0 && (
+            <div className="flex items-center justify-between px-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <span>Extracted Source Links ({items.length})</span>
+              <span className="text-[11px] normal-case text-slate-400">Raw URLs & Element Tags</span>
+            </div>
+          )}
           {items.length === 0 ? (
             <div className="py-7 px-3 text-center text-[#727b83] text-xs sm:text-sm border border-dashed border-[#ccd3d9] rounded-[10px] bg-slate-50/50">
               Paste a webpage URL and click “Extract Links” or choose a preset

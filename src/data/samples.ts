@@ -8,6 +8,31 @@ export interface SamplePage {
 
 export const SAMPLES: SamplePage[] = [
   {
+    id: "series_episodes",
+    name: "Series Episodes (Multi-Link)",
+    description: "Contains multiple episode action buttons (Ep 1 to 6) for testing alternating button generator.",
+    url: "https://animexstream.example/series/season-1",
+    html: `<!DOCTYPE html>
+<html>
+<head><title>Season 1 Episodes Stream</title></head>
+<body>
+  <header><nav><a href="https://animexstream.example">Home</a></nav></header>
+  <main class="episode-list">
+    <h1>Season 1 - Full Episode Links</h1>
+    <div class="episodes-grid">
+      <a class="btn-download" href="https://stream.example/watch/s1-ep01">Watch Episode 01 HD</a>
+      <a class="btn-download" href="https://stream.example/watch/s1-ep02">Watch Episode 02 HD</a>
+      <a class="btn-download" href="https://stream.example/watch/s1-ep03">Watch Episode 03 HD</a>
+      <a class="btn-download" href="https://stream.example/watch/s1-ep04">Watch Episode 04 HD</a>
+      <a class="btn-download" href="https://stream.example/watch/s1-ep05">Watch Episode 05 HD</a>
+      <a class="btn-download" href="https://stream.example/watch/s1-ep06">Watch Episode 06 HD</a>
+    </div>
+  </main>
+  <footer><p>&copy; 2026 AnimeXStream</p></footer>
+</body>
+</html>`
+  },
+  {
     id: "streaming",
     name: "Media Streaming Portal",
     description: "Contains server buttons, download mirrors, and nav items to ignore.",
