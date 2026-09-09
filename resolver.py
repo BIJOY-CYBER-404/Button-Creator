@@ -18,6 +18,7 @@ Capabilities:
 """
 
 import base64
+import gzip
 import http.cookiejar
 import ipaddress
 import json
@@ -25,6 +26,7 @@ import re
 import socket
 import sys
 import time
+import zlib
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlparse
@@ -203,6 +205,24 @@ def extract_js_redirect(html):
 
     return None
 
+def decompress_body(raw, content_encoding=""):
+    """Decompresses gzip or deflate responses when returned by proxies or CDNs."""
+    if not raw:
+        return b""
+    try:
+        if raw.startswith(b"\x1f\x8b") or "gzip" in (content_encoding or "").lower():
+            return gzip.decompress(raw)
+        if (
+            raw.startswith(b"\x78\x9c")
+            or raw.startswith(b"\x78\x01")
+            or raw.startswith(b"\x78\xda")
+            or "deflate" in (content_encoding or "").lower()
+        ):
+            return zlib.decompress(raw)
+    except Exception:
+        pass
+    return raw
+
 # =========================================================
 # Safelink / Blogger / WordPress Shortener Multi-Step Bypass
 # =========================================================
@@ -213,28 +233,65 @@ def extract_safelink_bypass(html, current_url):
     Handles:
     - Step 1: Array of next blog destinations + ?url=<token>
     - Step 2: Unpacking token and constructing mainUrl (https://go.<domain>/<token>)
+    - Direct base64-encoded destination URLs in query parameters
     """
     if not html:
         return None
 
     parsed_cur = urlparse(current_url)
     qs = parse_qs(parsed_cur.query)
-    raw_url_param = qs.get("url", [""])[0]
+
+    # Collect token parameter
+    raw_url_param = ""
+    for k in ("url", "link", "token", "go", "safelink", "dest", "id", "data"):
+        if k in qs and qs[k]:
+            raw_url_param = qs[k][0].strip()
+            if raw_url_param:
+                break
+
+    # If raw_url_param decodes directly to a valid destination URL, return immediately
+    if raw_url_param:
+        try:
+            unquoted = unquote(raw_url_param)
+            padding = (4 - len(unquoted) % 4) % 4
+            decoded_try = base64.b64decode(unquoted + ("=" * padding)).decode("utf-8", errors="ignore").strip()
+            if decoded_try.startswith(("http://", "https://")):
+                p = urlparse(decoded_try)
+                if p.hostname and not is_blocked_host(p.hostname) and p.hostname != parsed_cur.hostname:
+                    return decoded_try
+        except Exception:
+            pass
 
     # Pattern A: Next step via array of destination blogs
     # let t = ["https://mydverse.com/..."] ... window.location.href = `${n}?url=${e}`
-    match_arr = re.search(r'let\s+t\s*=\s*\[\s*["\'](https?://[^"\']+)["\']', html)
-    if match_arr and ("safelink" in html.lower() or "footerCountdown" in html or "headerCard" in html):
-        next_base = match_arr.group(1).strip()
-        if raw_url_param:
-            return f"{next_base}?url={raw_url_param}"
-        return next_base
+    # Detect arrays of URLs in script
+    for arr_match in re.finditer(r'(?:let|var|const)\s+[a-zA-Z0-9_$]+\s*=\s*\[([\s\S]*?)\]', html):
+        content = arr_match.group(1)
+        urls = re.findall(r'["\'](https?://[^"\']+)["\']', content)
+        if urls:
+            valid_urls = [u for u in urls if not is_blocked_host(urlparse(u).hostname)]
+            if valid_urls:
+                next_base = valid_urls[0].strip()
+                if raw_url_param and "url=" not in next_base:
+                    sep = "&" if "?" in next_base else "?"
+                    return f"{next_base}{sep}url={raw_url_param}"
+                return next_base
 
-    # Pattern B: mainUrl = `https://go.<domain>/${decodedUrl}`
-    match_main = re.search(r'mainUrl\s*=\s*[`"\']([^`"\';]+)[`"\']', html)
-    if match_main:
-        template = match_main.group(1).strip()
-        # Decode base64 token from query param if present
+    # Pattern B: Template string redirects:
+    # const mainUrl = `https://go.sohojgyan.com/${decodedUrl}`
+    match_template = re.search(
+        r'(?:mainUrl|goUrl|redirectUrl|targetUrl|finalUrl|destUrl|realUrl|shortUrl)\s*=\s*[`"\']([^`"\';]+)[`"\']',
+        html,
+        re.I
+    )
+    if not match_template:
+        # Also check any backtick string containing https://go...${...}
+        match_template = re.search(r'`(https?://go\.[^`\s]+?\$\{[^`\}]+\}[^`\s]*)`', html)
+
+    if match_template:
+        template = match_template.group(1).strip()
+        # Decode token from query param if present
+        token = ""
         if raw_url_param:
             try:
                 unquoted = unquote(raw_url_param)
@@ -242,27 +299,27 @@ def extract_safelink_bypass(html, current_url):
                 token = base64.b64decode(unquoted + ("=" * padding)).decode("utf-8", errors="ignore").strip()
             except Exception:
                 token = raw_url_param
-        else:
-            token = ""
 
-        if "${decodedUrl}" in template and token:
-            return template.replace("${decodedUrl}", token)
-        elif "${" in template and token:
-            return re.sub(r"\$\{[^}]+\}", token, template)
-        elif template.startswith("http://") or template.startswith("https://"):
+        if token:
+            replaced = re.sub(r"\$\{[^}]+\}", token, template)
+            if replaced.startswith(("http://", "https://")):
+                return replaced
+        elif template.startswith(("http://", "https://")) and not ("${" in template):
             return template
 
     # Pattern C: Direct go link in script
     # window.location.href = "https://go..."
-    match_go = re.search(r'["\'](https?://go\.[^"\']+)["\']', html)
+    match_go = re.search(r'["\'](https?://go\.[^"\'\s<>()]+)["\']', html)
     if match_go:
-        candidate = match_go.group(1)
+        candidate = match_go.group(1).strip()
         if raw_url_param and candidate.endswith("/"):
             try:
                 token = base64.b64decode(unquote(raw_url_param)).decode("utf-8", errors="ignore").strip()
                 return f"{candidate}{token}"
             except Exception:
                 pass
+        elif not candidate.endswith("/"):
+            return candidate
 
     return None
 
@@ -270,18 +327,35 @@ def extract_safelink_bypass(html, current_url):
 # AdLinkFly / MightyScripts AJAX Form Bypasser
 # =========================================================
 
+class FormInputParser(HTMLParser):
+    """Accurately collects all hidden & text inputs from a form block."""
+    def __init__(self):
+        super().__init__()
+        self.inputs = {}
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() == "input":
+            d = dict(attrs)
+            name = d.get("name")
+            if name:
+                val = d.get("value", "")
+                # Clean URL-encoded tokens that CakePHP or scripts pre-encoded
+                if "%" in val:
+                    val = unquote(val)
+                self.inputs[name] = val
+
 def extract_adlinkfly_bypass(html, current_url, cookie_jar, opener):
     """
     Detects and bypasses AdLinkFly shorteners (e.g. go.sohojgyan.com, shrinkme.io)
     Finds <form id="go-link" action="/links/go">, collects tokens, waits counter,
     and sends AJAX POST to retrieve the final URL from JSON response.
+    Includes auto-retry and clock-skew tolerance.
     """
     if not html:
         return None
 
     form_match = re.search(r'<form[^>]*id=["\']go-link["\'][^>]*action=["\']([^"\']+)["\'][\s\S]*?</form>', html, re.I)
     if not form_match:
-        # Also check for form with action containing /links/go
         form_match = re.search(r'<form[^>]*action=["\']([^"\']*/links/go)["\'][\s\S]*?</form>', html, re.I)
 
     if not form_match:
@@ -291,49 +365,64 @@ def extract_adlinkfly_bypass(html, current_url, cookie_jar, opener):
     target_action = urljoin(current_url, action)
     form_html = form_match.group(0)
 
-    # Collect form inputs
-    inputs = re.findall(r'<input[^>]+name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']', form_html)
-    # Also reversed value / name
-    inputs_rev = re.findall(r'<input[^>]+value=["\']([^"\']*)["\'][^>]*name=["\']([^"\']+)["\']', form_html)
-    form_data = {n: v for n, v in inputs}
-    for v, n in inputs_rev:
-        form_data.setdefault(n, v)
+    # Collect form inputs using robust parser
+    parser = FormInputParser()
+    try:
+        parser.feed(form_html)
+        form_data = parser.inputs
+    except Exception:
+        # Fallback regex
+        inputs = re.findall(r'<input[^>]+name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']', form_html)
+        form_data = {n: (unquote(v) if "%" in v else v) for n, v in inputs}
 
     if not form_data:
         return None
 
     # Determine counter wait time
     counter_match = re.search(r'counter_value["\']?\s*:\s*(\d+)', html)
-    wait_sec = min(int(counter_match.group(1)), 4) if counter_match else 3
+    required_counter = int(counter_match.group(1)) if counter_match else 5
+    # Wait required counter time plus small margin to avoid clock-skew rejection
+    wait_sec = max(required_counter, 4) + 0.5
+    time.sleep(wait_sec)
 
-    if wait_sec > 0:
-        time.sleep(wait_sec)
+    # Try sending AJAX POST, retrying once if server indicates clock-skew / Bad Request
+    parsed_curr = urlparse(current_url)
+    origin = f"{parsed_curr.scheme}://{parsed_curr.netloc}"
 
-    try:
-        post_bytes = urlencode(form_data).encode("utf-8")
-        req = Request(
-            target_action,
-            data=post_bytes,
-            headers={
-                "User-Agent": USER_AGENT,
-                "Accept": "application/json, text/javascript, */*; q=0.01",
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "X-Requested-With": "XMLHttpRequest",
-                "Referer": current_url,
-                "Origin": f"{urlparse(current_url).scheme}://{urlparse(current_url).netloc}",
-                "Connection": "close",
-            }
-        )
-        resp = opener.open(req, timeout=TIMEOUT)
-        body = resp.read().decode("utf-8", errors="replace")
-        data = json.loads(body)
+    for attempt in range(2):
+        try:
+            post_bytes = urlencode(form_data).encode("utf-8")
+            req = Request(
+                target_action,
+                data=post_bytes,
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Accept": "application/json, text/javascript, */*; q=0.01",
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Referer": current_url,
+                    "Origin": origin,
+                    "Sec-Fetch-Dest": "empty",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Connection": "close",
+                }
+            )
+            resp = opener.open(req, timeout=TIMEOUT)
+            raw = resp.read()
+            raw = decompress_body(raw, resp.headers.get("Content-Encoding", ""))
+            body = raw.decode("utf-8", errors="replace")
+            data = json.loads(body)
 
-        if isinstance(data, dict):
-            bypassed_url = data.get("url")
-            if bypassed_url and (bypassed_url.startswith("http://") or bypassed_url.startswith("https://")):
-                return bypassed_url
-    except Exception:
-        pass
+            if isinstance(data, dict):
+                bypassed_url = data.get("url")
+                if bypassed_url and (bypassed_url.startswith("http://") or bypassed_url.startswith("https://")):
+                    return bypassed_url
+        except Exception:
+            pass
+
+        if attempt == 0:
+            time.sleep(2.0)
 
     return None
 
@@ -341,14 +430,25 @@ def extract_adlinkfly_bypass(html, current_url, cookie_jar, opener):
 # Button / Link Candidate Detection
 # =========================================================
 
+KNOWN_AD_DOMAINS = {
+    "doubleclick.net", "googleads.g.doubleclick.net", "adservice.google.com",
+    "facebook.com", "twitter.com", "t.me", "telegram.me", "instagram.com",
+    "highperformancegate.com", "topcreativeformat.com", "profitablecpmrate.com",
+    "adsterra.com", "monetag.com", "outbrain.com", "taboola.com"
+}
+
 def extract_button_bypass(html, current_url):
     """
     Finds direct Get Link or Skip Ad anchor links that lead to final destinations.
+    Ignores advertisements, sponsors, and AdLinkFly pages.
     """
     if not html:
         return None
 
-    # Matches <a ... href="..." ...>Get Link</a> or class="get-link" / "btn-download"
+    # Never extract buttons from AdLinkFly pages — their buttons are ad popups
+    if 'id="go-link"' in html or '/links/go' in html:
+        return None
+
     button_patterns = [
         r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(?:\s*<[^>]+>)*\s*(?:Get Link|Skip Ad|Proceed to link|Direct Link|Click here to continue)\s*(?:<[^>]+>)*\s*</a>',
         r'<a\s+[^>]*class=["\'][^"\']*(?:get-link|skip-ad|btn-download|download-btn)[^"\']*["\'][^>]*href=["\']([^"\']+)["\']',
@@ -358,10 +458,13 @@ def extract_button_bypass(html, current_url):
         match = re.search(pat, html, re.I)
         if match:
             candidate = match.group(1).strip()
-            if candidate and not candidate.startswith("javascript:") and not candidate.startswith("#"):
+            if candidate and not candidate.startswith(("javascript:", "#", "mailto:", "tel:")):
                 abs_url = urljoin(current_url, candidate)
                 parsed = urlparse(abs_url)
                 if parsed.scheme in ("http", "https") and parsed.hostname and not is_blocked_host(parsed.hostname):
+                    # Filter known ad networks and root homepages
+                    if parsed.hostname in KNOWN_AD_DOMAINS:
+                        continue
                     if abs_url != current_url:
                         return abs_url
 
@@ -472,6 +575,7 @@ def resolve_url(start_url):
         if "text/html" in content_type or "application/xhtml" in content_type or not content_type:
             try:
                 raw = response.read(MAX_HTML_BYTES)
+                raw = decompress_body(raw, resp_headers.get("Content-Encoding", ""))
                 html = raw.decode("utf-8", errors="replace")
             except Exception:
                 html = ""
