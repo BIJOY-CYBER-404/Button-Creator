@@ -31,6 +31,7 @@ export const EpisodeButtonsGenerator: React.FC<EpisodeButtonsGeneratorProps> = (
   const [includeHoverStyle, setIncludeHoverStyle] = useState<boolean>(true);
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [sessionEndText, setSessionEndText] = useState<string>("- Session End -");
+  const [marginSide, setMarginSide] = useState<number>(20);
   const [previewDevice, setPreviewDevice] = useState<"responsive" | "mobile" | "desktop">("responsive");
 
   // Generate button list
@@ -54,25 +55,27 @@ export const EpisodeButtonsGenerator: React.FC<EpisodeButtonsGeneratorProps> = (
     if (!buttonsData.length) return "";
 
     const targetAttr = openInNewTab ? ' target="_blank" rel="noopener noreferrer"' : "";
+    const totalMargin = marginSide * 2;
+    const baseStyle = `width: calc(100% - ${totalMargin}px); max-width: 440px; margin-left: ${marginSide}px; margin-right: ${marginSide}px; height: auto; min-height: 48px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; padding: 13px 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 600; text-align: center; text-decoration: none; border-radius: 8px; transition: all 0.2s ease; cursor: pointer; user-select: none; line-height: 1.35;`;
 
     const buttonsHtml = buttonsData
       .map((btn) => {
         if (btn.isFilled) {
-          // First button: Filled Blue (Mobile: 400px, Desktop: 600px, Height: Auto, no icon)
-          return `  <a href="${btn.url}"${targetAttr} class="ep-btn ep-btn-filled" style="width: 400px; max-width: 100%; height: auto; min-height: 48px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; padding: 13px 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 600; text-align: center; text-decoration: none; border-radius: 8px; transition: all 0.2s ease; background-color: #2563eb; color: #ffffff; border: 1.5px solid #2563eb; box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25); cursor: pointer;">${btn.label}</a>`;
+          // First button: Filled Blue (Mobile width, 20px left-right margin, Height: Auto, no icon)
+          return `  <a href="${btn.url}"${targetAttr} class="ep-btn ep-btn-filled" style="${baseStyle} background-color: #2563eb; color: #ffffff; border: 1.5px solid #2563eb; box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);">${btn.label}</a>`;
         } else {
-          // Second button: Outlined Blue with low filled color opacity (Mobile: 400px, Desktop: 600px, Height: Auto, no icon)
-          return `  <a href="${btn.url}"${targetAttr} class="ep-btn ep-btn-outlined" style="width: 400px; max-width: 100%; height: auto; min-height: 48px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; padding: 13px 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 600; text-align: center; text-decoration: none; border-radius: 8px; transition: all 0.2s ease; background-color: rgba(37, 99, 235, 0.08); color: #2563eb; border: 1.5px solid #2563eb; cursor: pointer;">${btn.label}</a>`;
+          // Second button: Outlined Blue with low filled color opacity (Mobile width, 20px left-right margin, Height: Auto, no icon)
+          return `  <a href="${btn.url}"${targetAttr} class="ep-btn ep-btn-outlined" style="${baseStyle} background-color: rgba(37, 99, 235, 0.08); color: #2563eb; border: 1.5px solid #2563eb;">${btn.label}</a>`;
         }
       })
       .join("\n");
 
     const sessionEndHtml = sessionEndText
-      ? `\n  <div class="ep-session-end" style="margin-top: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; color: #dc2626; text-align: center; letter-spacing: 0.5px;">${sessionEndText}</div>`
+      ? `\n  <div class="ep-session-end" style="margin-top: 14px; margin-left: ${marginSide}px; margin-right: ${marginSide}px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; color: #dc2626; text-align: center; letter-spacing: 0.5px;">${sessionEndText}</div>`
       : "";
 
     if (includeHoverStyle) {
-      return `<!-- Episode Buttons (Mobile: 400px, Desktop: 600px, Height: Auto, Blue Combo: Alternating Filled & Outlined) -->
+      return `<!-- Episode Buttons (Mobile Width, ${marginSide}px Left-Right Margin, Height: Auto, Blue Combo: Alternating Filled & Outlined) -->
 <style>
   .episodes-container {
     display: flex;
@@ -80,11 +83,14 @@ export const EpisodeButtonsGenerator: React.FC<EpisodeButtonsGeneratorProps> = (
     align-items: center;
     gap: 14px;
     width: 100%;
-    margin: 16px 0;
+    margin: 16px auto;
+    box-sizing: border-box;
   }
   .ep-btn {
-    width: 400px;
-    max-width: 100%;
+    width: calc(100% - ${totalMargin}px);
+    max-width: 440px;
+    margin-left: ${marginSide}px;
+    margin-right: ${marginSide}px;
     height: auto;
     min-height: 48px;
     box-sizing: border-box;
@@ -103,16 +109,22 @@ export const EpisodeButtonsGenerator: React.FC<EpisodeButtonsGeneratorProps> = (
     user-select: none;
     line-height: 1.35;
   }
-  @media (min-width: 768px) {
-    .ep-btn {
-      width: 600px !important;
-    }
+  .ep-btn-filled {
+    background-color: #2563eb;
+    color: #ffffff !important;
+    border: 1.5px solid #2563eb;
+    box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
   }
   .ep-btn-filled:hover {
     background-color: #1d4ed8 !important;
     border-color: #1d4ed8 !important;
     transform: translateY(-1px);
     box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35) !important;
+  }
+  .ep-btn-outlined {
+    background-color: rgba(37, 99, 235, 0.08);
+    color: #2563eb !important;
+    border: 1.5px solid #2563eb;
   }
   .ep-btn-outlined:hover {
     background-color: rgba(37, 99, 235, 0.16) !important;
@@ -121,6 +133,8 @@ export const EpisodeButtonsGenerator: React.FC<EpisodeButtonsGeneratorProps> = (
   }
   .ep-session-end {
     margin-top: 14px;
+    margin-left: ${marginSide}px;
+    margin-right: ${marginSide}px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     font-size: 15px;
     font-weight: 700;
@@ -134,18 +148,11 @@ ${buttonsHtml}${sessionEndHtml}
 </div>`;
     }
 
-    return `<!-- Episode Buttons (Mobile: 400px, Desktop: 600px, Height: Auto, Pure HTML) -->
-<style>
-  @media (min-width: 768px) {
-    .ep-btn {
-      width: 600px !important;
-    }
-  }
-</style>
-<div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; margin: 16px 0;">
+    return `<!-- Episode Buttons (Mobile Width, ${marginSide}px Left-Right Margin, Height: Auto, Pure HTML) -->
+<div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; margin: 16px auto; box-sizing: border-box;">
 ${buttonsHtml}${sessionEndHtml}
 </div>`;
-  }, [buttonsData, openInNewTab, includeHoverStyle, sessionEndText]);
+  }, [buttonsData, openInNewTab, includeHoverStyle, sessionEndText, marginSide]);
 
   const copyHtml = async () => {
     if (!generatedHtml) return;
@@ -193,11 +200,11 @@ ${buttonsHtml}${sessionEndHtml}
                 Generated Episode Buttons HTML
               </h2>
               <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-semibold">
-                Mobile 400px • Desktop 600px
+                Mobile Width • {marginSide}px Margin
               </span>
             </div>
             <p className="text-xs text-slate-600">
-              Responsive width (400px mobile, 600px desktop) • Height auto-match • 1 per row • Alternating filled &amp; outlined • Red &ldquo;- Session End -&rdquo; footer
+              Mobile width with {marginSide}px margin from left-right • Height auto-match • 1 per row • Alternating filled &amp; outlined • Red &ldquo;- Session End -&rdquo; footer
             </p>
           </div>
         </div>
@@ -266,6 +273,19 @@ ${buttonsHtml}${sessionEndHtml}
                 onChange={(e) => setStartNumber(parseInt(e.target.value, 10) || 0)}
                 className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium outline-none focus:border-blue-500"
               />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium">Margin L/R:</span>
+              <input
+                type="number"
+                min={0}
+                max={80}
+                value={marginSide}
+                onChange={(e) => setMarginSide(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                className="w-14 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium outline-none focus:border-blue-500"
+              />
+              <span className="text-[11px] text-slate-400">px</span>
             </div>
 
             <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -352,7 +372,7 @@ ${buttonsHtml}${sessionEndHtml}
                   </span>
                   <span className="text-[11px] text-slate-300">•</span>
                   <span className="text-blue-600 text-xs font-medium">
-                    Height Auto-matches
+                    Width = Mobile Width (20px Margin L/R)
                   </span>
                 </div>
 
@@ -366,7 +386,7 @@ ${buttonsHtml}${sessionEndHtml}
                         ? "bg-white text-blue-600 shadow-2xs font-semibold"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
-                    title="Responsive auto width (400px on mobile, 600px on desktop)"
+                    title="Responsive width with left-right margins"
                   >
                     <span>Auto (Responsive)</span>
                   </button>
@@ -378,10 +398,10 @@ ${buttonsHtml}${sessionEndHtml}
                         ? "bg-white text-blue-600 shadow-2xs font-semibold"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
-                    title="Preview mobile width (400px)"
+                    title="Preview in 390px mobile viewport"
                   >
                     <Smartphone className="w-3.5 h-3.5" />
-                    <span>Mobile (400px)</span>
+                    <span>Mobile Screen (390px)</span>
                   </button>
                   <button
                     type="button"
@@ -391,70 +411,95 @@ ${buttonsHtml}${sessionEndHtml}
                         ? "bg-white text-blue-600 shadow-2xs font-semibold"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
-                    title="Preview desktop width (600px)"
+                    title="Preview on desktop"
                   >
                     <Monitor className="w-3.5 h-3.5" />
-                    <span>Desktop (600px)</span>
+                    <span>Desktop (Centered)</span>
                   </button>
                 </div>
               </div>
 
-              {/* Render the buttons: Mobile 400px, Desktop 600px, Height auto-match */}
-              <div className="flex flex-col items-center gap-3.5 w-full my-3">
-                {buttonsData.map((btn) => {
-                  const widthClass =
+              {/* Render the buttons: Mobile width with 20px margin from left-right, Height auto-match */}
+              <div className="w-full my-3 flex justify-center">
+                <div
+                  className={`w-full transition-all duration-200 ${
                     previewDevice === "mobile"
-                      ? "w-[400px] max-w-full"
-                      : previewDevice === "desktop"
-                      ? "w-[600px] max-w-full"
-                      : "w-[400px] md:w-[600px] max-w-full";
+                      ? "max-w-[390px] bg-slate-50/70 border border-slate-300/80 rounded-2xl p-3 shadow-inner"
+                      : "max-w-2xl"
+                  }`}
+                >
+                  {previewDevice === "mobile" && (
+                    <div className="text-[10px] font-medium text-slate-500 pb-2 mb-3 border-b border-slate-200 flex items-center justify-between px-1 select-none">
+                      <span className="text-blue-600 font-mono">|← {marginSide}px</span>
+                      <span className="font-semibold text-slate-700">Mobile Viewport (390px)</span>
+                      <span className="text-blue-600 font-mono">{marginSide}px →|</span>
+                    </div>
+                  )}
 
-                  if (btn.isFilled) {
-                    return (
-                      <a
-                        key={btn.id}
-                        href={btn.url}
-                        target={openInNewTab ? "_blank" : undefined}
-                        rel={openInNewTab ? "noopener noreferrer" : undefined}
-                        className={`${widthClass} h-auto min-h-[48px] inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 select-none text-center`}
+                  <div className="flex flex-col items-center gap-3.5 w-full">
+                    {buttonsData.map((btn) => {
+                      const buttonStyle: React.CSSProperties = {
+                        width: `calc(100% - ${marginSide * 2}px)`,
+                        maxWidth: "440px",
+                        marginLeft: `${marginSide}px`,
+                        marginRight: `${marginSide}px`,
+                        boxSizing: "border-box",
+                      };
+
+                      if (btn.isFilled) {
+                        return (
+                          <a
+                            key={btn.id}
+                            href={btn.url}
+                            target={openInNewTab ? "_blank" : undefined}
+                            rel={openInNewTab ? "noopener noreferrer" : undefined}
+                            className="h-auto min-h-[48px] inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 select-none text-center"
+                            style={{
+                              ...buttonStyle,
+                              backgroundColor: "#2563eb",
+                              color: "#ffffff",
+                              border: "1.5px solid #2563eb",
+                              boxShadow: "0 2px 5px rgba(37, 99, 235, 0.25)",
+                            }}
+                          >
+                            <span>{btn.label}</span>
+                          </a>
+                        );
+                      } else {
+                        return (
+                          <a
+                            key={btn.id}
+                            href={btn.url}
+                            target={openInNewTab ? "_blank" : undefined}
+                            rel={openInNewTab ? "noopener noreferrer" : undefined}
+                            className="h-auto min-h-[48px] inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 cursor-pointer hover:shadow-xs hover:-translate-y-0.5 active:scale-95 select-none text-center"
+                            style={{
+                              ...buttonStyle,
+                              backgroundColor: "rgba(37, 99, 235, 0.08)",
+                              color: "#2563eb",
+                              border: "1.5px solid #2563eb",
+                            }}
+                          >
+                            <span>{btn.label}</span>
+                          </a>
+                        );
+                      }
+                    })}
+
+                    {sessionEndText && (
+                      <div
+                        className="mt-3 text-base font-bold tracking-wide text-red-600 select-none text-center"
                         style={{
-                          backgroundColor: "#2563eb",
-                          color: "#ffffff",
-                          border: "1.5px solid #2563eb",
-                          boxShadow: "0 2px 5px rgba(37, 99, 235, 0.25)",
+                          color: "#dc2626",
+                          marginLeft: `${marginSide}px`,
+                          marginRight: `${marginSide}px`,
                         }}
                       >
-                        <span>{btn.label}</span>
-                      </a>
-                    );
-                  } else {
-                    return (
-                      <a
-                        key={btn.id}
-                        href={btn.url}
-                        target={openInNewTab ? "_blank" : undefined}
-                        rel={openInNewTab ? "noopener noreferrer" : undefined}
-                        className={`${widthClass} h-auto min-h-[48px] inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 cursor-pointer hover:shadow-xs hover:-translate-y-0.5 active:scale-95 select-none text-center`}
-                        style={{
-                          backgroundColor: "rgba(37, 99, 235, 0.08)",
-                          color: "#2563eb",
-                          border: "1.5px solid #2563eb",
-                        }}
-                      >
-                        <span>{btn.label}</span>
-                      </a>
-                    );
-                  }
-                })}
-
-                {sessionEndText && (
-                  <div
-                    className="mt-3 text-base font-bold tracking-wide text-red-600 select-none text-center"
-                    style={{ color: "#dc2626" }}
-                  >
-                    {sessionEndText}
+                        {sessionEndText}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-500">
@@ -469,7 +514,7 @@ ${buttonsHtml}${sessionEndHtml}
                   </span>
                   <span className="text-slate-300">|</span>
                   <span className="font-medium text-slate-700">
-                    Mobile: 400px • Desktop: 600px • Height: Auto
+                    Width: Mobile Width • Margin: {marginSide}px L/R • Height: Auto
                   </span>
                 </div>
                 <button
