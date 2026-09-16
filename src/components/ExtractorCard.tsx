@@ -530,11 +530,23 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
                   {onNavigateToResolver && (
                     <button
                       onClick={() => onNavigateToResolver(item.url)}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2.5 py-1.5 rounded-[6px] font-medium cursor-pointer transition-colors flex items-center gap-1"
-                      title="Inspect redirect chain in URL Resolver"
+                      className={`text-xs px-2.5 py-1.5 rounded-[6px] font-medium cursor-pointer transition-colors flex items-center gap-1.5 ${
+                        /shrt\.|tinyurl|bit\.ly|t\.co|goo\.gl|is\.gd|cutt\.ly|rebrand\.ly|sohojgyan/i.test(
+                          item.url
+                        )
+                          ? "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                      }`}
+                      title="Inspect and resolve full redirect chain in URL Resolver"
                     >
-                      <ArrowUpRight className="w-3 h-3 text-slate-500" />
-                      <span>Trace Redirects</span>
+                      <ArrowUpRight className="w-3 h-3 text-current" />
+                      <span>
+                        {/shrt\.|tinyurl|bit\.ly|t\.co|goo\.gl|is\.gd|cutt\.ly|rebrand\.ly|sohojgyan/i.test(
+                          item.url
+                        )
+                          ? "Resolve Shortlink"
+                          : "Trace Redirects"}
+                      </span>
                     </button>
                   )}
                 </div>

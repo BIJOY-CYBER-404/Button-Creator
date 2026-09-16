@@ -23,8 +23,14 @@ TIMEOUT = 15
 
 ACTION_WORDS = {
     "download", "watch", "stream", "play", "open", "direct",
-    "server", "link", "get", "view", "continue", "mirror",
+    "server", "link", "links", "get", "view", "continue", "mirror",
     "xcloud", "filemoon", "streamtape", "doodstream", "mixdrop",
+    "episode", "episodes", "ep", "wise", "gdrive", "drive", "mediafire", "mega"
+}
+
+VOID_ELEMENTS = {
+    "area", "base", "br", "col", "embed", "hr", "img", "input",
+    "link", "meta", "param", "source", "track", "wbr"
 }
 
 INTERNAL_NAV_WORDS = {
@@ -109,6 +115,10 @@ def looks_like_action_link(item, base_url):
     if is_blocked_test_link(text, url):
         return False
 
+    # Exclude comment response and reply anchor links
+    if "#respond" in url.lower() or "cancel reply" in text.lower() or "comment-reply" in css:
+        return False
+
     words = normalized_words(f"{text} {css}")
 
     if words & ACTION_WORDS:
@@ -147,7 +157,6 @@ class ElementCollector(HTMLParser):
         # If the input HTML doesn't contain a <body> tag, assume the snippet is inside the body
         self._body = not has_explicit_body
         self._had_explicit_body = has_explicit_body
-        self._excluded = 0
         self._capture = None
         self._capture_depth = 0
 
@@ -166,67 +175,69 @@ class ElementCollector(HTMLParser):
                 return True
         return False
 
+    def _is_excluded(self):
+        return any(frame.get("excluded", False) for frame in self._stack)
+
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
         attrs_dict = {str(k).lower(): (v or "") for k, v in attrs}
 
         if tag == "body":
             self._body = True
-            self._stack.append({"tag": tag, "item": None})
+            self._stack.append({"tag": tag, "item": None, "excluded": False})
             return
 
         if not self._body:
-            self._stack.append({"tag": tag, "item": None})
+            self._stack.append({"tag": tag, "item": None, "excluded": False})
             return
 
-        if self._excluded:
-            self._excluded += 1
-            self._stack.append({"tag": tag, "item": None})
-            return
-
-        if self.excluded_container(tag, attrs_dict):
-            self._excluded = 1
-            self._stack.append({"tag": tag, "item": None})
-            return
+        is_excluded = self._is_excluded() or self.excluded_container(tag, attrs_dict)
 
         item = None
-        href = attrs_dict.get("href")
-        onclick = attrs_dict.get("onclick")
-        data_url = attrs_dict.get("data-url") or attrs_dict.get("data-href") or attrs_dict.get("data-link")
-        formaction = attrs_dict.get("formaction")
-        action = attrs_dict.get("action")
-        input_type = attrs_dict.get("type", "").lower()
+        if not is_excluded:
+            href = attrs_dict.get("href")
+            onclick = attrs_dict.get("onclick")
+            data_url = attrs_dict.get("data-url") or attrs_dict.get("data-href") or attrs_dict.get("data-link")
+            formaction = attrs_dict.get("formaction")
+            action = attrs_dict.get("action")
+            input_type = attrs_dict.get("type", "").lower()
 
-        if tag == "a" and href:
-            item = {"type":"link","tag":"a","raw_url":href,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
-        elif tag == "button":
-            raw = formaction or data_url or extract_url_from_js(onclick)
-            if raw:
-                item = {"type":"button","tag":"button","raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
-        elif tag == "input" and input_type in ("button", "submit"):
-            raw = formaction or data_url or extract_url_from_js(onclick)
-            if raw:
-                item = {"type":input_type,"tag":"input","raw_url":raw,"text":attrs_dict.get("value",""),"class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
-        elif tag == "form":
-            raw = action or data_url
-            if raw:
-                item = {"type":"form","tag":"form","raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
-        elif onclick or data_url:
-            raw = data_url or extract_url_from_js(onclick)
-            if raw:
-                item = {"type":"clickable","tag":tag,"raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            if tag == "a" and href:
+                item = {"type":"link","tag":"a","raw_url":href,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            elif tag == "button":
+                raw = formaction or data_url or extract_url_from_js(onclick)
+                if raw:
+                    item = {"type":"button","tag":"button","raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            elif tag == "input" and input_type in ("button", "submit"):
+                raw = formaction or data_url or extract_url_from_js(onclick)
+                if raw:
+                    item = {"type":input_type,"tag":"input","raw_url":raw,"text":attrs_dict.get("value",""),"class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            elif tag == "form":
+                raw = action or data_url
+                if raw:
+                    item = {"type":"form","tag":"form","raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            elif onclick or data_url:
+                raw = data_url or extract_url_from_js(onclick)
+                if raw:
+                    item = {"type":"clickable","tag":tag,"raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
 
-        self._stack.append({"tag": tag, "item": item})
+        if tag in VOID_ELEMENTS:
+            if item:
+                self.results.append(item)
+            return
+
+        self._stack.append({"tag": tag, "item": item, "excluded": is_excluded})
         if item is not None:
             self._capture = item
             self._capture_depth = len(self._stack)
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
-        self.handle_endtag(tag)
+        if tag not in VOID_ELEMENTS:
+            self.handle_endtag(tag)
 
     def handle_data(self, data):
-        if not self._body or self._excluded or self._capture is None:
+        if not self._body or self._is_excluded() or self._capture is None:
             return
         text = clean_text(data)
         if text:
@@ -246,9 +257,6 @@ class ElementCollector(HTMLParser):
         depth = idx + 1
         self._stack = self._stack[:idx]
 
-        if self._excluded:
-            self._excluded -= 1
-
         if self._capture is not None and depth <= self._capture_depth:
             if self._capture not in self.results:
                 self.results.append(self._capture)
@@ -257,7 +265,6 @@ class ElementCollector(HTMLParser):
 
         if tag == "body":
             self._body = False
-            self._excluded = 0
             self._capture = None
             self._capture_depth = 0
 

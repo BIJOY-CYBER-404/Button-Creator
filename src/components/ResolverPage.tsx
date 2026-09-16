@@ -17,26 +17,36 @@ import { ResolveResult, ResolveResponse } from "../types";
 interface ResolverPageProps {
   onNotify: (text: string, type?: "success" | "error" | "info") => void;
   onNavigateToExtractor: (prefillUrl?: string) => void;
+  initialUrl?: string;
 }
 
 const SAMPLE_SHORT_URLS = [
+  { name: "Fanletter Drama Page (mydverse.com)", url: "https://mydverse.com/2026/09/fanletter-please-korean-drama-in-hindi/" },
+  { name: "Fanletter Shortlink (shrt.sohojgyan)", url: "https://shrt.sohojgyan.com/Ij03ndJ" },
   { name: "Safelink (shrt.sohojgyan)", url: "https://shrt.sohojgyan.com/zEgAAfE" },
   { name: "TinyURL Demo", url: "https://tinyurl.com/2p86f345" },
   { name: "Bitly Sample", url: "https://bit.ly/3uL8x2V" },
-  { name: "Google HTTP 301", url: "http://google.com" },
 ];
 
 export const ResolverPage: React.FC<ResolverPageProps> = ({
   onNotify,
   onNavigateToExtractor,
+  initialUrl,
 }) => {
-  const [urlInput, setUrlInput] = useState<string>("");
+  const [urlInput, setUrlInput] = useState<string>(initialUrl || "");
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [result, setResult] = useState<ResolveResult | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [copiedStepIndex, setCopiedStepIndex] = useState<number | null>(null);
   const [activePill, setActivePill] = useState<string>("Short URL Resolver");
+
+  React.useEffect(() => {
+    if (initialUrl && initialUrl.trim()) {
+      setUrlInput(initialUrl.trim());
+      handleResolve(initialUrl.trim());
+    }
+  }, [initialUrl]);
 
   const handleCopyStepUrl = async (url: string, stepIndex: number) => {
     try {

@@ -110,5 +110,12 @@ export const SAMPLES: SamplePage[] = [
     description: "Standard live HTTP test to https://example.com",
     url: "https://example.com",
     html: ""
+  },
+  {
+    id: "fanletter_please",
+    name: "Fanletter Please (Korean Drama)",
+    description: "Live page from mydverse.com containing the 'Episode Wise Links' shortener button.",
+    url: "https://mydverse.com/2026/09/fanletter-please-korean-drama-in-hindi/",
+    html: ""
   }
 ];

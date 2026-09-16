@@ -17,6 +17,7 @@ export default function App() {
   const [showPythonLogic, setShowPythonLogic] = useState<boolean>(false);
   const [activePage, setActivePage] = useState<ActivePage>("extractor");
   const [prefillExtractorUrl, setPrefillExtractorUrl] = useState<string>("");
+  const [prefillResolverUrl, setPrefillResolverUrl] = useState<string>("");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = (text: string, type: "success" | "error" | "info" = "info") => {
@@ -40,10 +41,11 @@ export default function App() {
   };
 
   const navigateToResolver = (url?: string) => {
-    setActivePage("resolver");
     if (url) {
-      addToast("Opened URL Resolver", "info");
+      setPrefillResolverUrl(url);
+      addToast("Transferred short link to URL Resolver", "info");
     }
+    setActivePage("resolver");
   };
 
   return (
@@ -94,7 +96,8 @@ export default function App() {
             />
           ) : (
             <ResolverPage
-              key="resolver"
+              key={`resolver-${prefillResolverUrl}`}
+              initialUrl={prefillResolverUrl}
               onNotify={addToast}
               onNavigateToExtractor={navigateToExtractor}
             />

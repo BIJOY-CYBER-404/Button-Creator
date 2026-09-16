@@ -427,7 +427,7 @@ def extract_adlinkfly_bypass(html, current_url, cookie_jar, opener):
     return None
 
 # =========================================================
-# Button / Link Candidate Detection
+# Button / Link Candidate Detection & Robust Element Collector
 # =========================================================
 
 KNOWN_AD_DOMAINS = {
@@ -437,9 +437,155 @@ KNOWN_AD_DOMAINS = {
     "adsterra.com", "monetag.com", "outbrain.com", "taboola.com"
 }
 
+VOID_ELEMENTS = {
+    "area", "base", "br", "col", "embed", "hr", "img", "input",
+    "link", "meta", "param", "source", "track", "wbr"
+}
+
+def clean_text(text):
+    if not text:
+        return ""
+    return re.sub(r"\s+", " ", str(text)).strip()
+
+def extract_url_from_js(code):
+    if not code:
+        return None
+    match = re.search(r"""(?:window\.open|location\.href\s*=|\.assign|\.replace)\s*\(\s*['"]([^'"]+)['"]""", code)
+    if match:
+        return match.group(1).strip()
+    match2 = re.search(r"""['"](https?://[^'"]+)['"]""", code)
+    if match2:
+        return match2.group(1).strip()
+    return None
+
+class RobustElementCollector(HTMLParser):
+    EXCLUDED_TAGS = {"header", "footer", "nav", "aside", "script", "style", "noscript"}
+    EXCLUDED_MARKERS = (
+        "header", "footer", "navbar", "navigation", "nav-menu", "navmenu",
+        "main-menu", "mainmenu", "menu", "menus", "sidebar", "site-header",
+        "site-footer", "topbar", "top-bar", "bottombar", "bottom-bar",
+        "breadcrumb", "breadcrumbs"
+    )
+
+    def __init__(self, has_explicit_body=True):
+        super().__init__(convert_charrefs=True)
+        self.results = []
+        self._stack = []
+        self._body = not has_explicit_body
+        self._capture = None
+        self._capture_depth = 0
+
+    @classmethod
+    def excluded_container(cls, tag, attrs):
+        if tag in cls.EXCLUDED_TAGS:
+            return True
+        vals = [attrs.get(k, "").lower() for k in ("id", "class", "aria-label", "title", "role")]
+        role = attrs.get("role", "").lower()
+        if role in {"navigation", "banner", "contentinfo", "complementary", "menubar", "menu"}:
+            return True
+        text = " ".join(vals)
+        normalized = text.replace("_", "-")
+        for marker in cls.EXCLUDED_MARKERS:
+            if re.search(r"(?:^|[\s-])" + re.escape(marker) + r"(?:$|[\s-])", normalized):
+                return True
+        return False
+
+    def _is_excluded(self):
+        return any(frame.get("excluded", False) for frame in self._stack)
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        attrs_dict = {str(k).lower(): (v or "") for k, v in attrs}
+
+        if tag == "body":
+            self._body = True
+            self._stack.append({"tag": tag, "item": None, "excluded": False})
+            return
+
+        if not self._body:
+            self._stack.append({"tag": tag, "item": None, "excluded": False})
+            return
+
+        is_excluded = self._is_excluded() or self.excluded_container(tag, attrs_dict)
+
+        item = None
+        if not is_excluded:
+            href = attrs_dict.get("href")
+            onclick = attrs_dict.get("onclick")
+            data_url = attrs_dict.get("data-url") or attrs_dict.get("data-href") or attrs_dict.get("data-link")
+            formaction = attrs_dict.get("formaction")
+            action = attrs_dict.get("action")
+            input_type = attrs_dict.get("type", "").lower()
+
+            if tag == "a" and href:
+                item = {"type":"link","tag":"a","raw_url":href,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            elif tag == "button":
+                raw = formaction or data_url or extract_url_from_js(onclick)
+                if raw:
+                    item = {"type":"button","tag":"button","raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            elif tag == "input" and input_type in ("button", "submit"):
+                raw = formaction or data_url or extract_url_from_js(onclick)
+                if raw:
+                    item = {"type":input_type,"tag":"input","raw_url":raw,"text":attrs_dict.get("value",""),"class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            elif tag == "form":
+                raw = action or data_url
+                if raw:
+                    item = {"type":"form","tag":"form","raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+            elif onclick or data_url:
+                raw = data_url or extract_url_from_js(onclick)
+                if raw:
+                    item = {"type":"clickable","tag":tag,"raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+
+        if tag in VOID_ELEMENTS:
+            if item:
+                self.results.append(item)
+            return
+
+        self._stack.append({"tag": tag, "item": item, "excluded": is_excluded})
+        if item is not None:
+            self._capture = item
+            self._capture_depth = len(self._stack)
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_ELEMENTS:
+            self.handle_endtag(tag)
+
+    def handle_data(self, data):
+        if not self._body or self._is_excluded() or self._capture is None:
+            return
+        text = clean_text(data)
+        if text:
+            self._capture["text"] = clean_text(self._capture.get("text", "") + " " + text)
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if not self._stack:
+            return
+        idx = None
+        for i in range(len(self._stack)-1, -1, -1):
+            if self._stack[i]["tag"] == tag:
+                idx = i
+                break
+        if idx is None:
+            return
+        depth = idx + 1
+        self._stack = self._stack[:idx]
+
+        if self._capture is not None and depth <= self._capture_depth:
+            if self._capture not in self.results:
+                self.results.append(self._capture)
+            self._capture = None
+            self._capture_depth = 0
+
+        if tag == "body":
+            self._body = False
+            self._capture = None
+            self._capture_depth = 0
+
 def extract_button_bypass(html, current_url):
     """
-    Finds direct Get Link or Skip Ad anchor links that lead to final destinations.
+    Finds direct Get Link, Episode Wise Links, or Skip Ad anchor links that lead to final destinations.
     Ignores advertisements, sponsors, and AdLinkFly pages.
     """
     if not html:
@@ -449,9 +595,85 @@ def extract_button_bypass(html, current_url):
     if 'id="go-link"' in html or '/links/go' in html:
         return None
 
+    # 1. Use Robust Element Collector to find real content buttons/links
+    collector = RobustElementCollector(has_explicit_body="<body" in html.lower())
+    try:
+        collector.feed(html)
+        collector.close()
+    except Exception:
+        pass
+
+    candidates = []
+    current_parsed = urlparse(current_url)
+    gdrive_count = 0
+
+    for item in collector.results:
+        raw_url = item.get("raw_url", "").strip()
+        if not raw_url or raw_url.startswith(("javascript:", "#", "mailto:", "tel:")):
+            continue
+        if "#respond" in raw_url.lower() or "cancel reply" in item.get("text", "").lower() or "comment-reply" in item.get("class", "").lower():
+            continue
+
+        abs_url = urljoin(current_url, raw_url)
+        parsed = urlparse(abs_url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname or is_blocked_host(parsed.hostname):
+            continue
+        if parsed.hostname in KNOWN_AD_DOMAINS:
+            continue
+        if abs_url == current_url:
+            continue
+
+        css = item.get("class", "").lower()
+        text = item.get("text", "")
+        text_lower = text.lower()
+        hostname_lower = parsed.hostname.lower()
+
+        if "drive.google.com" in hostname_lower or "mega.nz" in hostname_lower or "mediafire.com" in hostname_lower:
+            gdrive_count += 1
+
+        score = 0
+        # Priority 1: Shortener domains or known link redirectors
+        if any(marker in hostname_lower for marker in ("shrt.", "sohojgyan", "tinyurl", "bit.ly", "goo.gl", "is.gd", "cutt.ly", "shrink", "ouo.")):
+            score += 200
+
+        # Priority 2: Key classes like btn-slide, get-link, etc.
+        if "btn-slide" in css:
+            score += 160
+        elif any(c in css for c in ("get-link", "skip-ad", "btn-download", "download-btn", "btn-primary", "btn-success")):
+            score += 100
+        elif "btn" in css or "button" in css:
+            score += 40
+
+        # Priority 3: Action phrases in text
+        if "episode wise" in text_lower or "episode links" in text_lower:
+            score += 140
+        elif any(w in text_lower for w in ("get link", "skip ad", "proceed", "continue to link", "direct link", "click here to continue", "fast download")):
+            score += 90
+        elif any(w in text_lower for w in ("download", "episodes", "episode", "links", "link", "mirror", "server")):
+            score += 40
+
+        # Priority 4: Cross-domain redirection
+        if parsed.hostname != current_parsed.hostname:
+            score += 25
+
+        if score >= 60:
+            label = text if text else ("Button Link" if "btn" in css else "Action Link")
+            candidates.append((score, abs_url, label))
+
+    # If page contains 2 or more direct destination file downloads (e.g. multi-episode blogspot page)
+    # and NONE is an explicit shortener, treat the current page as the multi-episode destination
+    if gdrive_count >= 2 and not any(score >= 200 for score, _, _ in candidates):
+        return None
+
+    if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        top = candidates[0]
+        return (top[1], top[2])
+
+    # Fallback to regex patterns if collector didn't find candidate
     button_patterns = [
-        r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(?:\s*<[^>]+>)*\s*(?:Get Link|Skip Ad|Proceed to link|Direct Link|Click here to continue)\s*(?:<[^>]+>)*\s*</a>',
-        r'<a\s+[^>]*class=["\'][^"\']*(?:get-link|skip-ad|btn-download|download-btn)[^"\']*["\'][^>]*href=["\']([^"\']+)["\']',
+        r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(?:\s*<[^>]+>)*\s*(?:Episode Wise Links|Get Link|Skip Ad|Proceed to link|Direct Link|Click here to continue)\s*(?:<[^>]+>)*\s*</a>',
+        r'<a\s+[^>]*class=["\'][^"\']*(?:btn-slide|get-link|skip-ad|btn-download|download-btn)[^"\']*["\'][^>]*href=["\']([^"\']+)["\']',
     ]
 
     for pat in button_patterns:
@@ -462,11 +684,10 @@ def extract_button_bypass(html, current_url):
                 abs_url = urljoin(current_url, candidate)
                 parsed = urlparse(abs_url)
                 if parsed.scheme in ("http", "https") and parsed.hostname and not is_blocked_host(parsed.hostname):
-                    # Filter known ad networks and root homepages
                     if parsed.hostname in KNOWN_AD_DOMAINS:
                         continue
                     if abs_url != current_url:
-                        return abs_url
+                        return (abs_url, "Button Link")
 
     return None
 
@@ -642,17 +863,22 @@ def resolve_url(start_url):
                     current_url = next_url
                     continue
 
-            # E. Button Link Candidate (Get Link, Direct Link)
-            button_url = extract_button_bypass(html, current_url)
-            if button_url and button_url != current_url and button_url not in visited:
-                chain.append({
-                    "step": number,
-                    "url": current_url,
-                    "status": status,
-                    "type": "Action Link Bypass"
-                })
-                current_url = button_url
-                continue
+            # E. Button Link Candidate (Get Link, Episode Wise Links, Direct Link)
+            button_res = extract_button_bypass(html, current_url)
+            if button_res:
+                if isinstance(button_res, tuple):
+                    button_url, button_label = button_res
+                else:
+                    button_url, button_label = button_res, "Action Button"
+                if button_url and button_url != current_url and button_url not in visited:
+                    chain.append({
+                        "step": number,
+                        "url": current_url,
+                        "status": status,
+                        "type": f"Action Link Bypass: {button_label}" if button_label else "Action Link Bypass"
+                    })
+                    current_url = button_url
+                    continue
 
         try:
             response.close()
