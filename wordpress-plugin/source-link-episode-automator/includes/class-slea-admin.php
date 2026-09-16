@@ -111,9 +111,12 @@ class SLEA_Admin {
             wp_send_json_error(array('message' => 'Permission denied.'));
         }
 
-        $pending_count = (int)wp_count_posts('post')->pending;
-        $stats = SLEA_Cron::get_run_stats();
+        $post_counts   = wp_count_posts('post');
+        $pending_count = isset($post_counts->pending) ? (int)$post_counts->pending : 0;
+        $ready_count   = isset($post_counts->ready) ? (int)$post_counts->ready : 0;
+        $stats         = SLEA_Cron::get_run_stats();
         $stats['pending_posts'] = $pending_count;
+        $stats['ready_posts']   = $ready_count;
 
         wp_send_json_success($stats);
     }
@@ -218,7 +221,9 @@ class SLEA_Admin {
             'order'          => 'DESC',
         ));
 
-        $total_pending = $pending_query->found_posts;
+        $post_counts   = wp_count_posts('post');
+        $total_pending = isset($post_counts->pending) ? (int)$post_counts->pending : $pending_query->found_posts;
+        $total_ready   = isset($post_counts->ready) ? (int)$post_counts->ready : 0;
         $stats = SLEA_Cron::get_run_stats();
         $next_cron = wp_next_scheduled(SLEA_Cron::CRON_HOOK);
         $logs = SLEA_Logger::get_logs();
@@ -233,7 +238,7 @@ class SLEA_Admin {
         <div class="wrap slea-admin-wrap">
             <h1 class="wp-heading-inline">Source Link & Episode Button Automator</h1>
             <p class="description">
-                Engineered for WP Automatic & RSS feeds with 10+ pending posts. Detects source links, bypasses shorteners/redirects, generates isolated Gutenberg HTML blocks, and auto-publishes without mixing data.
+                Engineered for WP Automatic & RSS feeds with 10+ pending posts. Detects source links, bypasses shorteners/redirects, generates isolated Gutenberg HTML blocks, and marks posts as Ready without mixing data.
             </p>
             <hr class="wp-header-end">
 
@@ -242,6 +247,14 @@ class SLEA_Admin {
                 <div class="slea-stat-card">
                     <div class="slea-stat-value" id="slea-stat-pending-count"><?php echo intval($total_pending); ?></div>
                     <div class="slea-stat-label">Pending Posts in Queue</div>
+                </div>
+
+                <div class="slea-stat-card">
+                    <div class="slea-stat-value" id="slea-stat-ready-count" style="color:#0a8553;"><?php echo intval($total_ready); ?></div>
+                    <div class="slea-stat-label">
+                        Ready Posts
+                        <span class="slea-badge slea-badge-success" style="display:inline-block; margin-top:4px;">Processed &amp; Ready</span>
+                    </div>
                 </div>
 
                 <div class="slea-stat-card">
@@ -351,7 +364,7 @@ class SLEA_Admin {
                                     <td><?php echo get_the_date('Y-m-d H:i'); ?></td>
                                     <td>
                                         <button class="button button-small button-primary slea-btn-process-post" data-post-id="<?php echo $p_id; ?>" <?php echo !$source_info ? 'disabled' : ''; ?>>
-                                            Automate & Publish
+                                            Automate & Mark Ready
                                         </button>
                                         <a href="<?php echo get_preview_post_link($p_id); ?>" target="_blank" class="button button-small">Preview</a>
                                     </td>
@@ -466,12 +479,14 @@ class SLEA_Admin {
                             </td>
                         </tr>
                         <tr>
-                            <th scope="row">Auto Publish Post</th>
+                            <th scope="row">Post Status on Success</th>
                             <td>
-                                <label>
-                                    <input type="checkbox" name="slea_settings[auto_publish]" value="1" <?php checked(!empty($settings['auto_publish'])); ?>>
-                                    Automatically transition post status from <strong>Pending</strong> to <strong>Published</strong> after injecting buttons
-                                </label>
+                                <p style="margin-top:0;">
+                                    <span class="slea-badge slea-badge-success" style="background:#eafaf1; color:#0a8553; border:1px solid #c2ebd5; padding:4px 10px; border-radius:12px; font-weight:600; font-size:12px;">Status: Ready</span>
+                                </p>
+                                <p class="description">
+                                    When processing succeeds, the post is automatically updated and marked as <strong>Ready</strong> (registered with identical permissions and restrictions to <strong>Pending</strong>). If any step of the process fails, the post remains safely in <strong>Pending</strong> status.
+                                </p>
                             </td>
                         </tr>
                         <tr>

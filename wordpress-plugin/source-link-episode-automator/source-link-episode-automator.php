@@ -28,6 +28,84 @@ require_once SLEA_PLUGIN_DIR . 'includes/class-slea-cron.php';
 require_once SLEA_PLUGIN_DIR . 'includes/class-slea-admin.php';
 
 /**
+ * Register custom post status "Ready" with identical permissions and restrictions as "Pending"
+ * - Not publicly readable by unauthenticated users (public => false)
+ * - Protected from search and public archive visibility (protected => true)
+ * - Shows in admin "All" posts table and has its own status filter tab in edit.php
+ */
+function slea_register_ready_post_status() {
+    register_post_status('ready', array(
+        'label'                     => _x('Ready', 'post status', 'source-link-automator'),
+        'public'                    => false,
+        'protected'                 => true,
+        'exclude_from_search'       => false,
+        'show_in_admin_all_list'    => true,
+        'show_in_admin_status_list' => true,
+        'label_count'               => _n_noop('Ready <span class="count">(%s)</span>', 'Ready <span class="count">(%s)</span>', 'source-link-automator'),
+    ));
+}
+add_action('init', 'slea_register_ready_post_status');
+
+/**
+ * Display "— Ready" label in post states column in WordPress admin (edit.php)
+ */
+function slea_display_ready_post_state($states, $post) {
+    if (get_post_status($post->ID) === 'ready') {
+        $states['ready'] = _x('Ready', 'post status', 'source-link-automator');
+    }
+    return $states;
+}
+add_filter('display_post_states', 'slea_display_ready_post_state', 10, 2);
+
+/**
+ * Add "Ready" option to Classic Editor status dropdown in the Publish meta box
+ */
+function slea_add_ready_to_classic_editor() {
+    global $post;
+    if (!$post || $post->post_type !== 'post') {
+        return;
+    }
+    $status = get_post_status($post->ID);
+    $is_ready = ($status === 'ready');
+    ?>
+    <script type="text/javascript">
+    jQuery(document).ready(function($) {
+        var $select = $('select#post_status');
+        if ($select.length && $select.find('option[value="ready"]').length === 0) {
+            $select.append('<option value="ready" <?php selected($is_ready, true); ?>><?php esc_html_e('Ready', 'source-link-automator'); ?></option>');
+        }
+        <?php if ($is_ready) : ?>
+            $('#post-status-display').text('<?php echo esc_js(__('Ready', 'source-link-automator')); ?>');
+        <?php endif; ?>
+    });
+    </script>
+    <?php
+}
+add_action('post_submitbox_misc_actions', 'slea_add_ready_to_classic_editor');
+
+/**
+ * Add "Ready" option to Quick Edit & Bulk Edit status dropdowns in edit.php
+ */
+function slea_add_ready_to_quick_edit() {
+    global $post_type;
+    if ($post_type !== 'post') {
+        return;
+    }
+    ?>
+    <script type="text/javascript">
+    jQuery(document).ready(function($) {
+        $('select[name="_status"]').each(function() {
+            if ($(this).find('option[value="ready"]').length === 0) {
+                $(this).append('<option value="ready"><?php esc_html_e('Ready', 'source-link-automator'); ?></option>');
+            }
+        });
+    });
+    </script>
+    <?php
+}
+add_action('admin_footer-edit.php', 'slea_add_ready_to_quick_edit');
+
+/**
  * Activation hook: setup cron schedules and default options
  */
 function slea_activate_plugin() {

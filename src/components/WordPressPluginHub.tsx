@@ -67,15 +67,18 @@ export const WordPressPluginHub: React.FC<WordPressPluginHubProps> = ({
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#e8def8] text-[#4a4458]">
                   WordPress Plugin v2.0.0
                 </span>
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#14532d]">
+                  "Ready" Status Support
+                </span>
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#c2e7ff] text-[#001d35]">
                   WP Automatic Ready
                 </span>
-                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#14532d]">
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#e8def8] text-[#4a4458]">
                   Strict Data Isolation
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-[#444746] mt-0.5">
-                Engineered for WP Automatic & RSS feeds with 10+ pending posts: bypasses shorteners/redirects, generates isolated Gutenberg Custom HTML blocks, and auto-publishes on schedule without mixing buttons.
+                Engineered for WP Automatic & RSS feeds with 10+ pending posts: bypasses shorteners/redirects, generates isolated Gutenberg Custom HTML blocks, and marks posts as Ready without mixing buttons.
               </p>
             </div>
           </div>
@@ -169,10 +172,10 @@ export const WordPressPluginHub: React.FC<WordPressPluginHubProps> = ({
                   3
                 </div>
                 <h4 className="text-xs font-semibold text-[#1f1f1f]">
-                  Replace HTML & Publish
+                  Replace HTML & Mark Ready
                 </h4>
                 <p className="text-[11px] text-[#444746] mt-1 leading-relaxed">
-                  The plugin deletes the "Source Link" text, replaces it with styled mobile-width buttons, and switches status from <strong>Pending &rarr; Published</strong>.
+                  The plugin replaces the "Source Link" hyperlink in-place with styled mobile-width buttons, and switches status from <strong>Pending &rarr; Ready</strong> (with identical permissions as Pending). If processing fails, it remains in <strong>Pending</strong>.
                 </p>
               </div>
             </div>

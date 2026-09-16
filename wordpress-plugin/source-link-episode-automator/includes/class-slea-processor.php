@@ -62,12 +62,17 @@ class SLEA_Processor {
             $source_link_info = self::find_source_link($content, $post_id, $settings);
             if (!$source_link_info || empty($source_link_info['url'])) {
                 self::release_post_lock($post_id);
-                $msg = "Post #{$post_id} ('{$post->post_title}') - No Source Link or shortlink found in content or custom fields.";
+                // On failure: ensure post remains in 'pending' status
+                if ($post->post_status !== 'pending') {
+                    wp_update_post(array('ID' => $post_id, 'post_status' => 'pending'));
+                }
+                $msg = "Post #{$post_id} ('{$post->post_title}') - No Source Link or shortlink found in content or custom fields. Post kept in 'pending' status.";
                 SLEA_Logger::log($msg, 'info', $post_id);
                 return array(
                     'success' => false,
                     'post_id' => $post_id,
                     'title'   => $post->post_title,
+                    'status'  => 'pending',
                     'error'   => 'No matching Source Link found in post content or metadata.',
                 );
             }
@@ -121,7 +126,11 @@ class SLEA_Processor {
 
             if (empty($extracted_items)) {
                 self::release_post_lock($post_id);
-                $msg = "Post #{$post_id}: Resolved to {$final_url} ({$resolve_res['redirects']} hops), but found 0 extractable links.";
+                // On failure: ensure post remains in 'pending' status
+                if ($post->post_status !== 'pending') {
+                    wp_update_post(array('ID' => $post_id, 'post_status' => 'pending'));
+                }
+                $msg = "Post #{$post_id}: Resolved to {$final_url} ({$resolve_res['redirects']} hops), but found 0 extractable links. Post kept in 'pending' status.";
                 SLEA_Logger::log($msg, 'warning', $post_id);
                 return array(
                     'success'       => false,
@@ -131,6 +140,7 @@ class SLEA_Processor {
                     'shortened_url' => $shortened_url,
                     'final'         => $final_url,
                     'redirects'     => $resolve_res['redirects'],
+                    'status'        => 'pending',
                     'error'         => 'No action links found on destination page.',
                 );
             }
@@ -158,30 +168,30 @@ class SLEA_Processor {
                 update_post_meta($post_id, '_slea_processed_at', current_time('mysql'));
             }
 
-            // Step 10: Only after the post has been processed successfully and HTML inserted, change status to Published
+            // Step 10: Only after the post has been processed successfully and HTML inserted, mark status as 'ready'
             $update_data = array(
                 'ID'           => $post_id,
                 'post_content' => $new_content,
+                'post_status'  => 'ready', // Mark as 'Ready' status instead of Published
             );
-
-            $will_publish = !empty($settings['auto_publish']);
-            if ($will_publish && ($post->post_status === 'pending' || $force_publish)) {
-                $update_data['post_status'] = 'publish';
-            }
 
             $res = wp_update_post($update_data, true);
             if (is_wp_error($res)) {
+                // If update failed, ensure post remains in 'pending' status
+                wp_update_post(array(
+                    'ID'          => $post_id,
+                    'post_status' => 'pending',
+                ));
                 self::release_post_lock($post_id);
                 $err = $res->get_error_message();
-                SLEA_Logger::log("Post #{$post_id}: Update error: {$err}", 'error', $post_id);
-                return array('success' => false, 'error' => $err);
+                SLEA_Logger::log("Post #{$post_id}: Update error: {$err}. Kept in 'pending' status.", 'error', $post_id);
+                return array('success' => false, 'post_id' => $post_id, 'status' => 'pending', 'error' => $err);
             }
 
             // Release lock after successful write
             self::release_post_lock($post_id);
 
-            $status_text = $will_publish ? 'Published' : 'Updated';
-            $success_msg = "Post #{$post_id} ('{$post->post_title}') successfully {$status_text}! Resolved {$resolve_res['redirects']} hops, injected " . count($extracted_items) . " episode buttons into Custom HTML block.";
+            $success_msg = "Post #{$post_id} ('{$post->post_title}') successfully marked as 'Ready'! Resolved {$resolve_res['redirects']} hops, injected " . count($extracted_items) . " episode buttons into Custom HTML block.";
             SLEA_Logger::log($success_msg, 'success', $post_id);
 
             return array(
@@ -189,18 +199,26 @@ class SLEA_Processor {
                 'post_id'         => $post_id,
                 'title'           => $post->post_title,
                 'source_url'      => $source_url,
+                'shortened_url'   => $shortened_url,
                 'final_url'       => $final_url,
                 'redirects'       => $resolve_res['redirects'],
                 'extracted_count' => count($extracted_items),
                 'items'           => $extracted_items,
-                'published'       => $will_publish,
+                'status'          => 'ready',
             );
 
         } catch (Exception $e) {
+            // If any process failed, ensure post status remains 'pending'
+            if ($post && $post->post_status !== 'pending') {
+                wp_update_post(array(
+                    'ID'          => $post_id,
+                    'post_status' => 'pending',
+                ));
+            }
             self::release_post_lock($post_id);
             $err_msg = $e->getMessage();
-            SLEA_Logger::log("Post #{$post_id} Exception: {$err_msg}", 'error', $post_id);
-            return array('success' => false, 'post_id' => $post_id, 'error' => $err_msg);
+            SLEA_Logger::log("Post #{$post_id} Exception: {$err_msg}. Kept in 'pending' status.", 'error', $post_id);
+            return array('success' => false, 'post_id' => $post_id, 'status' => 'pending', 'error' => $err_msg);
         }
     }
 
@@ -240,6 +258,15 @@ class SLEA_Processor {
                     'type'  => 'anchor_match',
                 );
             }
+        }
+
+        // Pattern 1b: Text label "Source link:" preceding an anchor tag
+        if (preg_match('/(?:<p[^>]*>)?\s*(?:<strong>|<b>)?\s*source\s*link:?\s*(?:<\/strong>|<\/b>)?\s*(<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>.*?<\/a>)\s*(?:<\/p>)?/is', $content, $m)) {
+            return array(
+                'url'   => trim($m[2]),
+                'match' => $m[0],
+                'type'  => 'labeled_source_link',
+            );
         }
 
         // Pattern 2: Hyperlinks matching url_pattern (e.g. mydverse.com/2026/09/...)
@@ -351,7 +378,15 @@ class SLEA_Processor {
             );
         }
 
-        // 3. Priority A: Anchor whose text or inner element contains "Episode Wise Links" / "Episode Wise Link" / "Episode-Wise"
+        // 3. Priority A: Direct link to shrt.sohojgyan.com/<token>
+        if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/shrt\.sohojgyan\.com\/[a-zA-Z0-9_-]+)[\'"]/i', $page_html, $m)) {
+            return array(
+                'url'    => trim($m[1]),
+                'source' => 'domain_shrt_sohojgyan',
+            );
+        }
+
+        // 4. Priority B: Anchor whose text or inner element contains "Episode Wise Links" / "Episode Wise Link" / "Episode-Wise"
         if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]*?<\/a>/i', $page_html, $m)) {
             $candidate = trim($m[1]);
             $resolved = SLEA_Resolver::resolve_relative_url($source_url, $candidate);
@@ -361,21 +396,13 @@ class SLEA_Processor {
             );
         }
 
-        // 4. Priority B: Container or span with "Episode Wise Links" followed nearby by an <a> tag
+        // 5. Priority C: Container or span with "Episode Wise Links" followed nearby by an <a> tag
         if (preg_match('/(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]{0,300}?<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]/i', $page_html, $m)) {
             $candidate = trim($m[1]);
             $resolved = SLEA_Resolver::resolve_relative_url($source_url, $candidate);
             return array(
                 'url'    => $resolved,
                 'source' => 'heading_episode_wise_context',
-            );
-        }
-
-        // 5. Priority C: Direct link to shrt.sohojgyan.com/<token>
-        if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/shrt\.sohojgyan\.com\/[a-zA-Z0-9_-]+)[\'"]/i', $page_html, $m)) {
-            return array(
-                'url'    => trim($m[1]),
-                'source' => 'domain_shrt_sohojgyan',
             );
         }
 
@@ -395,25 +422,44 @@ class SLEA_Processor {
     }
 
     /**
-     * Replace Source Link match with Custom HTML block cleanly, stripping empty enclosing paragraphs,
-     * and ensuring the Custom HTML block is placed at the end of the post content.
+     * Replaces ONLY the "Source link" hyperlink in the post content with the generated output HTML code.
+     * Preserves all other post content (text, images, headings, paragraphs) completely intact and in place.
+     *
+     * @param string $content Full post content
+     * @param string|null $match The matched hyperlink markup (e.g. <a ...>Source link</a>)
+     * @param string $replacement_html The generated Custom HTML block
+     * @return string Modified content where only the Source Link hyperlink is replaced
      */
-    private static function replace_source_link($content, $match, $replacement_html) {
-        $clean_content = $content;
-        if (!empty($match)) {
-            $escaped_match = preg_quote($match, '/');
-            // Check if $match is the entire or main content of an enclosing <p>...</p> paragraph
-            $para_pattern = '/<p[^>]*>\s*(?:<strong>|<b>)?\s*' . $escaped_match . '\s*(?:<\/strong>|<\/b>)?\s*<\/p>/is';
-
-            if (preg_match($para_pattern, $clean_content)) {
-                $clean_content = preg_replace($para_pattern, '', $clean_content, 1);
-            } else {
-                $clean_content = str_replace($match, '', $clean_content);
-            }
+    public static function replace_source_link($content, $match, $replacement_html) {
+        if (empty($match)) {
+            // If no inline match was found in post body (e.g. detected from post metadata),
+            // safely append the HTML block to the content without modifying existing text.
+            return rtrim($content) . "\n\n" . $replacement_html . "\n";
         }
 
-        // Clean trailing whitespace and append Custom HTML block at the end of the post
-        return rtrim($clean_content) . "\n\n" . $replacement_html . "\n";
+        $escaped_match = preg_quote($match, '/');
+
+        // 1. If the match is the sole or primary content of an enclosing <p>...</p> paragraph,
+        // replace that paragraph directly in-place:
+        $para_pattern = '/<p[^>]*>\s*(?:<strong>|<b>)?\s*' . $escaped_match . '\s*(?:<\/strong>|<\/b>)?\s*<\/p>/is';
+        if (preg_match($para_pattern, $content)) {
+            return preg_replace($para_pattern, $replacement_html, $content, 1);
+        }
+
+        // 2. If wrapped in bold/strong tags, replace in-place:
+        $strong_pattern = '/<(?:strong|b)>\s*' . $escaped_match . '\s*<\/(?:strong|b)>/is';
+        if (preg_match($strong_pattern, $content)) {
+            return preg_replace($strong_pattern, $replacement_html, $content, 1);
+        }
+
+        // 3. Direct in-place replacement of the hyperlink markup itself
+        $pos = strpos($content, $match);
+        if ($pos !== false) {
+            return substr_replace($content, $replacement_html, $pos, strlen($match));
+        }
+
+        // 4. Regex fallback replacement (1 occurrence only)
+        return preg_replace('/' . $escaped_match . '/s', $replacement_html, $content, 1);
     }
 
     /**

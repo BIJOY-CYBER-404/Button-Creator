@@ -81,10 +81,10 @@ jQuery(document).ready(function($) {
                         data.results.forEach(function(r) {
                             if (r.success) {
                                 successCount++;
-                                reportHtml += '<li style="color:#0a8553;">Post #' + r.post_id + ': Extracted ' + r.extracted_count + ' episode buttons & published successfully.</li>';
+                                reportHtml += '<li style="color:#0a8553;">Post #' + r.post_id + ': Extracted ' + r.extracted_count + ' episode buttons & marked as Ready.</li>';
                                 $('#slea-post-row-' + r.post_id).css('background-color', '#eafaf1').fadeOut(1200);
                             } else {
-                                reportHtml += '<li style="color:#d63638;">Post #' + r.post_id + ': ' + (r.error || r.message || 'Failed') + '</li>';
+                                reportHtml += '<li style="color:#d63638;">Post #' + r.post_id + ': ' + (r.error || r.message || 'Failed (kept as Pending)') + '</li>';
                             }
                         });
                     }
@@ -108,7 +108,7 @@ jQuery(document).ready(function($) {
 
     // Run ALL Pending Posts Sequentially
     $('#slea-btn-run-all').on('click', function() {
-        if (!confirm('This will sequentially process ALL pending posts in the queue one by one, bypassing redirects, generating isolated episode buttons, and auto-publishing. Continue?')) {
+        if (!confirm('This will sequentially process ALL pending posts in the queue one by one, bypassing redirects, generating isolated episode buttons, and marking each successful post as Ready. Continue?')) {
             return;
         }
 
@@ -132,7 +132,7 @@ jQuery(document).ready(function($) {
         function processNext() {
             if (index >= total) {
                 $btn.prop('disabled', false).html(originalText);
-                $fb.removeClass('notice-warning').addClass('notice-success').html('<strong>All Completed!</strong> Processed ' + total + ' pending posts (' + successCount + ' successfully published).').slideDown();
+                $fb.removeClass('notice-warning').addClass('notice-success').html('<strong>All Completed!</strong> Processed ' + total + ' pending posts (' + successCount + ' successfully marked as Ready).').slideDown();
                 setTimeout(function() {
                     location.reload();
                 }, 2000);
@@ -155,16 +155,16 @@ jQuery(document).ready(function($) {
                 success: function(res) {
                     if (res.success) {
                         successCount++;
-                        $currBtn.removeClass('button-primary').addClass('button-secondary').text('Published');
+                        $currBtn.removeClass('button-primary').addClass('button-secondary').text('Marked Ready');
                         $('#slea-post-row-' + postId).css('background-color', '#eafaf1').fadeOut(1000);
                     } else {
-                        $currBtn.text('Failed');
+                        $currBtn.text('Failed (Pending)');
                     }
                     index++;
                     processNext();
                 },
                 error: function() {
-                    $currBtn.text('Error');
+                    $currBtn.text('Error (Pending)');
                     index++;
                     processNext();
                 }
@@ -192,13 +192,13 @@ jQuery(document).ready(function($) {
             },
             success: function(res) {
                 if (res.success) {
-                    $btn.removeClass('button-primary').addClass('button-secondary').text('Published!');
+                    $btn.removeClass('button-primary').addClass('button-secondary').text('Ready');
                     var $row = $('#slea-post-row-' + postId);
                     $row.css('background-color', '#eafaf1');
-                    alert('Post #' + postId + ' successfully resolved and published with ' + res.data.extracted_count + ' episode buttons!');
+                    alert('Post #' + postId + ' successfully resolved and marked as Ready with ' + res.data.extracted_count + ' episode buttons!');
                 } else {
                     $btn.prop('disabled', false).text(originalText);
-                    alert('Failed to automate post #' + postId + ': ' + (res.data ? (res.data.error || res.data.message) : 'Error'));
+                    alert('Failed to automate post #' + postId + ': ' + (res.data ? (res.data.error || res.data.message) : 'Error') + '\nPost remains in Pending status.');
                 }
             },
             error: function(xhr, status, err) {
