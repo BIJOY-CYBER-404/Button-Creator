@@ -186,25 +186,25 @@ ${buttonsHtml}${sessionEndHtml}
   return (
     <div
       id="episode-buttons-generator-card"
-      className="w-full bg-gradient-to-b from-blue-50/70 via-white to-white rounded-[14px] p-4 sm:p-5 border border-blue-200/90 shadow-[0_4px_20px_rgba(37,99,235,0.08)] mb-4 transition-all"
+      className="w-full bg-[#fdfcff] rounded-[28px] p-5 sm:p-7 border border-[#e1e7f0] m3-elevation-1 mb-4 transition-all"
     >
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-blue-100">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-            <Sparkles className="w-4 h-4" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#f0f4f9]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#d3e3fd] text-[#041e49] flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5 text-[#0b57d0]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                Generated Episode Buttons HTML
+              <h2 className="text-base sm:text-lg font-semibold text-[#1f1f1f] tracking-tight">
+                Episode Buttons HTML Generator
               </h2>
-              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-semibold">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#c2e7ff] text-[#001d35] text-[11px] font-medium">
                 Mobile Width • {marginSide}px Margin
               </span>
             </div>
-            <p className="text-xs text-slate-600">
-              Mobile width with {marginSide}px margin from left-right • Height auto-match • 1 per row • Alternating filled &amp; outlined • Red &ldquo;- Session End -&rdquo; footer
+            <p className="text-xs text-[#444746] mt-0.5">
+              Mobile width with {marginSide}px margin L/R • Auto height • Alternating filled &amp; outlined • Red &ldquo;- Session End -&rdquo; footer
             </p>
           </div>
         </div>
@@ -213,37 +213,37 @@ ${buttonsHtml}${sessionEndHtml}
           <button
             id="btn-copy-generated-html"
             onClick={copyHtml}
-            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            className="h-10 px-5 bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-medium rounded-full m3-elevation-1 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5" />
+                <Check className="w-4 h-4" />
                 <span>HTML Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5" />
+                <Copy className="w-4 h-4" />
                 <span>Copy HTML</span>
               </>
             )}
           </button>
           <button
             onClick={downloadHtml}
-            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
+            className="h-10 px-4 bg-[#f0f4f9] hover:bg-[#e9eef6] text-[#444746] text-xs font-medium rounded-full flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Download HTML snippet"
           >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <Download className="w-4 h-4 text-[#444746]" />
             <span className="hidden sm:inline">Download</span>
           </button>
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-blue-100/50 rounded-lg cursor-pointer transition-colors"
+            className="p-2 text-[#444746] hover:text-[#1f1f1f] hover:bg-[#f0f4f9] rounded-full cursor-pointer transition-colors"
             title={isCollapsed ? "Expand generator" : "Collapse generator"}
           >
             {isCollapsed ? (
-              <ChevronDown className="w-4 h-4" />
+              <ChevronDown className="w-5 h-5" />
             ) : (
-              <ChevronUp className="w-4 h-4" />
+              <ChevronUp className="w-5 h-5" />
             )}
           </button>
         </div>
@@ -252,169 +252,169 @@ ${buttonsHtml}${sessionEndHtml}
       {!isCollapsed && (
         <>
           {/* Controls & Configuration Bar */}
-          <div className="flex flex-wrap items-center gap-3 pt-3 pb-3 text-xs text-slate-700">
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-medium">Text Prefix:</span>
+          <div className="flex flex-wrap items-center gap-3.5 pt-4 pb-4 text-xs text-[#444746]">
+            <div className="flex items-center gap-1.5 bg-[#f8fafd] px-3 py-1.5 rounded-full border border-[#e1e7f0]">
+              <span className="text-[#747775] font-medium">Prefix:</span>
               <input
                 type="text"
                 value={prefix}
                 onChange={(e) => setPrefix(e.target.value)}
                 placeholder="Episode"
-                className="w-24 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium outline-none focus:border-blue-500"
+                className="w-20 px-1 bg-transparent text-xs font-medium text-[#1f1f1f] outline-none"
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-medium">Start #:</span>
+            <div className="flex items-center gap-1.5 bg-[#f8fafd] px-3 py-1.5 rounded-full border border-[#e1e7f0]">
+              <span className="text-[#747775] font-medium">Start #:</span>
               <input
                 type="number"
                 min={0}
                 value={startNumber}
                 onChange={(e) => setStartNumber(parseInt(e.target.value, 10) || 0)}
-                className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium outline-none focus:border-blue-500"
+                className="w-12 px-1 bg-transparent text-xs font-medium text-[#1f1f1f] outline-none"
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-medium">Margin L/R:</span>
+            <div className="flex items-center gap-1.5 bg-[#f8fafd] px-3 py-1.5 rounded-full border border-[#e1e7f0]">
+              <span className="text-[#747775] font-medium">Margin:</span>
               <input
                 type="number"
                 min={0}
                 max={80}
                 value={marginSide}
                 onChange={(e) => setMarginSide(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                className="w-14 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium outline-none focus:border-blue-500"
+                className="w-12 px-1 bg-transparent text-xs font-medium text-[#1f1f1f] outline-none"
               />
-              <span className="text-[11px] text-slate-400">px</span>
+              <span className="text-[11px] text-[#747775]">px</span>
             </div>
 
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <label className="flex items-center gap-2 cursor-pointer select-none bg-[#f8fafd] px-3 py-1.5 rounded-full border border-[#e1e7f0]">
               <input
                 type="checkbox"
                 checked={padZeroes}
                 onChange={(e) => setPadZeroes(e.target.checked)}
-                className="rounded text-blue-600 focus:ring-0 w-3.5 h-3.5 accent-blue-600 cursor-pointer"
+                className="rounded border-[#747775] text-[#0b57d0] focus:ring-0 w-3.5 h-3.5 accent-[#0b57d0] cursor-pointer"
               />
-              <span className="text-slate-700">Two-digit numbers (01, 02...)</span>
+              <span className="text-[#444746]">Two-digit (01, 02)</span>
             </label>
 
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <label className="flex items-center gap-2 cursor-pointer select-none bg-[#f8fafd] px-3 py-1.5 rounded-full border border-[#e1e7f0]">
               <input
                 type="checkbox"
                 checked={openInNewTab}
                 onChange={(e) => setOpenInNewTab(e.target.checked)}
-                className="rounded text-blue-600 focus:ring-0 w-3.5 h-3.5 accent-blue-600 cursor-pointer"
+                className="rounded border-[#747775] text-[#0b57d0] focus:ring-0 w-3.5 h-3.5 accent-[#0b57d0] cursor-pointer"
               />
-              <span className="text-slate-700">Open in new tab (_blank)</span>
+              <span className="text-[#444746]">New tab (_blank)</span>
             </label>
 
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <label className="flex items-center gap-2 cursor-pointer select-none bg-[#f8fafd] px-3 py-1.5 rounded-full border border-[#e1e7f0]">
               <input
                 type="checkbox"
                 checked={includeHoverStyle}
                 onChange={(e) => setIncludeHoverStyle(e.target.checked)}
-                className="rounded text-blue-600 focus:ring-0 w-3.5 h-3.5 accent-blue-600 cursor-pointer"
+                className="rounded border-[#747775] text-[#0b57d0] focus:ring-0 w-3.5 h-3.5 accent-[#0b57d0] cursor-pointer"
               />
-              <span className="text-slate-700">Include &lt;style&gt; hover FX</span>
+              <span className="text-[#444746]">&lt;style&gt; hover FX</span>
             </label>
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-medium">End Text:</span>
+            <div className="flex items-center gap-1.5 bg-[#f8fafd] px-3 py-1.5 rounded-full border border-[#e1e7f0]">
+              <span className="text-[#747775] font-medium">End:</span>
               <input
                 type="text"
                 value={sessionEndText}
                 onChange={(e) => setSessionEndText(e.target.value)}
                 placeholder="- Session End -"
-                className="w-36 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-semibold text-red-600 outline-none focus:border-red-400"
+                className="w-28 px-1 bg-transparent text-xs font-semibold text-[#ba1a1a] outline-none"
               />
             </div>
           </div>
 
           {/* View Mode Switcher (Visual Preview vs HTML Code) */}
-          <div className="flex items-center justify-between gap-2 mb-2.5">
-            <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium border border-slate-200/70">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="inline-flex rounded-full bg-[#f0f4f9] p-1 text-xs font-medium border border-[#e1e7f0]">
               <button
                 onClick={() => setActiveTab("preview")}
-                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3.5 py-1 rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "preview"
-                    ? "bg-white text-blue-600 shadow-xs font-semibold"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-[#0b57d0] text-white shadow-xs font-medium"
+                    : "text-[#444746] hover:text-[#1f1f1f]"
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>Live Buttons Preview</span>
+                <span>Live Preview</span>
               </button>
               <button
                 onClick={() => setActiveTab("code")}
-                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3.5 py-1 rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "code"
-                    ? "bg-white text-blue-600 shadow-xs font-semibold"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-[#0b57d0] text-white shadow-xs font-medium"
+                    : "text-[#444746] hover:text-[#1f1f1f]"
                 }`}
               >
                 <Code className="w-3.5 h-3.5" />
-                <span>HTML Code ({buttonsData.length} buttons)</span>
+                <span>HTML Code ({buttonsData.length})</span>
               </button>
             </div>
 
-            <span className="text-[11px] text-slate-500 font-medium">
+            <span className="text-xs text-[#747775] font-medium">
               {buttonsData.length} button{buttonsData.length === 1 ? "" : "s"} generated
             </span>
           </div>
 
           {/* Tab 1: Live Interactive Preview */}
           {activeTab === "preview" && (
-            <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200/80 shadow-inner">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 mb-3 border-b border-slate-100">
+            <div className="bg-[#f8fafd] rounded-2xl p-5 sm:p-6 border border-[#e1e7f0]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-4 border-b border-[#e1e7f0]">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                    Rendered HTML Output
+                  <span className="text-xs font-semibold text-[#444746] uppercase tracking-wider">
+                    Rendered Output
                   </span>
-                  <span className="text-[11px] text-slate-300">•</span>
-                  <span className="text-blue-600 text-xs font-medium">
-                    Width = Mobile Width (20px Margin L/R)
+                  <span className="text-[#c4c7c5]">•</span>
+                  <span className="text-[#0b57d0] text-xs font-medium">
+                    Mobile Width ({marginSide}px Margin L/R)
                   </span>
                 </div>
 
                 {/* Viewport Simulation Controls */}
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs self-start sm:self-auto">
+                <div className="flex items-center gap-1 bg-[#e9eef6] p-1 rounded-full text-xs self-start sm:self-auto">
                   <button
                     type="button"
                     onClick={() => setPreviewDevice("responsive")}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
                       previewDevice === "responsive"
-                        ? "bg-white text-blue-600 shadow-2xs font-semibold"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "bg-white text-[#0b57d0] shadow-2xs font-semibold"
+                        : "text-[#444746] hover:text-[#1f1f1f]"
                     }`}
                     title="Responsive width with left-right margins"
                   >
-                    <span>Auto (Responsive)</span>
+                    <span>Auto</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPreviewDevice("mobile")}
-                    className={`px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
                       previewDevice === "mobile"
-                        ? "bg-white text-blue-600 shadow-2xs font-semibold"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "bg-white text-[#0b57d0] shadow-2xs font-semibold"
+                        : "text-[#444746] hover:text-[#1f1f1f]"
                     }`}
                     title="Preview in 390px mobile viewport"
                   >
                     <Smartphone className="w-3.5 h-3.5" />
-                    <span>Mobile Screen (390px)</span>
+                    <span>Mobile (390px)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPreviewDevice("desktop")}
-                    className={`px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
                       previewDevice === "desktop"
-                        ? "bg-white text-blue-600 shadow-2xs font-semibold"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "bg-white text-[#0b57d0] shadow-2xs font-semibold"
+                        : "text-[#444746] hover:text-[#1f1f1f]"
                     }`}
                     title="Preview on desktop"
                   >
                     <Monitor className="w-3.5 h-3.5" />
-                    <span>Desktop (Centered)</span>
+                    <span>Desktop</span>
                   </button>
                 </div>
               </div>
@@ -424,15 +424,15 @@ ${buttonsHtml}${sessionEndHtml}
                 <div
                   className={`w-full transition-all duration-200 ${
                     previewDevice === "mobile"
-                      ? "max-w-[390px] bg-slate-50/70 border border-slate-300/80 rounded-2xl p-3 shadow-inner"
+                      ? "max-w-[390px] bg-white border border-[#c4c7c5] rounded-3xl p-4 shadow-sm"
                       : "max-w-2xl"
                   }`}
                 >
                   {previewDevice === "mobile" && (
-                    <div className="text-[10px] font-medium text-slate-500 pb-2 mb-3 border-b border-slate-200 flex items-center justify-between px-1 select-none">
-                      <span className="text-blue-600 font-mono">|← {marginSide}px</span>
-                      <span className="font-semibold text-slate-700">Mobile Viewport (390px)</span>
-                      <span className="text-blue-600 font-mono">{marginSide}px →|</span>
+                    <div className="text-[11px] font-medium text-[#747775] pb-2 mb-3 border-b border-[#e1e7f0] flex items-center justify-between px-1 select-none">
+                      <span className="text-[#0b57d0] font-mono">|← {marginSide}px</span>
+                      <span className="font-semibold text-[#1f1f1f]">390px Viewport</span>
+                      <span className="text-[#0b57d0] font-mono">{marginSide}px →|</span>
                     </div>
                   )}
 
@@ -453,13 +453,13 @@ ${buttonsHtml}${sessionEndHtml}
                             href={btn.url}
                             target={openInNewTab ? "_blank" : undefined}
                             rel={openInNewTab ? "noopener noreferrer" : undefined}
-                            className="h-auto min-h-[48px] inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 select-none text-center"
+                            className="h-auto min-h-[48px] inline-flex items-center justify-center px-6 py-3 rounded-xl text-sm sm:text-base font-semibold transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 select-none text-center"
                             style={{
                               ...buttonStyle,
-                              backgroundColor: "#2563eb",
+                              backgroundColor: "#0b57d0",
                               color: "#ffffff",
-                              border: "1.5px solid #2563eb",
-                              boxShadow: "0 2px 5px rgba(37, 99, 235, 0.25)",
+                              border: "1.5px solid #0b57d0",
+                              boxShadow: "0 2px 5px rgba(11, 87, 208, 0.25)",
                             }}
                           >
                             <span>{btn.label}</span>
@@ -472,12 +472,12 @@ ${buttonsHtml}${sessionEndHtml}
                             href={btn.url}
                             target={openInNewTab ? "_blank" : undefined}
                             rel={openInNewTab ? "noopener noreferrer" : undefined}
-                            className="h-auto min-h-[48px] inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 cursor-pointer hover:shadow-xs hover:-translate-y-0.5 active:scale-95 select-none text-center"
+                            className="h-auto min-h-[48px] inline-flex items-center justify-center px-6 py-3 rounded-xl text-sm sm:text-base font-semibold transition-all duration-200 cursor-pointer hover:shadow-xs hover:-translate-y-0.5 active:scale-95 select-none text-center"
                             style={{
                               ...buttonStyle,
-                              backgroundColor: "rgba(37, 99, 235, 0.08)",
-                              color: "#2563eb",
-                              border: "1.5px solid #2563eb",
+                              backgroundColor: "rgba(11, 87, 208, 0.08)",
+                              color: "#0b57d0",
+                              border: "1.5px solid #0b57d0",
                             }}
                           >
                             <span>{btn.label}</span>
@@ -488,9 +488,9 @@ ${buttonsHtml}${sessionEndHtml}
 
                     {sessionEndText && (
                       <div
-                        className="mt-3 text-base font-bold tracking-wide text-red-600 select-none text-center"
+                        className="mt-3 text-base font-bold tracking-wide text-[#ba1a1a] select-none text-center"
                         style={{
-                          color: "#dc2626",
+                          color: "#ba1a1a",
                           marginLeft: `${marginSide}px`,
                           marginRight: `${marginSide}px`,
                         }}
@@ -502,26 +502,26 @@ ${buttonsHtml}${sessionEndHtml}
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-500">
+              <div className="mt-4 pt-3 border-t border-[#e1e7f0] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-[#747775]">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#0b57d0] inline-block"></span>
                     1st: Solid Filled Blue
                   </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-100 border border-blue-600 inline-block"></span>
-                    2nd: Outlined + Low Fill Opacity
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#d3e3fd] border border-[#0b57d0] inline-block"></span>
+                    2nd: Outlined Low Fill
                   </span>
-                  <span className="text-slate-300">|</span>
-                  <span className="font-medium text-slate-700">
-                    Width: Mobile Width • Margin: {marginSide}px L/R • Height: Auto
+                  <span className="text-[#c4c7c5]">|</span>
+                  <span className="font-medium text-[#444746]">
+                    Margin: {marginSide}px L/R • Height: Auto
                   </span>
                 </div>
                 <button
                   onClick={copyHtml}
-                  className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer flex items-center gap-1 shrink-0"
+                  className="text-[#0b57d0] hover:text-[#0842a0] font-medium cursor-pointer flex items-center gap-1 shrink-0"
                 >
-                  <Copy className="w-3 h-3" />
+                  <Copy className="w-3.5 h-3.5" />
                   <span>Copy HTML</span>
                 </button>
               </div>
@@ -530,27 +530,27 @@ ${buttonsHtml}${sessionEndHtml}
 
           {/* Tab 2: Copyable HTML Source Code */}
           {activeTab === "code" && (
-            <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-slate-950 text-slate-200 font-mono text-xs">
-              <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900 border-b border-slate-800 text-slate-400 text-[11px]">
+            <div className="relative rounded-2xl overflow-hidden border border-[#303030] bg-[#1e1f20] text-[#e3e3e3] font-mono text-xs">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[#2a2b2c] border-b border-[#3c3c3c] text-[#c4c7c5] text-xs">
                 <span>HTML Code (Ready to paste)</span>
                 <button
                   onClick={copyHtml}
-                  className="text-white hover:text-blue-400 font-sans font-semibold cursor-pointer flex items-center gap-1 transition-colors"
+                  className="text-white hover:text-[#a8c7fa] font-sans font-medium cursor-pointer flex items-center gap-1 transition-colors"
                 >
                   {copied ? (
                     <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span className="text-emerald-400">Copied!</span>
+                      <Check className="w-3.5 h-3.5 text-[#6dd58c]" />
+                      <span className="text-[#6dd58c]">Copied!</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3 h-3" />
+                      <Copy className="w-3.5 h-3.5" />
                       <span>Copy Code</span>
                     </>
                   )}
                 </button>
               </div>
-              <pre className="p-3.5 overflow-x-auto max-h-72 leading-relaxed text-[11px] select-all">
+              <pre className="p-4 overflow-x-auto max-h-72 leading-relaxed text-[11px] select-all">
                 <code>{generatedHtml}</code>
               </pre>
             </div>

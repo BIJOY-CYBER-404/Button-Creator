@@ -132,6 +132,76 @@ async function startServer() {
     }
   });
 
+  // API: Unified Resolver & Link Extractor pipeline
+  app.post("/api/unified", async (req, res) => {
+    const {
+      url,
+      html,
+      base_url,
+      button_only = true,
+      auto_resolve = true,
+    } = req.body;
+
+    if (!url && !html) {
+      return res.status(400).json({
+        success: false,
+        error: "Please provide a valid URL or HTML content.",
+      });
+    }
+
+    try {
+      const pythonProcess = spawn("python3", ["unified_engine.py", "--json"]);
+
+      let stdoutData = "";
+      let stderrData = "";
+
+      pythonProcess.stdout.on("data", (data) => {
+        stdoutData += data.toString();
+      });
+
+      pythonProcess.stderr.on("data", (data) => {
+        stderrData += data.toString();
+      });
+
+      pythonProcess.on("close", (code) => {
+        if (code !== 0 && !stdoutData.trim()) {
+          return res.status(500).json({
+            success: false,
+            error:
+              stderrData.trim() || `Unified engine exited with code ${code}`,
+          });
+        }
+
+        try {
+          const parsed = JSON.parse(stdoutData.trim());
+          return res.json(parsed);
+        } catch (e: any) {
+          return res.status(500).json({
+            success: false,
+            error: `Failed to parse Unified output: ${e.message}`,
+            raw: stdoutData,
+          });
+        }
+      });
+
+      pythonProcess.stdin.write(
+        JSON.stringify({
+          url: url ? url.trim() : "",
+          html: html || "",
+          base_url: base_url || "",
+          button_only: Boolean(button_only),
+          auto_resolve: Boolean(auto_resolve),
+        })
+      );
+      pythonProcess.stdin.end();
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: `Failed to spawn unified engine: ${err.message}`,
+      });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

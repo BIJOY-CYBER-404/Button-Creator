@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Sparkles,
   Copy,
   Download,
   Check,
@@ -231,38 +230,6 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
           </button>
         </div>
       )}
-
-      {/* Sample Quick Select Bar - strictly wrapped to prevent horizontal scrolling */}
-      <div className="flex flex-wrap items-center gap-1.5 pb-1 text-xs w-full max-w-full">
-        <span className="text-slate-500 font-medium whitespace-nowrap pl-0.5 flex items-center gap-1">
-          <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Presets:
-        </span>
-        {SAMPLES.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => loadSample(s)}
-            className="px-2.5 py-1 rounded-full bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs font-medium transition-colors cursor-pointer text-xs"
-          >
-            {s.name}
-          </button>
-        ))}
-        {onNavigateToResolver && (
-          <button
-            onClick={() => onNavigateToResolver()}
-            className="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300/80 shadow-xs font-medium transition-colors flex items-center gap-1 cursor-pointer text-xs"
-          >
-            <ArrowUpRight className="w-3 h-3 text-slate-600" /> URL Resolver Page
-          </button>
-        )}
-        {onOpenPythonLogic && (
-          <button
-            onClick={onOpenPythonLogic}
-            className="px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 shadow-xs font-medium transition-colors flex items-center gap-1 cursor-pointer text-xs"
-          >
-            <FileCode className="w-3 h-3" /> Python Engine Logic
-          </button>
-        )}
-      </div>
 
       {/* Main Extractor Card (Styled after the user's provided HTML design) */}
       <div

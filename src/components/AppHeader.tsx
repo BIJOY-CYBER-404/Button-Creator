@@ -1,105 +1,76 @@
 import React from "react";
-import {
-  Terminal,
-  Link2,
-  Route,
-  ArrowUpRight,
-  Download,
-  Code2,
-} from "lucide-react";
-import { ActivePage } from "../types";
+import { Terminal, Code2 } from "lucide-react";
 
 interface AppHeaderProps {
   onTogglePythonLogic: () => void;
   showPythonLogic: boolean;
-  activePage: ActivePage;
-  onNavigatePage: (page: ActivePage) => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
   onTogglePythonLogic,
   showPythonLogic,
-  activePage,
-  onNavigatePage,
 }) => {
   return (
     <header
       id="app-header"
-      className="w-full bg-[#111827] text-white border-b border-slate-800 shadow-sm select-none"
+      className="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-xs select-none sticky top-0 z-30 transition-colors"
     >
-      <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-        {/* Brand & Identity */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
-            {activePage === "extractor" ? (
-              <Download className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <Route className="w-4 h-4 text-emerald-400" />
-            )}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        {/* Brand & Identity (M3 Headline Medium / Title) */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center shrink-0 transition-transform active:scale-95 shadow-xs">
+            {/* Google-style dynamic colorful emblem */}
+            <svg
+              className="w-5 h-5 text-[#0b57d0]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="font-bold text-sm sm:text-base leading-tight text-white tracking-tight truncate">
-                {activePage === "extractor" ? "Link Extractor" : "URL Shortener Resolver"}
+              <h1 className="font-semibold text-base sm:text-lg leading-snug text-[#1f1f1f] tracking-tight truncate font-sans">
+                Link Extractor
               </h1>
-              <span className="hidden xs:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold shrink-0">
-                PRO
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#e9eef6] text-[#444746] tracking-wide shrink-0">
+                M3 Clean
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 truncate hidden sm:block">
-              {activePage === "extractor"
-                ? "Extract action & download links from HTML and live web pages"
-                : "Bypass shorteners, safelinks, and trace full redirect chains"}
+            <p className="text-[12px] text-[#444746] truncate hidden sm:block font-normal">
+              Resolve redirects, bypass shortlinks, and extract clean direct links
             </p>
           </div>
         </div>
 
-        {/* Navigation & Utilities */}
+        {/* M3 Outlined / Tonal Action Button */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Page switch tabs */}
-          <div className="flex items-center bg-slate-800/90 p-0.5 rounded-lg border border-slate-700/60">
-            <button
-              id="header-btn-extractor"
-              onClick={() => onNavigatePage("extractor")}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activePage === "extractor"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-slate-300 hover:text-white"
-              }`}
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Extractor</span>
-            </button>
-            <button
-              id="header-btn-resolver"
-              onClick={() => onNavigatePage("resolver")}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activePage === "resolver"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-slate-300 hover:text-white"
-              }`}
-            >
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Resolver</span>
-            </button>
-          </div>
-
-          {/* Python Logic Toggle */}
           <button
             id="header-btn-python"
             onClick={onTogglePythonLogic}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border ${
+            className={`h-10 px-4 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
               showPythonLogic
-                ? "bg-emerald-600 border-emerald-500 text-white"
-                : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                ? "bg-[#0b57d0] text-white shadow-xs hover:bg-[#0842a0]"
+                : "bg-[#e9eef6] text-[#1f1f1f] hover:bg-[#dfe4ed] active:bg-[#d3e3fd]"
             }`}
-            title="Inspect Python backend logic and source code"
+            title="Toggle Python engine logic"
           >
-            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden md:inline">Python Logic</span>
+            {showPythonLogic ? (
+              <Code2 className="w-4 h-4" />
+            ) : (
+              <Terminal className="w-4 h-4 text-[#444746]" />
+            )}
+            <span className="hidden sm:inline">Engine Logic</span>
           </button>
         </div>
       </div>
     </header>
   );
 };
+
+

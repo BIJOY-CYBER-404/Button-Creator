@@ -1,55 +1,91 @@
 import React, { useState } from "react";
-import { Terminal, Copy, Check, Play, FileCode2, ShieldCheck, Sparkles } from "lucide-react";
+import { Terminal, Copy, Check, FileCode2, ShieldCheck, Sparkles } from "lucide-react";
 
 interface PythonLogicViewerProps {
   onRunTestSample?: () => void;
 }
 
-export const PythonLogicViewer: React.FC<PythonLogicViewerProps> = ({ onRunTestSample }) => {
+export const PythonLogicViewer: React.FC<PythonLogicViewerProps> = () => {
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"unified" | "resolver" | "extractor">("unified");
 
-  const pythonCode = `#!/usr/bin/env python3
+  const unifiedCode = `#!/usr/bin/env python3
+"""
+Unified Link Resolver & Extractor Engine
+Merges URL Shortener Resolving and Link Extraction into one pipeline.
+1. Accepts input URL (post, shortlink, or direct page) or HTML snippet.
+2. If URL: resolves all redirect hops, safelinks, action buttons & AdLinkFly tokens.
+3. Automatically parses the final destination page HTML and extracts download links.
+4. Returns end-to-end trace and extracted episodes in a single response.
+"""
+import resolver
+import extractor
+
+def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, auto_resolve=True):
+    if auto_resolve and url:
+        # Step 1: Trace and bypass all redirects & shorteners
+        resolve_res = resolver.resolve_url(url, return_html=True)
+        final_dest_url = resolve_res["final"]
+        final_html = resolve_res.get("final_html")
+        
+        # Step 2: Extract action & download links from destination page
+        items = extractor.extract_from_html(final_html, final_dest_url, button_only=button_only)
+        return {
+            "success": True,
+            "resolved": True,
+            "original_url": url,
+            "final_url": final_dest_url,
+            "redirects": resolve_res["redirects"],
+            "chain": resolve_res["chain"],
+            "items": items,
+            "count": len(items)
+        }
+`;
+
+  const resolverCode = `#!/usr/bin/env python3
+"""
+URL Shortener Resolver & Safelink Bypasser
+Bypasses:
+- HTTP 301, 302, 303, 307, 308 redirects
+- AdLinkFly & Sohojgyan shorteners (token decoding & AJAX bypass)
+- Blogger safelink interstitial pages (?url= base64 payloads)
+- WordPress safelink pages (?url= & delay timers)
+- Content post action buttons (btn-slide, get-link, Episode Wise Links)
+"""
+import urllib.request, urllib.parse, re, base64
+
+def resolve_url(start_url, return_html=False):
+    # Cookie jar preserves session tokens across redirects
+    # Follows hops, decrypts intermediates, and returns destination
+    ...
+`;
+
+  const extractorCode = `#!/usr/bin/env python3
 """
 Webpage Link & Button Extractor
-Python standard library only:
-- HTMLParser for robust AST parsing
-- urllib for HTTP fetching
-- Regex for inline JS URLs (location.href, window.open, data-url)
-- Excludes site chrome (header, footer, nav, sidebar, menus)
-- Excludes test/audit tools (Rich Results Test, PageSpeed Insights)
-- Pinpoints high-confidence action buttons (download, stream, watch, servers)
+- HTMLParser for robust AST DOM parsing
+- Void element & ancestor stack exclusion tracking
+- Skips header, footer, navbars, sidebars, and menus
+- Pinpoints high-confidence action buttons (GDrive, Mega, download, stream)
 """
-
-import re
-import sys
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlparse, unquote
-from urllib.request import Request, urlopen
-
-ACTION_WORDS = {
-    "download", "watch", "stream", "play", "open", "direct",
-    "server", "link", "get", "view", "continue", "mirror",
-    "xcloud", "filemoon", "streamtape", "doodstream", "mixdrop",
-}
 
 class ElementCollector(HTMLParser):
-    """Extracts links/buttons from <body> while skipping site chrome."""
-    EXCLUDED_TAGS = {"header", "footer", "nav", "aside", "script", "style", "noscript"}
-    EXCLUDED_MARKERS = (
-        "header", "footer", "navbar", "navigation", "nav-menu", "navmenu",
-        "main-menu", "mainmenu", "menu", "menus", "sidebar", "site-header",
-        "site-footer", "topbar", "top-bar", "bottombar", "bottom-bar"
-    )
-
     def handle_starttag(self, tag, attrs):
-        # Captures <a href>, <button>, <input type="button|submit">,
-        # onclick handlers and data-url attributes while excluding navigation chrome.
+        # Captures <a href>, <button>, <input type="button|submit">
         ...
 `;
 
+  const currentCode =
+    activeTab === "unified"
+      ? unifiedCode
+      : activeTab === "resolver"
+      ? resolverCode
+      : extractorCode;
+
   const copyCode = async () => {
     try {
-      await navigator.clipboard.writeText(pythonCode);
+      await navigator.clipboard.writeText(currentCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -58,69 +94,99 @@ class ElementCollector(HTMLParser):
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-            <FileCode2 className="w-4 h-4" />
+    <div className="bg-[#fdfcff] rounded-[28px] p-6 m3-elevation-1 border border-[#e1e7f0] space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#d3e3fd] text-[#041e49] flex items-center justify-center shrink-0">
+            <FileCode2 className="w-5 h-5 text-[#0b57d0]" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-900 text-sm">Python Architecture</h3>
-            <p className="text-xs text-slate-500">Standard Library Engine • No 3rd-Party Wheels</p>
+            <h3 className="font-semibold text-[#1f1f1f] text-sm sm:text-base">Python Architecture</h3>
+            <p className="text-xs text-[#444746]">Standard Library Engine • Zero 3rd-Party Wheels</p>
           </div>
         </div>
         <button
           onClick={copyCode}
-          className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+          className="h-9 px-4 rounded-full text-xs font-medium bg-[#e9eef6] text-[#1f1f1f] hover:bg-[#dfe4ed] active:bg-[#d3e3fd] flex items-center gap-1.5 transition-colors cursor-pointer"
         >
-          {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? "Copied" : "Copy Code"}
+          {copied ? <Check className="w-3.5 h-3.5 text-[#0b57d0]" /> : <Copy className="w-3.5 h-3.5" />}
+          <span>{copied ? "Copied" : "Copy Code"}</span>
         </button>
       </div>
 
-      {/* Feature cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+      {/* M3 Navigation Segmented Buttons / Chips */}
+      <div className="flex items-center gap-2 p-1 bg-[#f0f4f9] rounded-full w-fit">
+        <button
+          onClick={() => setActiveTab("unified")}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+            activeTab === "unified"
+              ? "bg-[#0b57d0] text-white shadow-xs"
+              : "text-[#444746] hover:text-[#1f1f1f]"
+          }`}
+        >
+          Unified Engine
+        </button>
+        <button
+          onClick={() => setActiveTab("resolver")}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+            activeTab === "resolver"
+              ? "bg-[#0b57d0] text-white shadow-xs"
+              : "text-[#444746] hover:text-[#1f1f1f]"
+          }`}
+        >
+          Resolver Logic
+        </button>
+        <button
+          onClick={() => setActiveTab("extractor")}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+            activeTab === "extractor"
+              ? "bg-[#0b57d0] text-white shadow-xs"
+              : "text-[#444746] hover:text-[#1f1f1f]"
+          }`}
+        >
+          Extractor Logic
+        </button>
+      </div>
+
+      {/* M3 Feature Highlights Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div className="p-3.5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] flex items-start gap-2.5">
+          <div className="w-6 h-6 rounded-full bg-[#d3e3fd] flex items-center justify-center shrink-0 mt-0.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#0b57d0]" />
+          </div>
           <div>
-            <span className="font-semibold text-slate-800">Chrome Exclusion:</span>
-            <p className="text-slate-500 text-[11px] mt-0.5">
-              Skips &lt;header&gt;, &lt;footer&gt;, &lt;nav&gt;, navbars, sidebars, and menus.
+            <span className="font-semibold text-[#1f1f1f]">DOM Chrome Exclusion</span>
+            <p className="text-[#444746] text-[12px] mt-0.5 leading-relaxed">
+              Skips &lt;header&gt;, &lt;footer&gt;, &lt;nav&gt;, navbars, sidebars, and menus automatically.
             </p>
           </div>
         </div>
-        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2">
-          <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+        <div className="p-3.5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] flex items-start gap-2.5">
+          <div className="w-6 h-6 rounded-full bg-[#c2e7ff] flex items-center justify-center shrink-0 mt-0.5">
+            <Sparkles className="w-3.5 h-3.5 text-[#00639b]" />
+          </div>
           <div>
-            <span className="font-semibold text-slate-800">Action Scoring:</span>
-            <p className="text-slate-500 text-[11px] mt-0.5">
+            <span className="font-semibold text-[#1f1f1f]">Action Button Scoring</span>
+            <p className="text-[#444746] text-[12px] mt-0.5 leading-relaxed">
               Prioritizes downloads, video mirrors, external target hosts, and data-url buttons.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Code Block */}
-      <div className="relative rounded-xl overflow-hidden bg-slate-950 text-slate-300 font-mono text-[11px] border border-slate-800 w-full max-w-full">
-        <div className="bg-slate-900/90 px-3 py-1.5 flex items-center justify-between border-b border-slate-800 text-[10px] text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <Terminal className="w-3 h-3 text-emerald-400" /> extractor.py
+      {/* Code Block Container */}
+      <div className="relative rounded-2xl overflow-hidden bg-[#1e1f20] text-[#e3e3e3] font-mono text-[12px] border border-[#303030] w-full max-w-full">
+        <div className="flex items-center justify-between px-4 py-2.5 bg-[#2a2b2c] border-b border-[#3c3c3c] text-xs text-[#c4c7c5]">
+          <span className="flex items-center gap-1.5 font-medium">
+            <Terminal className="w-3.5 h-3.5 text-[#a8c7fa]" /> python/{activeTab}.py
           </span>
-          <span>Python 3.10</span>
+          <span className="text-[11px] text-[#8e918f]">Python 3.10+</span>
         </div>
-        <pre className="p-3 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all leading-relaxed max-h-56 text-[11px] w-full max-w-full">
-          <code>{pythonCode}</code>
+        <pre className="p-4 overflow-x-auto leading-relaxed text-[12px]">
+          <code>{currentCode}</code>
         </pre>
       </div>
-
-      {onRunTestSample && (
-        <button
-          onClick={onRunTestSample}
-          className="w-full py-2.5 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-        >
-          <Play className="w-3.5 h-3.5 fill-current" /> Run Python Sample Demo
-        </button>
-      )}
     </div>
   );
 };
+

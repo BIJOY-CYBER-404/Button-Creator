@@ -705,7 +705,7 @@ class NoRedirectHandler(HTTPErrorProcessor):
 # Main Resolver & Bypasser
 # =========================================================
 
-def resolve_url(start_url):
+def resolve_url(start_url, max_redirects=MAX_REDIRECTS, return_html=False):
     start_url = validate_url(start_url)
     
     # Cookie jar preserves session tokens across redirects and AJAX requests
@@ -896,12 +896,15 @@ def resolve_url(start_url):
     else:
         raise RuntimeError("Too many redirects / hops.")
 
-    return {
+    result_dict = {
         "original": start_url,
         "final": current_url,
         "redirects": max(0, len(chain) - 1),
         "chain": chain
     }
+    if return_html:
+        result_dict["final_html"] = html
+    return result_dict
 
 def run_resolver_api(url):
     if not url:
