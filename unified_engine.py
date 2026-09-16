@@ -38,16 +38,35 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 shortlink_candidate = None
                 if final_html:
                     import re
-                    # 1. Direct href matching shrt.sohojgyan.com
-                    m_shrt = re.search(r'<a\s+[^>]*href=[\'"](https?://shrt\.sohojgyan\.com/[a-zA-Z0-9_-]+)[\'"]', final_html, re.I)
-                    if m_shrt:
+                    from urllib.parse import urljoin
+
+                    def is_valid_shortlink(cand_url):
+                        if not cand_url:
+                            return False
+                        low = cand_url.lower()
+                        if "movihubhq.com" in low or "movihub" in low:
+                            return False
+                        return True
+
+                    # 1. Direct href matching shrt.sohojgyan.com or go.sohojgyan.com
+                    m_shrt = re.search(r'<a\s+[^>]*href=[\'"](https?://(?:shrt\.[a-z0-9.-]+|go\.sohojgyan\.com)/[a-zA-Z0-9_-]+)[\'"]', final_html, re.I)
+                    if m_shrt and is_valid_shortlink(m_shrt.group(1).strip()):
                         shortlink_candidate = m_shrt.group(1).strip()
                     else:
-                        # 2. Anchor containing Episode Wise Links
-                        m_ew = re.search(r'<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode\s*Wise|Episode-Wise)[\s\S]*?</a>', final_html, re.I)
+                        # 2. Anchor containing Episode Wise Links / Episode-Wise / Episode Wise Link
+                        m_ew = re.search(r'<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]*?</a>', final_html, re.I)
                         if m_ew:
-                            from urllib.parse import urljoin
-                            shortlink_candidate = urljoin(final_dest_url, m_ew.group(1).strip())
+                            resolved_cand = urljoin(final_dest_url, m_ew.group(1).strip())
+                            if is_valid_shortlink(resolved_cand):
+                                shortlink_candidate = resolved_cand
+
+                        # 3. Contextual nearby container
+                        if not shortlink_candidate:
+                            m_near = re.search(r'(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]{0,300}?<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]', final_html, re.I)
+                            if m_near:
+                                resolved_cand = urljoin(final_dest_url, m_near.group(1).strip())
+                                if is_valid_shortlink(resolved_cand):
+                                    shortlink_candidate = resolved_cand
 
                 # If an Episode Wise Links shortlink was identified on the source page, resolve that shortened URL
                 if shortlink_candidate and shortlink_candidate != url:

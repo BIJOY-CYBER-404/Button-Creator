@@ -230,14 +230,17 @@ class SLEA_Processor {
     }
 
     /**
-     * Find Source Link in HTML content or WP Automatic custom fields.
-     * Checks multiple patterns in order of specificity:
-     *  1. Configured anchor text (e.g. <a ...>Source Link</a>)
-     *  2. WP Automatic variations: "Source", "Original Link", "Source URL", "Original Post"
-     *  3. Configured URL pattern in href (e.g. mydverse.com/YYYY/MM/...)
-     *  4. Common link shorteners in href (bit.ly, ouo.io, tinyurl.com, cutt.ly, shrinke.me, etc.)
-     *  5. Plain text URL matching domain or shortlink pattern in body
-     *  6. WP Automatic post metadata (original_link, source_link, source_url, wp_automatic_source)
+     * Finds and isolates the "Source link" hyperlink in post content or post metadata.
+     * Priority order:
+     *  1. Explicit "<p><a href="...">Source link </a></p>" or "<a href="...">Source link</a>" markup
+     *  2. Hyperlinks with anchor text matching "Source link" / "Source" / "Original link"
+     *  3. Hyperlinks matching url_pattern (e.g. mydverse.com/YYYY/MM/...)
+     *  4. Text labeled "Source link:" preceding an anchor tag
+     *  5. Common link shorteners in href
+     *  6. Plain text URLs in body
+     *  7. WP Automatic post metadata custom fields
+     *
+     * EXCLUSION RULE: Any URL containing movihubhq.com is strictly excluded and ignored.
      *
      * @param string $content
      * @param int $post_id
@@ -248,75 +251,133 @@ class SLEA_Processor {
         $anchor_text = isset($settings['source_anchor_text']) ? trim($settings['source_anchor_text']) : 'Source Link';
         $url_pattern = isset($settings['url_pattern']) ? trim($settings['url_pattern']) : 'mydverse\.com\/[0-9]{4}\/[0-9]{2}\/';
 
-        // Pattern 1: Hyperlink whose text matches configured anchor text (case-insensitive)
-        if ($anchor_text) {
-            $escaped_anchor = preg_quote($anchor_text, '/');
-            if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>.*?' . $escaped_anchor . '.*?<\/a>/is', $content, $m)) {
+        // Helper closure to verify URL is not excluded (e.g. movihubhq.com)
+        $is_valid_url = function($url) {
+            if (empty($url)) {
+                return false;
+            }
+            $lower = strtolower($url);
+            // Strict exclusion of movihubhq.com
+            if (strpos($lower, 'movihubhq.com') !== false || strpos($lower, 'movihub') !== false) {
+                return false;
+            }
+            return true;
+        };
+
+        // Pattern 0: Exact paragraph-wrapped or bold-wrapped "Source link" hyperlink:
+        // e.g. <p><a href="https://mydverse.com/2026/09/the-tale-of-lady-ok-korean-drama-in-hindi/" target="_blank" rel="noopener">Source link </a></p>
+        if (preg_match('/<p[^>]*>\s*(?:<strong>|<b>)?\s*(<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>\s*source\s*link\s*<\/a>)\s*(?:<\/strong>|<\/b>)?\s*<\/p>/is', $content, $m)) {
+            $candidate_url = trim($m[2]);
+            if ($is_valid_url($candidate_url)) {
                 return array(
-                    'url'   => trim($m[1]),
+                    'url'   => $candidate_url,
+                    'match' => $m[0], // full paragraph match so replacement leaves clean document
+                    'anchor_only' => $m[1],
+                    'type'  => 'enclosed_source_link_paragraph',
+                );
+            }
+        }
+
+        // Pattern 1: Hyperlink whose anchor text specifically is "Source link" (with optional trailing spaces/tags)
+        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>\s*source\s*link\s*<\/a>/is', $content, $m)) {
+            $candidate_url = trim($m[1]);
+            if ($is_valid_url($candidate_url)) {
+                return array(
+                    'url'   => $candidate_url,
                     'match' => $m[0],
-                    'type'  => 'anchor_match',
+                    'type'  => 'exact_source_link_anchor',
                 );
             }
         }
 
         // Pattern 1b: Text label "Source link:" preceding an anchor tag
         if (preg_match('/(?:<p[^>]*>)?\s*(?:<strong>|<b>)?\s*source\s*link:?\s*(?:<\/strong>|<\/b>)?\s*(<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>.*?<\/a>)\s*(?:<\/p>)?/is', $content, $m)) {
-            return array(
-                'url'   => trim($m[2]),
-                'match' => $m[0],
-                'type'  => 'labeled_source_link',
-            );
+            $candidate_url = trim($m[2]);
+            if ($is_valid_url($candidate_url)) {
+                return array(
+                    'url'   => $candidate_url,
+                    'match' => $m[0],
+                    'type'  => 'labeled_source_link',
+                );
+            }
         }
 
         // Pattern 2: Hyperlinks matching url_pattern (e.g. mydverse.com/2026/09/...)
         if ($url_pattern) {
-            if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]*' . $url_pattern . '[^\'"]*)[\'"][^>]*>.*?<\/a>/is', $content, $m)) {
-                return array(
-                    'url'   => trim($m[1]),
-                    'match' => $m[0],
-                    'type'  => 'pattern_href_match',
-                );
+            if (preg_match_all('/<a\s+[^>]*href=[\'"]([^\'"]*' . $url_pattern . '[^\'"]*)[\'"][^>]*>.*?<\/a>/is', $content, $all_m, PREG_SET_ORDER)) {
+                foreach ($all_m as $m) {
+                    $candidate_url = trim($m[1]);
+                    if ($is_valid_url($candidate_url)) {
+                        return array(
+                            'url'   => $candidate_url,
+                            'match' => $m[0],
+                            'type'  => 'pattern_href_match',
+                        );
+                    }
+                }
             }
         }
 
-        // Pattern 3: Common WP Automatic anchors ("Source", "Original Post", "Source Link", "Source URL")
-        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>.*?(?:source\s*(?:link|url|post)?|original\s*(?:post|link|source)?).*?<\/a>/is', $content, $m)) {
-            return array(
-                'url'   => trim($m[1]),
-                'match' => $m[0],
-                'type'  => 'wp_automatic_anchor',
-            );
+        // Pattern 3: Anchor whose text matches configured anchor text (case-insensitive)
+        if ($anchor_text) {
+            $escaped_anchor = preg_quote($anchor_text, '/');
+            if (preg_match_all('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>.*?' . $escaped_anchor . '.*?<\/a>/is', $content, $all_m, PREG_SET_ORDER)) {
+                foreach ($all_m as $m) {
+                    $candidate_url = trim($m[1]);
+                    if ($is_valid_url($candidate_url)) {
+                        return array(
+                            'url'   => $candidate_url,
+                            'match' => $m[0],
+                            'type'  => 'anchor_match',
+                        );
+                    }
+                }
+            }
         }
 
-        // Pattern 4: Known URL Shorteners in href (bit.ly, ouo.io, ouo.press, tinyurl, cutt.ly, shorturl.at, shrinke.me)
+        // Pattern 4: Common WP Automatic anchors ("Source", "Original Post", "Source Link", "Source URL")
+        if (preg_match_all('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>.*?(?:source\s*(?:link|url|post)?|original\s*(?:post|link|source)?).*?<\/a>/is', $content, $all_m, PREG_SET_ORDER)) {
+            foreach ($all_m as $m) {
+                $candidate_url = trim($m[1]);
+                if ($is_valid_url($candidate_url)) {
+                    return array(
+                        'url'   => $candidate_url,
+                        'match' => $m[0],
+                        'type'  => 'wp_automatic_anchor',
+                    );
+                }
+            }
+        }
+
+        // Pattern 5: Known URL Shorteners in href (bit.ly, ouo.io, ouo.press, tinyurl, cutt.ly, shorturl.at, shrinke.me)
         $shortener_pattern = '(?:ouo\.(?:io|press)|bit\.ly|tinyurl\.com|cutt\.ly|shorturl\.at|shrinke\.me|t\.co|adf\.ly|shorte\.st)';
-        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]*' . $shortener_pattern . '[^\'"]*)[\'"][^>]*>.*?<\/a>/is', $content, $m)) {
-            return array(
-                'url'   => trim($m[1]),
-                'match' => $m[0],
-                'type'  => 'shortener_href_match',
-            );
-        }
-
-        // Pattern 5: Plain text URL matching domain pattern
-        if ($url_pattern) {
-            if (preg_match('/(https?:\/\/[^\s<"\']*' . $url_pattern . '[^\s<"\']*)/i', $content, $m)) {
-                return array(
-                    'url'   => trim($m[1]),
-                    'match' => $m[1],
-                    'type'  => 'plain_url_pattern',
-                );
+        if (preg_match_all('/<a\s+[^>]*href=[\'"]([^\'"]*' . $shortener_pattern . '[^\'"]*)[\'"][^>]*>.*?<\/a>/is', $content, $all_m, PREG_SET_ORDER)) {
+            foreach ($all_m as $m) {
+                $candidate_url = trim($m[1]);
+                if ($is_valid_url($candidate_url)) {
+                    return array(
+                        'url'   => $candidate_url,
+                        'match' => $m[0],
+                        'type'  => 'shortener_href_match',
+                    );
+                }
             }
         }
 
-        // Pattern 6: Plain text shortener URL
-        if (preg_match('/(https?:\/\/[^\s<"\']*' . $shortener_pattern . '[^\s<"\']*)/i', $content, $m)) {
-            return array(
-                'url'   => trim($m[1]),
-                'match' => $m[1],
-                'type'  => 'plain_shortener_url',
-            );
+        // Pattern 6: Plain text URL matching domain pattern in content
+        if ($url_pattern) {
+            if (preg_match_all('/(https?:\/\/[^\s<"\']*' . $url_pattern . '[^\s<"\']*)/i', $content, $all_m, PREG_SET_ORDER)) {
+                foreach ($all_m as $m) {
+                    $candidate_url = trim($m[1]);
+                    if ($is_valid_url($candidate_url)) {
+                        return array(
+                            'url'   => $candidate_url,
+                            'match' => $m[1],
+                            'type'  => 'plain_url_pattern',
+                        );
+                    }
+                }
+            }
         }
 
         // Pattern 7: Fallback to WP Automatic post metadata custom fields
@@ -325,11 +386,14 @@ class SLEA_Processor {
             foreach ($meta_keys as $key) {
                 $meta_val = get_post_meta($post_id, $key, true);
                 if (!empty($meta_val) && filter_var($meta_val, FILTER_VALIDATE_URL)) {
-                    return array(
-                        'url'   => trim($meta_val),
-                        'match' => null, // Not in post body, will append Custom HTML block
-                        'type'  => 'wp_automatic_meta_' . $key,
-                    );
+                    $meta_url = trim($meta_val);
+                    if ($is_valid_url($meta_url)) {
+                        return array(
+                            'url'   => $meta_url,
+                            'match' => null, // Not in post body, will append Custom HTML block
+                            'type'  => 'wp_automatic_meta_' . $key,
+                        );
+                    }
                 }
             }
         }

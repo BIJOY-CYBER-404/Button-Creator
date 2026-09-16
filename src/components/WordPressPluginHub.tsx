@@ -334,12 +334,14 @@ export const WordPressPluginHub: React.FC<WordPressPluginHubProps> = ({
 
               {expandedFile === "processor" && (
                 <pre>{`// SLEA_Processor::process_post($post_id)
-// 1. Detect "Source Link" regex / anchor text in post_content
-// 2. Resolve URL via SLEA_Resolver (HTTP 3xx, meta refresh, JS location)
-// 3. Extract episode buttons via SLEA_Extractor
-// 4. Generate responsive mobile-width buttons HTML (alternating blue)
-// 5. Replace <p><a ...>Source Link</a></p> with buttons HTML
-// 6. Change post status to 'publish' and update post!`}</pre>
+// 1. Detect "Source link" hyperlink in post_content (structure: mydverse.com/... or <p><a ...>Source link </a></p>)
+//    - Excludes any URL matching movihubhq.com
+// 2. Extract shortened URL from source link page (e.g. shrt.sohojgyan.com/Ij03ndJ or "Episode Wise Links")
+// 3. Resolve shortened URL to final destination page & extract episode links
+// 4. Generate responsive mobile-width blue alternating episode buttons
+// 5. Replace ONLY the "Source link" hyperlink text/markup with generated HTML, keeping all other content intact
+// 6. On success: Mark post status as 'ready' (same permissions as Pending)
+// 7. On failure: Keep post status as 'pending'`}</pre>
               )}
 
               {expandedFile === "cron" && (
