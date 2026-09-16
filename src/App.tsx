@@ -9,9 +9,11 @@ import { AppHeader } from "./components/AppHeader";
 import { Toast, ToastMessage } from "./components/Toast";
 import { UnifiedWorkspace } from "./components/UnifiedWorkspace";
 import { PythonLogicViewer } from "./components/PythonLogicViewer";
+import { WordPressPluginHub } from "./components/WordPressPluginHub";
 import { PipelineMode } from "./types";
 
 export default function App() {
+  const [showPluginHub, setShowPluginHub] = useState<boolean>(false);
   const [showPythonLogic, setShowPythonLogic] = useState<boolean>(false);
   const [pipelineMode, setPipelineMode] = useState<PipelineMode>("unified");
   const [prefillUrl, setPrefillUrl] = useState<string>("");
@@ -35,10 +37,32 @@ export default function App() {
       <AppHeader
         onTogglePythonLogic={() => setShowPythonLogic(!showPythonLogic)}
         showPythonLogic={showPythonLogic}
+        onTogglePluginHub={() => setShowPluginHub(!showPluginHub)}
+        showPluginHub={showPluginHub}
       />
 
       {/* Main Content Area - Responsive Container with vertical scroll */}
       <main className="flex-1 w-full max-w-4xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7 space-y-5">
+        {/* WordPress Plugin & Automation Hub */}
+        {showPluginHub && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.99 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="w-full max-w-full overflow-hidden"
+          >
+            <WordPressPluginHub
+              onNotify={addToast}
+              onSimulateSample={(sampleUrl) => {
+                setPrefillUrl(sampleUrl);
+                setPipelineMode("unified");
+                setShowPluginHub(false);
+              }}
+            />
+          </motion.div>
+        )}
+
         {/* Python Backend Logic Modal / Drawer */}
         {showPythonLogic && (
           <motion.div

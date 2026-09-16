@@ -14,6 +14,12 @@ async function startServer() {
     res.json({ status: "ok", python: "available" });
   });
 
+  // API: Download ready-to-install WordPress Plugin zip
+  app.get("/api/download-plugin-zip", (_req, res) => {
+    const zipFilePath = path.join(process.cwd(), "public", "source-link-episode-automator.zip");
+    res.download(zipFilePath, "source-link-episode-automator.zip");
+  });
+
   // API: Python extractor endpoint
   app.post("/api/extract", async (req, res) => {
     const { url, html, base_url, button_only = true } = req.body;

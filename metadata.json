@@ -1,6 +1,6 @@
 {
   "name": "Webpage Button Link Extractor",
-  "description": "Unified pipeline to bypass URL shorteners, trace redirects, and extract download links and episode buttons in one flow.",
+  "description": "Unified pipeline to bypass URL shorteners, trace redirects, extract episode links, generate mobile buttons, and WordPress automator plugin.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

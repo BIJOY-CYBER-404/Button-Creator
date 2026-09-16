@@ -1,14 +1,18 @@
 import React from "react";
-import { Terminal, Code2 } from "lucide-react";
+import { Terminal, Code2, FolderArchive } from "lucide-react";
 
 interface AppHeaderProps {
   onTogglePythonLogic: () => void;
   showPythonLogic: boolean;
+  onTogglePluginHub: () => void;
+  showPluginHub: boolean;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
   onTogglePythonLogic,
   showPythonLogic,
+  onTogglePluginHub,
+  showPluginHub,
 }) => {
   return (
     <header
@@ -51,9 +55,24 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         {/* M3 Outlined / Tonal Action Button */}
         <div className="flex items-center gap-2 shrink-0">
           <button
+            id="header-btn-plugin"
+            onClick={onTogglePluginHub}
+            className={`h-10 px-3.5 sm:px-4 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+              showPluginHub
+                ? "bg-[#6750a4] text-white shadow-xs hover:bg-[#533d8c]"
+                : "bg-[#e8def8] text-[#4a4458] hover:bg-[#decff5] active:bg-[#d0bbf0]"
+            }`}
+            title="WordPress Plugin & Automator"
+          >
+            <FolderArchive className="w-4 h-4" />
+            <span className="hidden sm:inline">WordPress Plugin</span>
+            <span className="text-[10px] bg-white/40 px-1.5 py-0.5 rounded-full font-semibold">ZIP</span>
+          </button>
+
+          <button
             id="header-btn-python"
             onClick={onTogglePythonLogic}
-            className={`h-10 px-4 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            className={`h-10 px-3.5 sm:px-4 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
               showPythonLogic
                 ? "bg-[#0b57d0] text-white shadow-xs hover:bg-[#0842a0]"
                 : "bg-[#e9eef6] text-[#1f1f1f] hover:bg-[#dfe4ed] active:bg-[#d3e3fd]"

@@ -1,0 +1,131 @@
+/* WordPress Source Link Automator Admin CSS */
+
+.slea-admin-wrap {
+    max-width: 1100px;
+    margin-top: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+.slea-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.slea-stat-card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 8px;
+    padding: 16px 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.slea-stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #2271b1;
+    line-height: 1.2;
+}
+
+.slea-stat-label {
+    font-size: 13px;
+    color: #50575e;
+    margin-top: 4px;
+}
+
+.slea-panel {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.slea-panel-actions {
+    background: #f0f6fc;
+    border-color: #c5d9ed;
+}
+
+.slea-button-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+}
+
+.slea-feedback-area {
+    margin-top: 15px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.slea-feedback-area.notice-success {
+    background: #ecf7ed;
+    border-left: 4px solid #46b450;
+    color: #155724;
+}
+
+.slea-feedback-area.notice-error {
+    background: #fcf0f2;
+    border-left: 4px solid #dc3232;
+    color: #721c24;
+}
+
+.slea-url-tag {
+    display: inline-block;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.slea-badge-warning {
+    display: inline-block;
+    background: #fff8e5;
+    color: #b36b00;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.slea-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.slea-badge-info {
+    background: #e5f5fa;
+    color: #0073aa;
+}
+
+.slea-badge-success {
+    background: #ecf7ed;
+    color: #46b450;
+}
+
+.slea-badge-warning {
+    background: #fff8e5;
+    color: #b36b00;
+}
+
+.slea-badge-error {
+    background: #fcf0f2;
+    color: #dc3232;
+}
+
+.slea-logs-container {
+    max-height: 400px;
+    overflow-y: auto;
+}
