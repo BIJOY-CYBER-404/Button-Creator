@@ -143,7 +143,23 @@ class SLEA_Resolver {
                 continue;
             }
 
-            // Case 3: JavaScript location redirect (window.location = ..., location.replace(...))
+            // Case 3: Safelink Multi-Step Interstitial Bypass
+            $safelink_target = self::extract_safelink_bypass($body, $current_url);
+            if ($safelink_target && $safelink_target !== $current_url && !isset($visited[strtolower(rtrim($safelink_target, '/'))])) {
+                $chain[count($chain) - 1]['type'] = 'Safelink Interstitial Bypass';
+                $current_url = $safelink_target;
+                continue;
+            }
+
+            // Case 4: AdLinkFly / MightyScripts AJAX Bypass (e.g. go.sohojgyan.com)
+            $adfly_target = self::extract_adlinkfly_bypass($body, $current_url, $cookies);
+            if ($adfly_target && $adfly_target !== $current_url && !isset($visited[strtolower(rtrim($adfly_target, '/'))])) {
+                $chain[count($chain) - 1]['type'] = 'AdLinkFly Engine Bypass';
+                $current_url = $adfly_target;
+                continue;
+            }
+
+            // Case 5: JavaScript location redirect (window.location = ..., location.replace(...))
             $js_target = self::extract_js_redirect($body, $current_url);
             if ($js_target && $js_target !== $current_url && !isset($visited[strtolower(rtrim($js_target, '/'))])) {
                 $chain[count($chain) - 1]['type'] = 'JavaScript Client Redirect';
@@ -151,7 +167,7 @@ class SLEA_Resolver {
                 continue;
             }
 
-            // Case 4: Base64 obfuscated window.location.href = atob("...")
+            // Case 6: Base64 obfuscated window.location.href = atob("...")
             $b64_target = self::extract_atob_redirect($body, $current_url);
             if ($b64_target && $b64_target !== $current_url && !isset($visited[strtolower(rtrim($b64_target, '/'))])) {
                 $chain[count($chain) - 1]['type'] = 'Obfuscated atob() Script Redirect';
@@ -159,7 +175,15 @@ class SLEA_Resolver {
                 continue;
             }
 
-            // Case 5: Destination reached (200 OK without further hops)
+            // Case 7: Button / Interstitial action link candidate
+            $btn_target = self::extract_button_bypass($body, $current_url);
+            if ($btn_target && $btn_target !== $current_url && !isset($visited[strtolower(rtrim($btn_target, '/'))])) {
+                $chain[count($chain) - 1]['type'] = 'Action Button Bypass';
+                $current_url = $btn_target;
+                continue;
+            }
+
+            // Case 8: Destination reached (200 OK without further hops)
             $chain[count($chain) - 1]['type'] = 'Final Destination Reached';
             break;
         }
@@ -306,6 +330,208 @@ class SLEA_Resolver {
                 return $decoded;
             }
         }
+        return null;
+    }
+
+    /**
+     * Safelink and multi-step Blogger/WordPress redirect bypasser
+     * Detects safelink parameters (?url=, ?link=, etc.), arrays of destination blogs,
+     * or template strings like mainUrl = `https://go.sohojgyan.com/${decodedUrl}`.
+     */
+    private static function extract_safelink_bypass($html, $current_url) {
+        if (empty($html)) {
+            return null;
+        }
+
+        $query = parse_url($current_url, PHP_URL_QUERY);
+        $raw_url_param = '';
+        if ($query) {
+            parse_str($query, $qs);
+            foreach (array('url', 'link', 'token', 'go', 'safelink', 'dest', 'id', 'data') as $k) {
+                if (!empty($qs[$k])) {
+                    $raw_url_param = trim($qs[$k]);
+                    break;
+                }
+            }
+        }
+
+        // Direct base64 decode check
+        if (!empty($raw_url_param)) {
+            $unquoted = urldecode($raw_url_param);
+            $padding = (4 - (strlen($unquoted) % 4)) % 4;
+            $decoded_try = base64_decode($unquoted . str_repeat('=', $padding), true);
+            if ($decoded_try && preg_match('/^https?:\/\//i', $decoded_try)) {
+                return $decoded_try;
+            }
+        }
+
+        // Pattern A: Next step via array of destination blogs in JS
+        if (preg_match_all('/(?:let|var|const)\s+[a-zA-Z0-9_$]+\s*=\s*\[([\s\S]*?)\]/i', $html, $arr_matches)) {
+            foreach ($arr_matches[1] as $arr_content) {
+                if (preg_match_all('/[\'"](https?:\/\/[^\'"]+)[\'"]/i', $arr_content, $url_matches)) {
+                    foreach ($url_matches[1] as $candidate_url) {
+                        $candidate_url = trim($candidate_url);
+                        if (self::is_safe_public_url($candidate_url)) {
+                            if (!empty($raw_url_param) && strpos($candidate_url, 'url=') === false) {
+                                $sep = (strpos($candidate_url, '?') !== false) ? '&' : '?';
+                                return "{$candidate_url}{$sep}url={$raw_url_param}";
+                            }
+                            return $candidate_url;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Pattern B: Template string redirects: e.g. mainUrl = `https://go.sohojgyan.com/${decodedUrl}`
+        if (preg_match('/(?:mainUrl|goUrl|redirectUrl|targetUrl|finalUrl|destUrl|realUrl|shortUrl)\s*=\s*[`\'"]([^`\'";]+)[`\'"]/i', $html, $m_tmpl)
+            || preg_match('/`\s*(https?:\/\/go\.[^`\s]+?\$\{[^`\}]+\}[^`\s]*)\s*`/i', $html, $m_tmpl)) {
+            $template = trim($m_tmpl[1]);
+            $token = '';
+            if (!empty($raw_url_param)) {
+                $unquoted = urldecode($raw_url_param);
+                $padding = (4 - (strlen($unquoted) % 4)) % 4;
+                $decoded = base64_decode($unquoted . str_repeat('=', $padding), true);
+                if ($decoded) {
+                    $token = trim($decoded);
+                }
+            }
+
+            if (!empty($token)) {
+                $replaced = preg_replace('/\$\{[^}]+\}/', $token, $template);
+                if (preg_match('/^https?:\/\//i', $replaced)) {
+                    return $replaced;
+                }
+            } elseif (preg_match('/^https?:\/\//i', $template) && strpos($template, '${') === false) {
+                return $template;
+            }
+        }
+
+        // Pattern C: Direct go. link in script
+        if (preg_match('/[\'"](https?:\/\/go\.[^"\'\s<>()]+)[\'"]/i', $html, $m_go)) {
+            $cand = trim($m_go[1]);
+            if (!empty($raw_url_param) && substr($cand, -1) === '/') {
+                $unquoted = urldecode($raw_url_param);
+                $padding = (4 - (strlen($unquoted) % 4)) % 4;
+                $tok = base64_decode($unquoted . str_repeat('=', $padding), true);
+                if ($tok) {
+                    return $cand . trim($tok);
+                }
+            } elseif (substr($cand, -1) !== '/') {
+                return $cand;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Detects and bypasses AdLinkFly / MightyScripts AJAX endpoints (e.g. go.sohojgyan.com)
+     * Collects form tokens from <form id="go-link" action="/links/go">, waits counter,
+     * and sends AJAX POST to retrieve the final URL from JSON response.
+     */
+    private static function extract_adlinkfly_bypass($html, $current_url, $cookies = array()) {
+        if (empty($html)) {
+            return null;
+        }
+
+        if (strpos($html, 'id="go-link"') === false && strpos($html, '/links/go') === false) {
+            return null;
+        }
+
+        if (!preg_match('/<form[^>]*id=[\'"]go-link[\'"][^>]*action=[\'"]([^\'"]+)[\'"][\s\S]*?<\/form>/i', $html, $form_match)
+            && !preg_match('/<form[^>]*action=[\'"]([^\'"]*\/links\/go)[\'"][\s\S]*?<\/form>/i', $html, $form_match)) {
+            return null;
+        }
+
+        $action = trim($form_match[1]);
+        $form_html = $form_match[0];
+        $target_action = self::resolve_relative_url($current_url, $action);
+
+        // Collect form input fields
+        $form_data = array();
+        if (preg_match_all('/<input[^>]+name=[\'"]([^\'"]+)[\'"][^>]*value=[\'"]([^\'"]*)[\'"]/i', $form_html, $input_matches, PREG_SET_ORDER)) {
+            foreach ($input_matches as $im) {
+                $val = $im[2];
+                if (strpos($val, '%') !== false) {
+                    $val = urldecode($val);
+                }
+                $form_data[$im[1]] = $val;
+            }
+        }
+
+        if (empty($form_data)) {
+            return null;
+        }
+
+        // Check if there's a counter
+        $wait_sec = 4;
+        if (preg_match('/counter_value[\'"]?\s*:\s*(\d+)/i', $html, $c_match)) {
+            $wait_sec = max(intval($c_match[1]), 3);
+        }
+        sleep($wait_sec);
+
+        $parsed_origin = parse_url($current_url);
+        $origin = ($parsed_origin && isset($parsed_origin['scheme'], $parsed_origin['host']))
+            ? "{$parsed_origin['scheme']}://{$parsed_origin['host']}"
+            : '';
+
+        $post_resp = wp_remote_post($target_action, array(
+            'timeout'    => 15,
+            'user-agent' => self::$user_agent,
+            'headers'    => array(
+                'Accept'           => 'application/json, text/javascript, */*; q=0.01',
+                'Content-Type'     => 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With' => 'XMLHttpRequest',
+                'Referer'          => $current_url,
+                'Origin'           => $origin,
+            ),
+            'body'       => http_build_query($form_data),
+            'cookies'    => $cookies,
+            'sslverify'  => false,
+        ));
+
+        if (!is_wp_error($post_resp)) {
+            $body = wp_remote_retrieve_body($post_resp);
+            $json = json_decode($body, true);
+            if (is_array($json) && !empty($json['url']) && preg_match('/^https?:\/\//i', $json['url'])) {
+                return trim($json['url']);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extracts next-step button or link candidates (e.g. "Get Link", "Proceed", "Episode Wise Links")
+     */
+    private static function extract_button_bypass($html, $current_url) {
+        if (empty($html) || strpos($html, 'id="go-link"') !== false || strpos($html, '/links/go') !== false) {
+            return null;
+        }
+
+        // Check for Episode Wise Links or direct button shorteners
+        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode\s*Wise|Get\s*Link|Skip\s*Ad|Proceed|Direct\s*Link)[\s\S]*?<\/a>/i', $html, $m)) {
+            $target = trim($m[1]);
+            if ($target && $target !== '#' && strpos($target, 'javascript:') !== 0) {
+                $abs = self::resolve_relative_url($current_url, $target);
+                if (self::is_safe_public_url($abs) && $abs !== $current_url) {
+                    return $abs;
+                }
+            }
+        }
+
+        // Check for specific CSS classes
+        if (preg_match('/<a\s+[^>]*class=[\'"][^\'"]*(?:btn-slide|get-link|skip-ad|btn-download|download-btn)[^\'"]*[\'"][^>]*href=[\'"]([^\'"]+)[\'"]/i', $html, $m)) {
+            $target = trim($m[1]);
+            if ($target && $target !== '#' && strpos($target, 'javascript:') !== 0) {
+                $abs = self::resolve_relative_url($current_url, $target);
+                if (self::is_safe_public_url($abs) && $abs !== $current_url) {
+                    return $abs;
+                }
+            }
+        }
+
         return null;
     }
 }

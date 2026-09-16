@@ -76,13 +76,21 @@ class SLEA_Processor {
             $raw_match  = isset($source_link_info['match']) ? $source_link_info['match'] : null;
             $source_type = isset($source_link_info['type']) ? $source_link_info['type'] : 'content_anchor';
 
-            SLEA_Logger::log("Post #{$post_id}: Isolated Source Link ({$source_type}): {$source_url}", 'info', $post_id);
+            SLEA_Logger::log("Post #{$post_id}: Step 3 - Isolated Source Link ({$source_type}): {$source_url}", 'info', $post_id);
 
-            // 2. Resolve URL and bypass shortlinks & redirects
             $timeout = isset($settings['request_timeout']) ? intval($settings['request_timeout']) : 15;
             $max_redirects = isset($settings['max_redirect_hops']) ? intval($settings['max_redirect_hops']) : 20;
 
-            $resolve_res = SLEA_Resolver::resolve_url($source_url, array(
+            // Step 4: From the source link page, identify the shortened URL associated with "Episode Wise Links"
+            // (e.g. https://shrt.sohojgyan.com/Ij03ndJ)
+            $shortlink_info = self::identify_episode_wise_shortlink($source_url, $timeout);
+            $shortened_url  = esc_url_raw($shortlink_info['url']);
+            $shortlink_src  = $shortlink_info['source'];
+
+            SLEA_Logger::log("Post #{$post_id}: Step 4 - Identified Shortened URL ({$shortlink_src}): {$shortened_url}", 'info', $post_id);
+
+            // Step 5: Resolve the identified shortened URL and access the final destination page
+            $resolve_res = SLEA_Resolver::resolve_url($shortened_url, array(
                 'timeout'       => $timeout,
                 'max_redirects' => $max_redirects,
             ));
@@ -95,7 +103,7 @@ class SLEA_Processor {
                 $refetch = wp_remote_get($final_url, array(
                     'timeout'     => $timeout,
                     'redirection' => 5,
-                    'user-agent'  => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'user-agent'  => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                     'sslverify'   => false,
                 ));
                 if (!is_wp_error($refetch)) {
@@ -103,7 +111,7 @@ class SLEA_Processor {
                 }
             }
 
-            // 3. Extract action/episode links from destination HTML
+            // Step 6: Extract the relevant action/episode links from the resolved destination page
             $extracted_items = SLEA_Extractor::extract_links($final_html, $final_url, true);
 
             // If button_only returned 0, try with relaxed filter
@@ -116,44 +124,41 @@ class SLEA_Processor {
                 $msg = "Post #{$post_id}: Resolved to {$final_url} ({$resolve_res['redirects']} hops), but found 0 extractable links.";
                 SLEA_Logger::log($msg, 'warning', $post_id);
                 return array(
-                    'success'   => false,
-                    'post_id'   => $post_id,
-                    'title'     => $post->post_title,
-                    'source'    => $source_url,
-                    'final'     => $final_url,
-                    'redirects' => $resolve_res['redirects'],
-                    'error'     => 'No action links found on destination page.',
+                    'success'       => false,
+                    'post_id'       => $post_id,
+                    'title'         => $post->post_title,
+                    'source'        => $source_url,
+                    'shortened_url' => $shortened_url,
+                    'final'         => $final_url,
+                    'redirects'     => $resolve_res['redirects'],
+                    'error'         => 'No action links found on destination page.',
                 );
             }
 
-            // 4. Generate Gutenberg Custom HTML Block for this specific Post ID
-            // Passes $post_id to ensure strict isolation, tagging data-slea-post-id="{post_id}"
+            // Step 7: Generate the required HTML code for the extracted links using mobile-friendly blue alternating buttons
+            // Bound strictly to this specific Post ID (data-slea-post-id="{post_id}")
             $buttons_html_block = SLEA_Button_Generator::generate_html($extracted_items, $settings, $post_id);
 
-            // 5. Replace "Source Link" with generated Gutenberg Custom HTML block
-            if ($raw_match && strpos($content, $raw_match) !== false) {
-                $new_content = self::replace_source_link($content, $raw_match, $buttons_html_block);
-            } else {
-                // If source link came from WP Automatic meta or plain URL, append the Custom HTML block cleanly
-                $new_content = rtrim($content) . "\n\n" . $buttons_html_block . "\n";
-            }
+            // Step 8: Replace original source link and insert Custom HTML block at end of post content
+            $new_content = self::replace_source_link($content, $raw_match, $buttons_html_block);
 
-            // 6. Anti-Cross-Contamination Integrity Check
+            // Step 9: Anti-Cross-Contamination Integrity Check
             // Verify that the generated block strictly carries this post ID attribute
             if (strpos($buttons_html_block, 'data-slea-post-id="' . $post_id . '"') === false) {
                 throw new Exception("Integrity error: generated markup does not match target Post #{$post_id}");
             }
 
-            // 7. Save backup meta if requested
+            // Save isolated post execution context in metadata
             if (!empty($settings['keep_backup_meta'])) {
                 update_post_meta($post_id, '_slea_original_content', $content);
                 update_post_meta($post_id, '_slea_source_url', $source_url);
+                update_post_meta($post_id, '_slea_shortened_url', $shortened_url);
                 update_post_meta($post_id, '_slea_final_url', $final_url);
                 update_post_meta($post_id, '_slea_extracted_count', count($extracted_items));
                 update_post_meta($post_id, '_slea_processed_at', current_time('mysql'));
             }
 
-            // 8. Update Post content & publish
+            // Step 10: Only after the post has been processed successfully and HTML inserted, change status to Published
             $update_data = array(
                 'ID'           => $post_id,
                 'post_content' => $new_content,
@@ -306,19 +311,109 @@ class SLEA_Processor {
     }
 
     /**
-     * Replace Source Link match with Custom HTML block cleanly, stripping empty enclosing paragraphs
+     * Identify the shortened URL associated with "Episode Wise Links" from the source link page.
+     * Looks for URLs following structures like https://shrt.sohojgyan.com/Ij03ndJ or links labeled "Episode Wise Links".
+     *
+     * @param string $source_url
+     * @param int $timeout
+     * @return array array('url' => ..., 'source' => ...)
      */
-    private static function replace_source_link($content, $match, $replacement_html) {
-        $escaped_match = preg_quote($match, '/');
-        // Check if $match is the entire or main content of an enclosing <p>...</p> paragraph
-        $para_pattern = '/<p[^>]*>\s*(?:<strong>|<b>)?\s*' . $escaped_match . '\s*(?:<\/strong>|<\/b>)?\s*<\/p>/is';
-
-        if (preg_match($para_pattern, $content)) {
-            return preg_replace($para_pattern, "\n\n" . $replacement_html . "\n\n", $content, 1);
+    public static function identify_episode_wise_shortlink($source_url, $timeout = 15) {
+        // 1. If source_url is already a shortened URL matching shrt.sohojgyan.com or similar, return it directly
+        if (preg_match('/^https?:\/\/shrt\.sohojgyan\.com\/[a-zA-Z0-9_-]+/i', $source_url)
+            || preg_match('/^https?:\/\/(?:shrt\.[a-z0-9.-]+|go\.sohojgyan\.com)\/[a-zA-Z0-9_-]+/i', $source_url)) {
+            return array(
+                'url'    => $source_url,
+                'source' => 'direct_shortener_source',
+            );
         }
 
-        // Otherwise replace just the match
-        return str_replace($match, "\n\n" . $replacement_html . "\n\n", $content);
+        // 2. Fetch the source link page HTML
+        $response = wp_remote_get($source_url, array(
+            'timeout'     => $timeout,
+            'redirection' => 5,
+            'user-agent'  => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'sslverify'   => false,
+        ));
+
+        if (is_wp_error($response)) {
+            return array(
+                'url'    => $source_url,
+                'source' => 'fetch_error_fallback',
+            );
+        }
+
+        $page_html = wp_remote_retrieve_body($response);
+        if (empty($page_html)) {
+            return array(
+                'url'    => $source_url,
+                'source' => 'empty_body_fallback',
+            );
+        }
+
+        // 3. Priority A: Anchor whose text or inner element contains "Episode Wise Links" / "Episode Wise Link" / "Episode-Wise"
+        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]*?<\/a>/i', $page_html, $m)) {
+            $candidate = trim($m[1]);
+            $resolved = SLEA_Resolver::resolve_relative_url($source_url, $candidate);
+            return array(
+                'url'    => $resolved,
+                'source' => 'anchor_episode_wise_text',
+            );
+        }
+
+        // 4. Priority B: Container or span with "Episode Wise Links" followed nearby by an <a> tag
+        if (preg_match('/(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]{0,300}?<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]/i', $page_html, $m)) {
+            $candidate = trim($m[1]);
+            $resolved = SLEA_Resolver::resolve_relative_url($source_url, $candidate);
+            return array(
+                'url'    => $resolved,
+                'source' => 'heading_episode_wise_context',
+            );
+        }
+
+        // 5. Priority C: Direct link to shrt.sohojgyan.com/<token>
+        if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/shrt\.sohojgyan\.com\/[a-zA-Z0-9_-]+)[\'"]/i', $page_html, $m)) {
+            return array(
+                'url'    => trim($m[1]),
+                'source' => 'domain_shrt_sohojgyan',
+            );
+        }
+
+        // 6. Priority D: Any shortener or intermediate redirect domain on page
+        if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/(?:shrt\.[a-z0-9.-]+|go\.sohojgyan\.com)\/[a-zA-Z0-9_-]+)[\'"]/i', $page_html, $m)) {
+            return array(
+                'url'    => trim($m[1]),
+                'source' => 'domain_shrt_pattern',
+            );
+        }
+
+        // Fallback: If no shortlink found on the page, return source_url directly
+        return array(
+            'url'    => $source_url,
+            'source' => 'page_fallback',
+        );
+    }
+
+    /**
+     * Replace Source Link match with Custom HTML block cleanly, stripping empty enclosing paragraphs,
+     * and ensuring the Custom HTML block is placed at the end of the post content.
+     */
+    private static function replace_source_link($content, $match, $replacement_html) {
+        $clean_content = $content;
+        if (!empty($match)) {
+            $escaped_match = preg_quote($match, '/');
+            // Check if $match is the entire or main content of an enclosing <p>...</p> paragraph
+            $para_pattern = '/<p[^>]*>\s*(?:<strong>|<b>)?\s*' . $escaped_match . '\s*(?:<\/strong>|<\/b>)?\s*<\/p>/is';
+
+            if (preg_match($para_pattern, $clean_content)) {
+                $clean_content = preg_replace($para_pattern, '', $clean_content, 1);
+            } else {
+                $clean_content = str_replace($match, '', $clean_content);
+            }
+        }
+
+        // Clean trailing whitespace and append Custom HTML block at the end of the post
+        return rtrim($clean_content) . "\n\n" . $replacement_html . "\n";
     }
 
     /**
