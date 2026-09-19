@@ -17,6 +17,51 @@ class SLEA_Resolver {
     private static $user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
     /**
+     * Resolves a shortened URL with retry logic until the destination matches the target Blogspot structure:
+     * (https://mydverse02.blogspot.com/p/flp-120926.html, https://mydverse02.blogspot.com/p/mbmb-030826.html).
+     *
+     * @param string $initial_url
+     * @param array  $options
+     * @param int    $max_retries
+     * @return array
+     */
+    public static function resolve_shortlink_until_target($initial_url, $options = array(), $max_retries = 3) {
+        $last_res = null;
+        for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
+            $target_url = $initial_url;
+            // On retry attempt 2, if shrt.sohojgyan is used, try direct go.sohojgyan gateway
+            if ($attempt === 2 && stripos($initial_url, 'shrt.sohojgyan') !== false) {
+                $path = trim(parse_url($initial_url, PHP_URL_PATH) ?: '', '/');
+                $parts = explode('/', $path);
+                $code = end($parts);
+                if ($code && strlen($code) >= 3) {
+                    $target_url = "https://go.sohojgyan.com/{$code}";
+                }
+            }
+
+            $res = self::resolve_url($target_url, $options);
+            $last_res = $res;
+
+            if (!empty($res['final']) && self::is_target_destination($res['final'])) {
+                $last_res['attempts'] = $attempt;
+                $last_res['target_destination_verified'] = true;
+                return $last_res;
+            }
+
+            if ($attempt < $max_retries) {
+                sleep(2 * $attempt);
+            }
+        }
+
+        if ($last_res) {
+            $last_res['attempts'] = $max_retries;
+            $last_res['target_destination_verified'] = self::is_target_destination(isset($last_res['final']) ? $last_res['final'] : '');
+        }
+
+        return $last_res;
+    }
+
+    /**
      * Resolve a URL through all redirects, shorteners, meta refreshes, and scripts.
      *
      * @param string $initial_url
@@ -57,6 +102,27 @@ class SLEA_Resolver {
                 break;
             }
             $visited[$normalized] = true;
+
+            // Target Destination Check (Early exit if already at target episode destination)
+            if (self::is_target_destination($current_url)) {
+                $chain[count($chain) - 1]['type'] = 'Target Destination (Blogspot Episode Page)';
+                $chain[count($chain) - 1]['status'] = 200;
+                break;
+            }
+
+            // Fast Gateway: Direct jump from shrt.sohojgyan.com/{code} to go.sohojgyan.com/{code}
+            $parsed_cur_host = strtolower(parse_url($current_url, PHP_URL_HOST) ?: '');
+            if (strpos($parsed_cur_host, 'shrt.sohojgyan') !== false) {
+                $parsed_path = trim(parse_url($current_url, PHP_URL_PATH) ?: '', '/');
+                $parts = explode('/', $parsed_path);
+                $code = end($parts);
+                if ($code && strlen($code) >= 3 && !self::is_target_destination($current_url)) {
+                    $chain[count($chain) - 1]['type'] = 'Shortlink Gateway';
+                    $chain[count($chain) - 1]['status'] = 302;
+                    $current_url = "https://go.sohojgyan.com/{$code}";
+                    continue;
+                }
+            }
 
             // SSRF Check (Ensure valid public HTTP URL)
             if (!self::is_safe_public_url($current_url)) {
@@ -216,10 +282,28 @@ class SLEA_Resolver {
         if (empty($url)) {
             return false;
         }
+        $query = parse_url($url, PHP_URL_QUERY);
+        if ($query) {
+            if (preg_match('/(?:url|dest|link|token|go)=/i', $query)) {
+                return false;
+            }
+        }
+
         $host = parse_url($url, PHP_URL_HOST);
         $path = parse_url($url, PHP_URL_PATH);
+        if (!$path) {
+            return false;
+        }
+
+        $path_lower = strtolower($path);
+        foreach (array('choose-best', 'web-hosting', 'seo-tips', 'sitemap', 'privacy', 'cookie', 'about', 'terms', 'contact') as $bad) {
+            if (strpos($path_lower, $bad) !== false) {
+                return false;
+            }
+        }
+
         if ($host && (stripos($host, 'blogspot.') !== false || stripos($host, 'mydverse') !== false)) {
-            if ($path && strpos($path, '/p/') !== false && substr($path, -5) === '.html') {
+            if (strpos($path, '/p/') !== false && substr($path, -5) === '.html') {
                 return true;
             }
         }
@@ -483,15 +567,11 @@ class SLEA_Resolver {
         $form_html = $form_match[0];
         $target_action = self::resolve_relative_url($current_url, $action);
 
-        // Collect form input fields
+        // Collect form input fields (preserve exact literal string for CakePHP token signatures)
         $form_data = array();
         if (preg_match_all('/<input[^>]+name=[\'"]([^\'"]+)[\'"][^>]*value=[\'"]([^\'"]*)[\'"]/i', $form_html, $input_matches, PREG_SET_ORDER)) {
             foreach ($input_matches as $im) {
-                $val = $im[2];
-                if (strpos($val, '%') !== false) {
-                    $val = urldecode($val);
-                }
-                $form_data[$im[1]] = $val;
+                $form_data[$im[1]] = $im[2];
             }
         }
 

@@ -94,14 +94,18 @@ class SLEA_Processor {
 
             SLEA_Logger::log("Post #{$post_id}: Step 4 - Identified Shortened URL ({$shortlink_src}): {$shortened_url}", 'info', $post_id);
 
-            // Step 5: Resolve the identified shortened URL and access the final destination page
-            $resolve_res = SLEA_Resolver::resolve_url($shortened_url, array(
+            // Step 5: Resolve the identified shortened URL with retry logic until the destination matches target Blogspot structure:
+            // (https://mydverse02.blogspot.com/p/flp-120926.html, https://mydverse02.blogspot.com/p/mbmb-030826.html)
+            $resolve_res = SLEA_Resolver::resolve_shortlink_until_target($shortened_url, array(
                 'timeout'       => $timeout,
                 'max_redirects' => $max_redirects,
-            ));
+            ), 3);
 
-            $final_url = $resolve_res['final'];
-            $final_html = $resolve_res['final_html'];
+            $final_url = isset($resolve_res['final']) ? $resolve_res['final'] : $shortened_url;
+            $final_html = isset($resolve_res['final_html']) ? $resolve_res['final_html'] : '';
+            $is_verified_target = SLEA_Resolver::is_target_destination($final_url);
+
+            SLEA_Logger::log("Post #{$post_id}: Step 5 - Resolved to {$final_url} (target_verified: " . ($is_verified_target ? 'YES' : 'NO') . ")", 'info', $post_id);
 
             // If destination HTML was not retained during redirect chain, fetch final destination directly
             if (empty($final_html) || strlen($final_html) < 200) {

@@ -31,6 +31,7 @@ import {
   PipelineMode
 } from "../types";
 import { parseHTMLClientSide, isBlockedTestLink } from "../utils/pythonExtractor";
+import { safeFetchJson } from "../utils/safeFetch";
 import { SAMPLES } from "../data/samples";
 import { EpisodeButtonsGenerator } from "./EpisodeButtonsGenerator";
 
@@ -115,16 +116,29 @@ export const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({
     try {
       if (activePipeline === "resolver" && inputTab === "url" && !overrideHtml) {
         // Run Resolver endpoint
-        const res = await fetch("/api/resolve", {
+        const fetchRes = await safeFetchJson<{
+          success: boolean;
+          data?: {
+            original: string;
+            final: string;
+            redirects: number;
+            chain: ResolveChainItem[];
+          };
+          error?: string;
+        }>("/api/resolve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: targetUrl }),
         });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to resolve URL.");
+
+        if (!fetchRes.ok || !fetchRes.data?.success || !fetchRes.data.data) {
+          throw new Error(
+            fetchRes.error ||
+              fetchRes.data?.error ||
+              "Failed to resolve URL."
+          );
         }
-        const resolveData = data.data;
+        const resolveData = fetchRes.data.data;
         const unifiedData: UnifiedResult = {
           success: true,
           resolved: true,
@@ -151,7 +165,7 @@ export const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({
       } else {
         // Run Unified Pipeline endpoint
         const isUnified = activePipeline === "unified";
-        const res = await fetch("/api/unified", {
+        const fetchRes = await safeFetchJson<UnifiedResponse>("/api/unified", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -163,11 +177,15 @@ export const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({
           }),
         });
 
-        const data: UnifiedResponse = await res.json();
-
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Execution failed.");
+        if (!fetchRes.ok || !fetchRes.data || !fetchRes.data.success) {
+          throw new Error(
+            fetchRes.error ||
+              fetchRes.data?.error ||
+              "Execution failed on server."
+          );
         }
+
+        const data: UnifiedResponse = fetchRes.data;
 
         // Clean & filter test links
         const cleanItems = (data.items || []).filter(
@@ -507,6 +525,66 @@ export const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({
                     Clear
                   </button>
                 )}
+              </div>
+
+              {/* Quick Sample Links for One-Click Testing */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
+                <span className="text-[#747775] font-medium text-[11px]">Quick Samples:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = "https://shrt.sohojgyan.com/Ij03ndJ";
+                    setUrlInput(u);
+                    handleExecute(u);
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]"
+                >
+                  ⚡ Shortlink 1 (Ij03ndJ)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = "https://shrt.sohojgyan.com/AAhg";
+                    setUrlInput(u);
+                    handleExecute(u);
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]"
+                >
+                  ⚡ Shortlink 2 (AAhg)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = "https://mydverse.com/2026/09/fanletter-please-korean-drama-in-hindi/";
+                    setUrlInput(u);
+                    handleExecute(u);
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]"
+                >
+                  🎬 Fanletter Please (Post)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = "https://mydverse.com/2026/09/the-tale-of-lady-ok-korean-drama-in-hindi/";
+                    setUrlInput(u);
+                    handleExecute(u);
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]"
+                >
+                  🎬 Tale of Lady Ok (Post)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = "https://mydverse02.blogspot.com/p/flp-120926.html";
+                    setUrlInput(u);
+                    handleExecute(u);
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-[#e8f0fe] hover:bg-[#c2e7ff] text-[#0b57d0] border border-[#a8c7fa] cursor-pointer transition-colors text-[11px]"
+                >
+                  🎯 Destination Target
+                </button>
               </div>
             </div>
           ) : (

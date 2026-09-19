@@ -11,10 +11,11 @@ for p in [current_dir, parent_dir, os.getcwd(), "/var/task", "/var/task/api"]:
         sys.path.insert(0, p)
 
 try:
-    import extractor
+    import unified_engine
 except ImportError:
+    # Try relative import or parent import
     sys.path.append(parent_dir)
-    import extractor
+    import unified_engine
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -36,6 +37,7 @@ class handler(BaseHTTPRequestHandler):
             if content_length > 0:
                 post_data = self.rfile.read(content_length).decode("utf-8", errors="replace")
             else:
+                # Try reading whatever is available if content-length was not provided
                 try:
                     post_data = self.rfile.read().decode("utf-8", errors="replace")
                 except Exception:
@@ -50,12 +52,14 @@ class handler(BaseHTTPRequestHandler):
             html = body.get("html")
             base_url = body.get("base_url")
             button_only = body.get("button_only", True)
+            auto_resolve = body.get("auto_resolve", True)
 
-            result = extractor.run_extraction_api(
+            result = unified_engine.run_unified_pipeline(
                 url=url,
                 html=html,
                 base_url=base_url,
-                button_only=button_only
+                button_only=button_only,
+                auto_resolve=auto_resolve
             )
 
             response_bytes = json.dumps(result).encode("utf-8")
@@ -68,10 +72,11 @@ class handler(BaseHTTPRequestHandler):
             self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(response_bytes)
+
         except Exception as exc:
             err_payload = json.dumps({
                 "success": False,
-                "error": f"Server error: {str(exc)}"
+                "error": f"Server processing error: {str(exc)}"
             }).encode("utf-8")
             self.send_response(500)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -82,10 +87,12 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(err_payload)
 
     def do_GET(self):
+        # Provide helpful status if accessed via GET
         payload = json.dumps({
             "status": "active",
-            "endpoint": "/api/extract",
-            "method": "POST"
+            "endpoint": "/api/unified",
+            "method": "POST",
+            "description": "Unified Link Resolver & Button Extractor Pipeline"
         }).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")

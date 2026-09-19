@@ -13,6 +13,7 @@ import {
   LockOpen,
 } from "lucide-react";
 import { ResolveResult, ResolveResponse } from "../types";
+import { safeFetchJson } from "../utils/safeFetch";
 
 interface ResolverPageProps {
   onNotify: (text: string, type?: "success" | "error" | "info") => void;
@@ -73,17 +74,21 @@ export const ResolverPage: React.FC<ResolverPageProps> = ({
     setLoading(true);
 
     try {
-      const res = await fetch("/api/resolve", {
+      const fetchRes = await safeFetchJson<ResolveResponse>("/api/resolve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: targetUrl }),
       });
 
-      const data: ResolveResponse = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Unable to resolve this URL.");
+      if (!fetchRes.ok || !fetchRes.data || !fetchRes.data.success) {
+        throw new Error(
+          fetchRes.error ||
+            fetchRes.data?.error ||
+            "Unable to resolve this URL."
+        );
       }
+
+      const data = fetchRes.data;
 
       if (data.data) {
         setResult(data.data);

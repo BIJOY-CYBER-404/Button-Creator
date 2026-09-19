@@ -30,6 +30,8 @@ export interface ResolveResult {
   final: string;
   redirects: number;
   chain: ResolveChainItem[];
+  target_destination_verified?: boolean;
+  attempts?: number;
 }
 
 export interface ResolveResponse {
@@ -48,6 +50,8 @@ export interface UnifiedResult {
   items: ExtractedItem[];
   count: number;
   bytes?: number;
+  target_destination_verified?: boolean;
+  attempts?: number;
   fetch_warning?: string;
   error?: string;
 }
@@ -64,6 +68,8 @@ export interface UnifiedResponse {
   items?: ExtractedItem[];
   count?: number;
   bytes?: number;
+  target_destination_verified?: boolean;
+  attempts?: number;
   fetch_warning?: string;
 }
 

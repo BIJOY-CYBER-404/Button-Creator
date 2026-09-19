@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ExtractedItem, ExtractionResponse } from "../types";
 import { parseHTMLClientSide, isBlockedTestLink } from "../utils/pythonExtractor";
+import { safeFetchJson } from "../utils/safeFetch";
 import { SAMPLES } from "../data/samples";
 import { ArrowUpRight } from "lucide-react";
 import { EpisodeButtonsGenerator } from "./EpisodeButtonsGenerator";
@@ -65,7 +66,7 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
 
     try {
       // 1. First attempt: call backend Python API (/api/extract)
-      const res = await fetch("/api/extract", {
+      const fetchRes = await safeFetchJson<ExtractionResponse>("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -76,31 +77,29 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
         }),
       });
 
-      if (res.ok) {
-        const data: ExtractionResponse = await res.json();
-        if (data.success && data.items) {
-          const filtered = data.items.filter(
-            (it) => !isBlockedTestLink(it.text, it.url)
-          );
-          setItems(filtered);
-          setStatusMessage(
-            `Done (Python 3.10 standard library). Final URL: ${
-              data.final_url || targetUrl
-            } (${data.bytes || 0} bytes parsed)`
-          );
-          onNotify(
-            `Found ${filtered.length} action link${
-              filtered.length === 1 ? "" : "s"
-            }`,
-            "success"
-          );
-          setLoading(false);
-          return;
-        } else if (data.error) {
-          throw new Error(data.error);
-        }
+      if (fetchRes.ok && fetchRes.data?.success && fetchRes.data.items) {
+        const data = fetchRes.data;
+        const filtered = data.items.filter(
+          (it) => !isBlockedTestLink(it.text, it.url)
+        );
+        setItems(filtered);
+        setStatusMessage(
+          `Done (Python 3.10 standard library). Final URL: ${
+            data.final_url || targetUrl
+          } (${data.bytes || 0} bytes parsed)`
+        );
+        onNotify(
+          `Found ${filtered.length} action link${
+            filtered.length === 1 ? "" : "s"
+          }`,
+          "success"
+        );
+        setLoading(false);
+        return;
+      } else if (fetchRes.error || fetchRes.data?.error) {
+        throw new Error(fetchRes.error || fetchRes.data?.error);
       }
-      throw new Error(`Server returned status ${res.status}`);
+      throw new Error(`Server returned status ${fetchRes.status}`);
     } catch (apiErr: any) {
       // 2. Fallback: If network error (e.g. target website blocks server IP, CORS, or local HTML mode)
       console.warn("Backend Python fetch failed, trying client-side Python logic mirror:", apiErr);

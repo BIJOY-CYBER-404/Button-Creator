@@ -5,10 +5,15 @@
   "outputDirectory": "dist",
   "functions": {
     "api/*.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "api/**,public/**"
     }
   },
   "rewrites": [
+    {
+      "source": "/api/download-plugin-zip",
+      "destination": "/api/download_plugin_zip"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
