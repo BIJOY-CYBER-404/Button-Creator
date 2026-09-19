@@ -64,10 +64,11 @@ class SLEA_Admin {
     public static function sanitize_settings($input) {
         $clean = array();
         $clean['cron_enabled']        = !empty($input['cron_enabled']) ? 1 : 0;
+        $clean['target_status']       = (isset($input['target_status']) && in_array($input['target_status'], array('publish', 'ready'))) ? $input['target_status'] : 'publish';
         $clean['cron_interval']       = sanitize_text_field($input['cron_interval']);
         $clean['custom_cron_minutes'] = max(1, min(1440, intval($input['custom_cron_minutes'])));
         $clean['max_runs']            = max(0, intval($input['max_runs'])); // 0 = unlimited
-        $clean['batch_limit']         = max(1, min(100, intval($input['batch_limit'])));
+        $clean['batch_limit']         = max(1, min(50, intval($input['batch_limit'])));
         $clean['source_anchor_text']  = sanitize_text_field($input['source_anchor_text']);
         $clean['url_pattern']         = sanitize_text_field($input['url_pattern']);
         $clean['button_prefix']       = sanitize_text_field($input['button_prefix']);
@@ -343,7 +344,7 @@ class SLEA_Admin {
                             <?php while ($pending_query->have_posts()) : $pending_query->the_post();
                                 $p_id = get_the_ID();
                                 $content = get_the_content();
-                                $source_info = SLEA_Processor::find_source_link($content, $settings, $p_id);
+                                $source_info = SLEA_Processor::find_source_link($content, $p_id, $settings);
                             ?>
                                 <tr id="slea-post-row-<?php echo $p_id; ?>">
                                     <td><strong>#<?php echo $p_id; ?></strong></td>
@@ -353,7 +354,7 @@ class SLEA_Admin {
                                     <td>
                                         <?php if ($source_info) : ?>
                                             <code class="slea-url-tag" style="word-break:break-all;"><?php echo esc_html($source_info['url']); ?></code>
-                                            <small style="display:block; color:#666;">Source: <?php echo esc_html($source_info['match_type']); ?></small>
+                                            <small style="display:block; color:#666;">Type: <?php echo esc_html(!empty($source_info['type']) ? $source_info['type'] : (!empty($source_info['match_type']) ? $source_info['match_type'] : 'detected')); ?></small>
                                         <?php else : ?>
                                             <span class="slea-badge-warning">No Source Link Found</span>
                                         <?php endif; ?>
@@ -481,11 +482,17 @@ class SLEA_Admin {
                         <tr>
                             <th scope="row">Post Status on Success</th>
                             <td>
-                                <p style="margin-top:0;">
-                                    <span class="slea-badge slea-badge-success" style="background:#eafaf1; color:#0a8553; border:1px solid #c2ebd5; padding:4px 10px; border-radius:12px; font-weight:600; font-size:12px;">Status: Ready</span>
-                                </p>
+                                <?php $current_target = !empty($settings['target_status']) ? $settings['target_status'] : (!empty($settings['auto_publish']) ? 'publish' : 'ready'); ?>
+                                <label style="display:block; margin-bottom:8px;">
+                                    <input type="radio" name="slea_settings[target_status]" value="publish" <?php checked($current_target, 'publish'); ?>>
+                                    <strong>Publish immediately</strong> — Post becomes public and is visible to visitors on your website right away.
+                                </label>
+                                <label style="display:block; margin-bottom:8px;">
+                                    <input type="radio" name="slea_settings[target_status]" value="ready" <?php checked($current_target, 'ready'); ?>>
+                                    <strong>Mark as "Ready"</strong> — Post status is set to Ready (draft/review stage) without making it public yet.
+                                </label>
                                 <p class="description">
-                                    When processing succeeds, the post is automatically updated and marked as <strong>Ready</strong> (registered with identical permissions and restrictions to <strong>Pending</strong>). If any step of the process fails, the post remains safely in <strong>Pending</strong> status.
+                                    Choose whether automated posts should be published live on the website or kept in "Ready" status for manual approval. If processing fails, the post remains safely in <strong>Pending</strong>.
                                 </p>
                             </td>
                         </tr>

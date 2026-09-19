@@ -48,25 +48,30 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                             return False
                         return True
 
-                    # 1. Direct href matching shrt.sohojgyan.com or go.sohojgyan.com
-                    m_shrt = re.search(r'<a\s+[^>]*href=[\'"](https?://(?:shrt\.[a-z0-9.-]+|go\.sohojgyan\.com)/[a-zA-Z0-9_-]+)[\'"]', final_html, re.I)
-                    if m_shrt and is_valid_shortlink(m_shrt.group(1).strip()):
-                        shortlink_candidate = m_shrt.group(1).strip()
+                    # 0. Direct href matching target Blogspot destination structure (e.g. https://mydverse02.blogspot.com/p/flp-120926.html)
+                    m_target = re.search(r'<a\s+[^>]*href=[\'"](https?://[a-zA-Z0-9.-]*blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html)[\'"]', final_html, re.I)
+                    if m_target:
+                        shortlink_candidate = m_target.group(1).strip()
                     else:
-                        # 2. Anchor containing Episode Wise Links / Episode-Wise / Episode Wise Link
-                        m_ew = re.search(r'<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]*?</a>', final_html, re.I)
-                        if m_ew:
-                            resolved_cand = urljoin(final_dest_url, m_ew.group(1).strip())
-                            if is_valid_shortlink(resolved_cand):
-                                shortlink_candidate = resolved_cand
-
-                        # 3. Contextual nearby container
-                        if not shortlink_candidate:
-                            m_near = re.search(r'(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]{0,300}?<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]', final_html, re.I)
-                            if m_near:
-                                resolved_cand = urljoin(final_dest_url, m_near.group(1).strip())
+                        # 1. Direct href matching shrt.sohojgyan.com or go.sohojgyan.com or other shortener
+                        m_shrt = re.search(r'<a\s+[^>]*href=[\'"](https?://(?:shrt\.[a-z0-9.-]+|go\.sohojgyan\.com)/[a-zA-Z0-9_-]+)[\'"]', final_html, re.I)
+                        if m_shrt and is_valid_shortlink(m_shrt.group(1).strip()):
+                            shortlink_candidate = m_shrt.group(1).strip()
+                        else:
+                            # 2. Anchor containing Episode Wise Links / Episode-Wise / Episode Wise Link
+                            m_ew = re.search(r'<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]*?</a>', final_html, re.I)
+                            if m_ew:
+                                resolved_cand = urljoin(final_dest_url, m_ew.group(1).strip())
                                 if is_valid_shortlink(resolved_cand):
                                     shortlink_candidate = resolved_cand
+
+                            # 3. Contextual nearby container
+                            if not shortlink_candidate:
+                                m_near = re.search(r'(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]{0,300}?<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]', final_html, re.I)
+                                if m_near:
+                                    resolved_cand = urljoin(final_dest_url, m_near.group(1).strip())
+                                    if is_valid_shortlink(resolved_cand):
+                                        shortlink_candidate = resolved_cand
 
                 # If an Episode Wise Links shortlink was identified on the source page, resolve that shortened URL
                 if shortlink_candidate and shortlink_candidate != url:

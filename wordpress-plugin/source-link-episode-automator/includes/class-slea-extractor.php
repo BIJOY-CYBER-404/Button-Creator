@@ -13,8 +13,9 @@ class SLEA_Extractor {
     private static $action_words = array(
         'download', 'watch', 'stream', 'play', 'open', 'direct',
         'server', 'link', 'links', 'get', 'view', 'continue', 'mirror',
-        'xcloud', 'filemoon', 'streamtape', 'doodstream', 'mixdrop',
-        'episode', 'episodes', 'ep', 'wise', 'gdrive', 'drive', 'mediafire', 'mega'
+        'xcloud', 'filemoon', 'streamtape', 'doodstream', 'mixdrop', 'hubcloud', 'gdflix',
+        'episode', 'episodes', 'ep', 'eps', 'wise', 'gdrive', 'drive', 'mediafire', 'mega',
+        '480p', '720p', '1080p', '2160p', '4k', 'hevc', 'fast', 'click here', 'click'
     );
 
     private static $nav_words = array(

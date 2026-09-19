@@ -143,7 +143,14 @@ class SLEA_Resolver {
                 continue;
             }
 
-            // Case 3: Safelink Multi-Step Interstitial Bypass
+            // If current_url matches target destination structure (e.g. https://mydverse02.blogspot.com/p/flp-120926.html),
+            // this is the intended final destination page holding the episode links.
+            if (self::is_target_destination($current_url)) {
+                $chain[count($chain) - 1]['type'] = 'Target Destination (Blogspot Episode Page)';
+                break;
+            }
+
+            // Case 3: Safelink Multi-Stage Interstitial Bypass
             $safelink_target = self::extract_safelink_bypass($body, $current_url);
             if ($safelink_target && $safelink_target !== $current_url && !isset($visited[strtolower(rtrim($safelink_target, '/'))])) {
                 $chain[count($chain) - 1]['type'] = 'Safelink Interstitial Bypass';
@@ -197,6 +204,26 @@ class SLEA_Resolver {
             'final_html'=> $final_html,
             'error'     => null,
         );
+    }
+
+    /**
+     * Checks if URL matches the target Blogspot destination structure:
+     * e.g. https://mydverse02.blogspot.com/p/flp-120926.html
+     *      https://mydverse02.blogspot.com/p/mbmb-030826.html
+     *      https://*.blogspot.com/p/*.html
+     */
+    public static function is_target_destination($url) {
+        if (empty($url)) {
+            return false;
+        }
+        $host = parse_url($url, PHP_URL_HOST);
+        $path = parse_url($url, PHP_URL_PATH);
+        if ($host && (stripos($host, 'blogspot.') !== false || stripos($host, 'mydverse') !== false)) {
+            if ($path && strpos($path, '/p/') !== false && substr($path, -5) === '.html') {
+                return true;
+            }
+        }
+        return (bool) preg_match('/^https?:\/\/[a-zA-Z0-9.-]*blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html/i', $url);
     }
 
     /**
@@ -341,6 +368,14 @@ class SLEA_Resolver {
     private static function extract_safelink_bypass($html, $current_url) {
         if (empty($html)) {
             return null;
+        }
+
+        // Direct target Blogspot destination detection (e.g. https://mydverse02.blogspot.com/p/flp-120926.html)
+        if (preg_match('/[\'"](https?:\/\/[a-zA-Z0-9.-]*blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)[\'"]/i', $html, $m_dest)) {
+            $target_cand = trim($m_dest[1]);
+            if (self::is_safe_public_url($target_cand) && $target_cand !== $current_url) {
+                return $target_cand;
+            }
         }
 
         $query = parse_url($current_url, PHP_URL_QUERY);
@@ -508,6 +543,19 @@ class SLEA_Resolver {
     private static function extract_button_bypass($html, $current_url) {
         if (empty($html) || strpos($html, 'id="go-link"') !== false || strpos($html, '/links/go') !== false) {
             return null;
+        }
+
+        // If current page is already the target Blogspot destination format, do NOT navigate away
+        if (self::is_target_destination($current_url)) {
+            return null;
+        }
+
+        // Priority 0: Check for direct target Blogspot destination link
+        if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/[a-zA-Z0-9.-]*blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)[\'"]/i', $html, $m)) {
+            $target = trim($m[1]);
+            if (self::is_safe_public_url($target) && $target !== $current_url) {
+                return $target;
+            }
         }
 
         // Check for Episode Wise Links or direct button shorteners

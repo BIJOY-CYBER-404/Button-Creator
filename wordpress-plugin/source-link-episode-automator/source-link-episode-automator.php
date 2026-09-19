@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Source Link & Episode Button Automator
  * Plugin URI:  https://mydverse.com/
- * Description: Automatically detects "Source Link" in pending RSS/WP Automatic imported posts, resolves redirects and bypasses shortlinks, extracts episode links, injects mobile-width buttons in isolated Gutenberg Custom HTML blocks, and auto-publishes on schedule (configurable frequency & run count) or via batch execution.
- * Version:     2.0.0
+ * Description: Automatically detects "Source Link" in pending RSS/WP Automatic imported posts, resolves redirects and bypasses shortlinks to target Blogspot destinations, extracts episode links, injects mobile-width buttons in isolated Gutenberg Custom HTML blocks, and marks posts as Ready on schedule or via batch execution.
+ * Version:     2.2.0
  * Author:      Automator Team
  * License:     GPL-2.0+
  * Text Domain: source-link-automator
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-define('SLEA_VERSION', '2.0.0');
+define('SLEA_VERSION', '2.2.0');
 define('SLEA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SLEA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SLEA_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -29,29 +29,40 @@ require_once SLEA_PLUGIN_DIR . 'includes/class-slea-admin.php';
 
 /**
  * Register custom post status "Ready" with identical permissions and restrictions as "Pending"
- * - Not publicly readable by unauthenticated users (public => false)
- * - Protected from search and public archive visibility (protected => true)
+ * - Protected from search and public archive visibility
  * - Shows in admin "All" posts table and has its own status filter tab in edit.php
  */
 function slea_register_ready_post_status() {
-    register_post_status('ready', array(
-        'label'                     => _x('Ready', 'post status', 'source-link-automator'),
-        'public'                    => false,
-        'protected'                 => true,
-        'exclude_from_search'       => false,
-        'show_in_admin_all_list'    => true,
-        'show_in_admin_status_list' => true,
-        'label_count'               => _n_noop('Ready <span class="count">(%s)</span>', 'Ready <span class="count">(%s)</span>', 'source-link-automator'),
-    ));
+    if (!get_post_status_object('ready')) {
+        register_post_status('ready', array(
+            'label'                     => _x('Ready', 'post status', 'source-link-automator'),
+            'public'                    => false,
+            'protected'                 => true,
+            'exclude_from_search'       => true,
+            'show_in_admin_all_list'    => true,
+            'show_in_admin_status_list' => true,
+            'label_count'               => _n_noop('Ready <span class="count">(%s)</span>', 'Ready <span class="count">(%s)</span>', 'source-link-automator'),
+        ));
+    }
 }
 add_action('init', 'slea_register_ready_post_status');
 
 /**
  * Display "— Ready" label in post states column in WordPress admin (edit.php)
+ * Completely defensive against missing arguments, non-objects, or null posts
  */
-function slea_display_ready_post_state($states, $post) {
-    if (get_post_status($post->ID) === 'ready') {
-        $states['ready'] = _x('Ready', 'post status', 'source-link-automator');
+function slea_display_ready_post_state($states = array(), $post = null) {
+    if (!is_array($states)) {
+        $states = array();
+    }
+    if (!$post) {
+        return $states;
+    }
+    $post_id = is_object($post) && isset($post->ID) ? (int)$post->ID : (is_numeric($post) ? (int)$post : 0);
+    if ($post_id > 0 && function_exists('get_post_status')) {
+        if (get_post_status($post_id) === 'ready') {
+            $states['ready'] = _x('Ready', 'post status', 'source-link-automator');
+        }
     }
     return $states;
 }
@@ -61,11 +72,14 @@ add_filter('display_post_states', 'slea_display_ready_post_state', 10, 2);
  * Add "Ready" option to Classic Editor status dropdown in the Publish meta box
  */
 function slea_add_ready_to_classic_editor() {
-    global $post;
-    if (!$post || $post->post_type !== 'post') {
+    if (!is_admin()) {
         return;
     }
-    $status = get_post_status($post->ID);
+    global $post;
+    if (!$post || !is_object($post) || !isset($post->post_type) || $post->post_type !== 'post') {
+        return;
+    }
+    $status = isset($post->ID) ? get_post_status($post->ID) : '';
     $is_ready = ($status === 'ready');
     ?>
     <script type="text/javascript">
@@ -87,8 +101,11 @@ add_action('post_submitbox_misc_actions', 'slea_add_ready_to_classic_editor');
  * Add "Ready" option to Quick Edit & Bulk Edit status dropdowns in edit.php
  */
 function slea_add_ready_to_quick_edit() {
+    if (!is_admin()) {
+        return;
+    }
     global $post_type;
-    if ($post_type !== 'post') {
+    if (empty($post_type) || $post_type !== 'post') {
         return;
     }
     ?>
@@ -111,23 +128,24 @@ add_action('admin_footer-edit.php', 'slea_add_ready_to_quick_edit');
 function slea_activate_plugin() {
     // Default settings
     $default_settings = array(
-        'cron_enabled'        => 1,
-        'cron_interval'       => 'every_five_minutes', // 1 min, 2 min, 5 min, 10 min, 15 min, 30 min, hourly, etc.
+        'cron_enabled'        => 0, // Safe default: off until configured to prevent server load
+        'target_status'       => 'publish', // Default to 'publish' so posts appear live on website!
+        'cron_interval'       => 'every_five_minutes',
         'custom_cron_minutes' => 10,
-        'max_runs'            => 0, // 0 = unlimited continuous runs, or specify number (e.g. 10)
-        'batch_limit'         => 10, // Handles 10+ pending posts smoothly
-        'source_anchor_text'  => 'Source Link', // case-insensitive anchor text or URL pattern
-        'url_pattern'         => 'mydverse\.com\/[0-9]{4}\/[0-9]{2}\/', // regex to detect source link URLs
+        'max_runs'            => 0,
+        'batch_limit'         => 5, // Safe 5 posts per batch to prevent gateway timeouts
+        'source_anchor_text'  => 'Source Link',
+        'url_pattern'         => 'mydverse\.com\/[0-9]{4}\/[0-9]{2}\/',
         'button_prefix'       => 'Episode',
         'start_number'        => 1,
         'pad_zeroes'          => 1,
         'open_new_tab'        => 1,
         'margin_side'         => 20,
         'session_end_text'    => '- Session End -',
-        'auto_publish'        => 1, // Change status from 'pending' to 'publish'
-        'keep_backup_meta'    => 1, // Store original content & source link in post meta
-        'max_redirect_hops'   => 20,
-        'request_timeout'     => 15,
+        'auto_publish'        => 1,
+        'keep_backup_meta'    => 1,
+        'max_redirect_hops'   => 15,
+        'request_timeout'     => 10,
         'debug_logging'       => 1,
     );
 
@@ -139,8 +157,10 @@ function slea_activate_plugin() {
         update_option('slea_settings', $merged);
     }
 
-    // Schedule cron job
-    SLEA_Cron::schedule_event();
+    // Only schedule if enabled
+    if (!empty($existing['cron_enabled'])) {
+        SLEA_Cron::schedule_event();
+    }
 }
 register_activation_hook(__FILE__, 'slea_activate_plugin');
 

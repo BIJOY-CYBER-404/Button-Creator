@@ -65,7 +65,7 @@ export const WordPressPluginHub: React.FC<WordPressPluginHubProps> = ({
                   Source Link & Episode Button Automator
                 </h2>
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#e8def8] text-[#4a4458]">
-                  WordPress Plugin v2.0.0
+                  WordPress Plugin v2.2.0
                 </span>
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#14532d]">
                   "Ready" Status Support
@@ -78,7 +78,7 @@ export const WordPressPluginHub: React.FC<WordPressPluginHubProps> = ({
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-[#444746] mt-0.5">
-                Engineered for WP Automatic & RSS feeds with 10+ pending posts: bypasses shorteners/redirects, generates isolated Gutenberg Custom HTML blocks, and marks posts as Ready without mixing buttons.
+                Engineered for WP Automatic & RSS feeds: bypasses shorteners/redirects to Blogspot destination (<code className="font-mono text-[11px]">https://mydverse02.blogspot.com/p/*.html</code>), generates isolated Gutenberg Custom HTML blocks, and marks posts as Ready without mixing buttons.
               </p>
             </div>
           </div>
@@ -325,10 +325,10 @@ export const WordPressPluginHub: React.FC<WordPressPluginHubProps> = ({
  * Plugin Name: Source Link & Episode Button Automator
  * Plugin URI:  https://mydverse.com/
  * Description: Automatically detects "Source Link" in pending RSS imported posts,
- *              resolves redirects and bypasses shortlinks, extracts episode buttons,
- *              replaces the Source Link with responsive episode buttons HTML,
- *              and auto-publishes on schedule (WP-Cron) or manual batch trigger.
- * Version:     1.0.0
+ *              resolves redirects and bypasses shortlinks to Blogspot destination,
+ *              extracts episode buttons, replaces the Source Link with responsive
+ *              episode buttons HTML, and marks posts as Ready.
+ * Version:     2.1.0
  */`}</pre>
               )}
 
@@ -337,7 +337,7 @@ export const WordPressPluginHub: React.FC<WordPressPluginHubProps> = ({
 // 1. Detect "Source link" hyperlink in post_content (structure: mydverse.com/... or <p><a ...>Source link </a></p>)
 //    - Excludes any URL matching movihubhq.com
 // 2. Extract shortened URL from source link page (e.g. shrt.sohojgyan.com/Ij03ndJ or "Episode Wise Links")
-// 3. Resolve shortened URL to final destination page & extract episode links
+// 3. Resolve shortened URL to final destination page (https://mydverse02.blogspot.com/p/*.html) & extract episode links
 // 4. Generate responsive mobile-width blue alternating episode buttons
 // 5. Replace ONLY the "Source link" hyperlink text/markup with generated HTML, keeping all other content intact
 // 6. On success: Mark post status as 'ready' (same permissions as Pending)
@@ -356,7 +356,8 @@ add_action('slea_run_pending_post_automator', ['SLEA_Cron', 'execute_cron']);
               {expandedFile === "resolver" && (
                 <pre>{`// SLEA_Resolver::resolve_url($url)
 // Follows hops, stores session cookies, extracts meta refresh,
-// parses JS window.location & obfuscated atob() base64 targets.`}</pre>
+// parses JS window.location & obfuscated atob() base64 targets,
+// and enforces resolution to target Blogspot page (https://mydverse02.blogspot.com/p/*.html).`}</pre>
               )}
 
               {expandedFile === "extractor" && (

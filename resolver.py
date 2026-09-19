@@ -65,6 +65,27 @@ class RedirectParser(HTMLParser):
 # Security & SSRF Protection
 # =========================================================
 
+def is_target_destination(url):
+    """
+    Checks if the URL matches the target Blogspot destination structure:
+    e.g. https://mydverse02.blogspot.com/p/flp-120926.html
+         https://mydverse02.blogspot.com/p/mbmb-030826.html
+         https://*.blogspot.com/p/*.html
+    """
+    if not url:
+        return False
+    try:
+        p = urlparse(url)
+        host = (p.hostname or "").lower()
+        path = p.path or ""
+        if ("blogspot." in host or "mydverse" in host) and ("/p/" in path and path.endswith(".html")):
+            return True
+        if re.search(r'https?://[a-zA-Z0-9.-]*blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html', url, re.I):
+            return True
+    except Exception:
+        pass
+    return False
+
 def is_blocked_host(hostname):
     if not hostname:
         return True
@@ -231,12 +252,21 @@ def extract_safelink_bypass(html, current_url):
     """
     Detects safelink scripts (e.g. shrt.sohojgyan, mydriveverse, mydverse)
     Handles:
+    - Target Blogspot Destination direct detection (https://mydverse02.blogspot.com/p/*.html)
     - Step 1: Array of next blog destinations + ?url=<token>
     - Step 2: Unpacking token and constructing mainUrl (https://go.<domain>/<token>)
     - Direct base64-encoded destination URLs in query parameters
     """
     if not html:
         return None
+
+    # Pattern 0: Direct Blogspot destination link in script or HTML
+    target_match = re.search(r'["\'](https?://[a-zA-Z0-9.-]*blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html)["\']', html, re.I)
+    if target_match:
+        target_cand = target_match.group(1).strip()
+        parsed_cand = urlparse(target_cand)
+        if parsed_cand.hostname and not is_blocked_host(parsed_cand.hostname) and target_cand != current_url:
+            return target_cand
 
     parsed_cur = urlparse(current_url)
     qs = parse_qs(parsed_cur.query)
@@ -595,6 +625,10 @@ def extract_button_bypass(html, current_url):
     if 'id="go-link"' in html or '/links/go' in html:
         return None
 
+    # If current page is already the target blogspot destination format, do NOT navigate away
+    if is_target_destination(current_url):
+        return None
+
     # 1. Use Robust Element Collector to find real content buttons/links
     collector = RobustElementCollector(has_explicit_body="<body" in html.lower())
     try:
@@ -632,6 +666,11 @@ def extract_button_bypass(html, current_url):
             gdrive_count += 1
 
         score = 0
+
+        # Priority 0: Exact target Blogspot destination structure (e.g. https://mydverse02.blogspot.com/p/flp-120926.html)
+        if is_target_destination(abs_url):
+            score += 500
+
         # Priority 1: Shortener domains or known link redirectors
         if any(marker in hostname_lower for marker in ("shrt.", "sohojgyan", "tinyurl", "bit.ly", "goo.gl", "is.gd", "cutt.ly", "shrink", "ouo.")):
             score += 200
@@ -657,7 +696,7 @@ def extract_button_bypass(html, current_url):
             score += 25
 
         if score >= 60:
-            label = text if text else ("Button Link" if "btn" in css else "Action Link")
+            label = text if text else ("Target Blogspot Destination" if is_target_destination(abs_url) else ("Button Link" if "btn" in css else "Action Link"))
             candidates.append((score, abs_url, label))
 
     # If page contains 2 or more direct destination file downloads (e.g. multi-episode blogspot page)
@@ -824,6 +863,17 @@ def resolve_url(start_url, max_redirects=MAX_REDIRECTS, return_html=False):
                     })
                     current_url = next_url
                     continue
+
+            # If current_url matches target destination structure (e.g. https://mydverse02.blogspot.com/p/flp-120926.html),
+            # this is the intended final destination page holding the episode links.
+            if is_target_destination(current_url):
+                chain.append({
+                    "step": number,
+                    "url": current_url,
+                    "status": status,
+                    "type": "Target Destination (Blogspot Episode Page)"
+                })
+                break
 
             # B. AdLinkFly / MightyScripts AJAX Bypass (/links/go)
             adlinkfly_url = extract_adlinkfly_bypass(html, current_url, cookie_jar, opener)

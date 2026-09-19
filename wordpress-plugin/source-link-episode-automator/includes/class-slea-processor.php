@@ -168,11 +168,18 @@ class SLEA_Processor {
                 update_post_meta($post_id, '_slea_processed_at', current_time('mysql'));
             }
 
-            // Step 10: Only after the post has been processed successfully and HTML inserted, mark status as 'ready'
+            // Step 10: Update post status - allow choosing 'publish' (live on site) or 'ready' (internal review)
+            $target_status = 'publish';
+            if (!empty($settings['target_status']) && in_array($settings['target_status'], array('publish', 'ready', 'pending', 'draft'))) {
+                $target_status = $settings['target_status'];
+            } elseif (isset($settings['auto_publish']) && empty($settings['auto_publish'])) {
+                $target_status = 'ready';
+            }
+
             $update_data = array(
                 'ID'           => $post_id,
                 'post_content' => $new_content,
-                'post_status'  => 'ready', // Mark as 'Ready' status instead of Published
+                'post_status'  => $target_status,
             );
 
             $res = wp_update_post($update_data, true);
@@ -191,7 +198,8 @@ class SLEA_Processor {
             // Release lock after successful write
             self::release_post_lock($post_id);
 
-            $success_msg = "Post #{$post_id} ('{$post->post_title}') successfully marked as 'Ready'! Resolved {$resolve_res['redirects']} hops, injected " . count($extracted_items) . " episode buttons into Custom HTML block.";
+            $status_label = ($target_status === 'publish') ? 'Published' : 'Ready';
+            $success_msg = "Post #{$post_id} ('{$post->post_title}') successfully marked as '{$status_label}'! Resolved {$resolve_res['redirects']} hops, injected " . count($extracted_items) . " episode buttons into Custom HTML block.";
             SLEA_Logger::log($success_msg, 'success', $post_id);
 
             return array(
@@ -204,7 +212,7 @@ class SLEA_Processor {
                 'redirects'       => $resolve_res['redirects'],
                 'extracted_count' => count($extracted_items),
                 'items'           => $extracted_items,
-                'status'          => 'ready',
+                'status'          => $target_status,
             );
 
         } catch (Exception $e) {
@@ -266,7 +274,7 @@ class SLEA_Processor {
 
         // Pattern 0: Exact paragraph-wrapped or bold-wrapped "Source link" hyperlink:
         // e.g. <p><a href="https://mydverse.com/2026/09/the-tale-of-lady-ok-korean-drama-in-hindi/" target="_blank" rel="noopener">Source link </a></p>
-        if (preg_match('/<p[^>]*>\s*(?:<strong>|<b>)?\s*(<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>\s*source\s*link\s*<\/a>)\s*(?:<\/strong>|<\/b>)?\s*<\/p>/is', $content, $m)) {
+        if (preg_match('/<p[^>]*>\s*(?:<strong>|<b>)?\s*(<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\xc2\xa0]*(?:<strong>|<b>)?[\s\xc2\xa0]*source[\s\xc2\xa0_-]*link[\s\xc2\xa0]*(?:<\/strong>|<\/b>)?[\s\xc2\xa0]*<\/a>)\s*(?:<\/strong>|<\/b>)?\s*<\/p>/is', $content, $m)) {
             $candidate_url = trim($m[2]);
             if ($is_valid_url($candidate_url)) {
                 return array(
@@ -278,8 +286,8 @@ class SLEA_Processor {
             }
         }
 
-        // Pattern 1: Hyperlink whose anchor text specifically is "Source link" (with optional trailing spaces/tags)
-        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>\s*source\s*link\s*<\/a>/is', $content, $m)) {
+        // Pattern 1: Hyperlink whose anchor text specifically contains "Source link"
+        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\xc2\xa0]*(?:<strong>|<b>)?[\s\xc2\xa0]*source[\s\xc2\xa0_-]*link[\s\xc2\xa0]*(?:<\/strong>|<\/b>)?[\s\xc2\xa0]*<\/a>/is', $content, $m)) {
             $candidate_url = trim($m[1]);
             if ($is_valid_url($candidate_url)) {
                 return array(
@@ -291,7 +299,7 @@ class SLEA_Processor {
         }
 
         // Pattern 1b: Text label "Source link:" preceding an anchor tag
-        if (preg_match('/(?:<p[^>]*>)?\s*(?:<strong>|<b>)?\s*source\s*link:?\s*(?:<\/strong>|<\/b>)?\s*(<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>.*?<\/a>)\s*(?:<\/p>)?/is', $content, $m)) {
+        if (preg_match('/(?:<p[^>]*>)?\s*(?:<strong>|<b>)?\s*source[\s\xc2\xa0_-]*link:?\s*(?:<\/strong>|<\/b>)?\s*(<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>.*?<\/a>)\s*(?:<\/p>)?/is', $content, $m)) {
             $candidate_url = trim($m[2]);
             if ($is_valid_url($candidate_url)) {
                 return array(
@@ -410,7 +418,14 @@ class SLEA_Processor {
      * @return array array('url' => ..., 'source' => ...)
      */
     public static function identify_episode_wise_shortlink($source_url, $timeout = 15) {
-        // 1. If source_url is already a shortened URL matching shrt.sohojgyan.com or similar, return it directly
+        // 1. If source_url is already a target Blogspot destination or shortened URL, return it directly
+        if (SLEA_Resolver::is_target_destination($source_url)) {
+            return array(
+                'url'    => $source_url,
+                'source' => 'direct_target_destination',
+            );
+        }
+
         if (preg_match('/^https?:\/\/shrt\.sohojgyan\.com\/[a-zA-Z0-9_-]+/i', $source_url)
             || preg_match('/^https?:\/\/(?:shrt\.[a-z0-9.-]+|go\.sohojgyan\.com)\/[a-zA-Z0-9_-]+/i', $source_url)) {
             return array(
@@ -442,7 +457,15 @@ class SLEA_Processor {
             );
         }
 
-        // 3. Priority A: Direct link to shrt.sohojgyan.com/<token>
+        // 3. Priority 0: Direct link to Blogspot destination structure (e.g. https://mydverse02.blogspot.com/p/flp-120926.html)
+        if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/[a-zA-Z0-9.-]*blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)[\'"]/i', $page_html, $m)) {
+            return array(
+                'url'    => trim($m[1]),
+                'source' => 'direct_target_blogspot_destination',
+            );
+        }
+
+        // 4. Priority A: Direct link to shrt.sohojgyan.com/<token>
         if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/shrt\.sohojgyan\.com\/[a-zA-Z0-9_-]+)[\'"]/i', $page_html, $m)) {
             return array(
                 'url'    => trim($m[1]),
@@ -561,23 +584,38 @@ class SLEA_Processor {
 
         $query = new WP_Query($args);
         $results = array();
+        $start_time = time();
+        $max_duration_seconds = 25; // Never run longer than 25 seconds to prevent gateway timeouts
+
+        if (function_exists('wp_suspend_cache_addition')) {
+            wp_suspend_cache_addition(true);
+        }
 
         try {
             if ($query->have_posts()) {
                 SLEA_Logger::log("Starting isolated batch processing on " . count($query->posts) . " pending posts...", 'info');
 
                 foreach ($query->posts as $post_id) {
+                    // Check if execution time is approaching server cutoff
+                    if ((time() - $start_time) >= $max_duration_seconds) {
+                        SLEA_Logger::log("Batch safely yielded after {$max_duration_seconds}s to keep server responsive. Remaining posts will run in next pass.", 'info');
+                        break;
+                    }
+
                     // Process each post in complete isolation
                     $post_result = self::process_post($post_id);
                     $results[] = $post_result;
 
-                    // Brief 100ms pause to ensure clean thread and memory teardown between posts
-                    usleep(100000);
+                    // Brief 50ms pause
+                    usleep(50000);
                 }
             } else {
                 SLEA_Logger::log("Batch processing check: No pending posts currently waiting in queue.", 'info');
             }
         } finally {
+            if (function_exists('wp_suspend_cache_addition')) {
+                wp_suspend_cache_addition(false);
+            }
             // Always release batch mutex
             delete_transient('slea_batch_running_lock');
         }
