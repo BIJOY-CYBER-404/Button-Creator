@@ -441,14 +441,14 @@ async function startServer() {
     }
     return res.json({
       name: "Movie Hub HQ Drive",
-      version: "3.9.5",
+      version: "3.9.6",
       release_date: "2026-09-20",
-      download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/cpanel-app-package.zip",
+      download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
       minimum_php: "8.0",
       release_notes: [
-        "Fixed core config saving bug where manually saved manifest URL was overwritten during the next update scan",
-        "Added beautifully detailed Remote Update Diagnostics panel inside the updater interface",
-        "Version v-3.9.5 re-packed production bundle ready for automatic updates"
+        "Cleaned up cPanel shared hosting build automation script paths and parameters",
+        "Enhanced security checks and logging systems during automated archive updates",
+        "Version v-3.9.6 re-packed production bundle ready for automatic updates"
       ]
     });
   });
