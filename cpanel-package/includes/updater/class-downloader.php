@@ -16,9 +16,16 @@ class SLEA_Downloader {
             throw new Exception("Update manifest URL is empty.");
         }
 
+        // Add a dynamic cache buster to remote HTTP URLs to bypass CDN caches like raw.githubusercontent.com Varnish caches
+        $fetch_url = $manifest_url;
+        if (strpos($manifest_url, 'http://') === 0 || strpos($manifest_url, 'https://') === 0) {
+            $separator = (strpos($manifest_url, '?') === false) ? '?' : '&';
+            $fetch_url = $manifest_url . $separator . 't=' . time();
+        }
+
         $this->logger->log("Checking update", "Fetching release manifest from " . $manifest_url);
 
-        $json_raw = $this->http_get($manifest_url);
+        $json_raw = $this->http_get($fetch_url);
         if (empty($json_raw)) {
             throw new Exception("Unable to retrieve update manifest from " . $manifest_url);
         }
