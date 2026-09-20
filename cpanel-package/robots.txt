@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /p/
+Disallow: /page/
+Disallow: /view.php
+Disallow: /admin.php
+Disallow: /api.php
+Disallow: /data/
+Disallow: /includes/
+Disallow: /config.php

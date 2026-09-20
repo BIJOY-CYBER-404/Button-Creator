@@ -320,3 +320,67 @@ export function parseHTMLClientSide(html: string, baseUrl: string): ExtractedIte
 
   return out;
 }
+
+export function extractPageTitleClientSide(html: string, url: string = ""): string {
+  if (!html) {
+    return deriveTitleFromUrlClientSide(url);
+  }
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    // 1. <title> tag
+    const titleEl = doc.querySelector("title");
+    let title = titleEl?.textContent?.trim() || "";
+
+    // 2. OpenGraph / Twitter meta tags
+    if (!title || /^(?:Blogger|Blogspot|Home|Untitled)$/i.test(title)) {
+      const og = doc.querySelector('meta[property="og:title"]')?.getAttribute("content") ||
+                 doc.querySelector('meta[name="twitter:title"]')?.getAttribute("content");
+      if (og?.trim()) title = og.trim();
+    }
+
+    // 3. Post / H1 headings
+    if (!title || /^(?:Blogger|Blogspot|Home|Untitled)$/i.test(title)) {
+      const h1 = doc.querySelector("h1.post-title, h1.entry-title, .post-title, h1");
+      const h1Text = h1?.textContent?.trim();
+      if (h1Text) title = h1Text;
+    }
+
+    if (title) {
+      title = title.replace(/\s+/g, " ");
+      title = title.replace(/\s*[-|–—:]\s*(?:Blogger|Blogspot|Watch Online|Download|HD Movies|MovieHubHQ|MovieHub).*$/i, "");
+      title = title.replace(/\s*[-|–—:]\s*Home$/i, "");
+      title = title.trim();
+    }
+
+    if (!title || /^(?:Blogger|Blogspot|Home|Untitled)$/i.test(title)) {
+      return deriveTitleFromUrlClientSide(url);
+    }
+    return title;
+  } catch {
+    return deriveTitleFromUrlClientSide(url);
+  }
+}
+
+export function deriveTitleFromUrlClientSide(url: string): string {
+  if (!url) return "Episode Download Links";
+  const blogspotMatch = url.match(/\/p\/([a-zA-Z0-9_-]+)\.html/i);
+  if (blogspotMatch && blogspotMatch[1]) {
+    return blogspotMatch[1]
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
+  }
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) {
+      const clean = last.replace(/\.(html|php|asp)$/i, "").replace(/[-_]+/g, " ");
+      return clean.replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+    }
+  } catch {}
+  return "Episode Download Links";
+}
+

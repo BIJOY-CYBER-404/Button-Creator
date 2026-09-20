@@ -1,95 +1,106 @@
-import React from "react";
-import { Terminal, Code2, FolderArchive } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { ShieldCheck, Lock, ChevronRight } from "lucide-react";
+import { ViewTab, SiteIdentity } from "../types";
 
 interface AppHeaderProps {
-  onTogglePythonLogic: () => void;
-  showPythonLogic: boolean;
-  onTogglePluginHub: () => void;
-  showPluginHub: boolean;
+  currentTab: ViewTab;
+  isAdmin: boolean;
+  onLogout: () => void;
+  onShowLogin: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
-  onTogglePythonLogic,
-  showPythonLogic,
-  onTogglePluginHub,
-  showPluginHub,
+  currentTab,
+  isAdmin,
+  onShowLogin,
 }) => {
+  const [siteIdentity, setSiteIdentity] = useState<SiteIdentity>(() => {
+    const saved = localStorage.getItem("slea_site_identity");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // fallback
+      }
+    }
+    return {
+      site_name: "Movie Hub HQ Drive",
+      site_logo_url: "",
+      site_logo_icon: "⚡",
+      site_logo_text: "MHQ",
+    };
+  });
+
+  useEffect(() => {
+    const handler = () => {
+      const saved = localStorage.getItem("slea_site_identity");
+      if (saved) {
+        try {
+          setSiteIdentity(JSON.parse(saved));
+        } catch {
+          // fallback
+        }
+      }
+    };
+    window.addEventListener("site_identity_updated", handler);
+    return () => window.removeEventListener("site_identity_updated", handler);
+  }, []);
+
+  const tabTitles: Record<ViewTab, string> = {
+    admin_flow: "Generate Button Page",
+    pages_list: "Manage Pages (/pages)",
+    settings: "Admin Settings (/settings)",
+    updater: "One-Click System Updater (/update.php)",
+    cpanel_hub: "cPanel Deployment Hub",
+    wp_plugin: "WordPress Automation Plugin",
+  };
+
   return (
     <header
       id="app-header"
-      className="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-xs select-none sticky top-0 z-30 transition-colors"
+      className="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors"
     >
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        {/* Brand & Identity (M3 Headline Medium / Title) */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center shrink-0 transition-transform active:scale-95 shadow-xs">
-            {/* Google-style dynamic colorful emblem */}
-            <svg
-              className="w-5 h-5 text-[#0b57d0]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="font-semibold text-base sm:text-lg leading-snug text-[#1f1f1f] tracking-tight truncate font-sans">
-                Link Extractor
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+        {/* Text Logo & Breadcrumb */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <h1 className="font-bold text-sm sm:text-base leading-snug text-[#1f1f1f] tracking-tight truncate">
+                {siteIdentity.site_name || "Movie Hub HQ Drive"}
               </h1>
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#e9eef6] text-[#444746] tracking-wide shrink-0">
-                M3 Clean
-              </span>
+              {isAdmin ? (
+                <div className="flex items-center gap-1.5 text-xs text-[#5f6368] min-w-0">
+                  <ChevronRight className="w-3.5 h-3.5 text-[#8e918f] shrink-0" />
+                  <span className="font-semibold text-[#0b57d0] truncate">{tabTitles[currentTab]}</span>
+                </div>
+              ) : null}
             </div>
-            <p className="text-[12px] text-[#444746] truncate hidden sm:block font-normal">
-              Resolve redirects, bypass shortlinks, and extract clean direct links
+            <p className="text-[11px] text-[#5f6368] truncate hidden sm:block">
+              Shortlink Bypass • Episode Button Pages
             </p>
           </div>
         </div>
 
-        {/* M3 Outlined / Tonal Action Button */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            id="header-btn-plugin"
-            onClick={onTogglePluginHub}
-            className={`h-10 px-3.5 sm:px-4 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
-              showPluginHub
-                ? "bg-[#6750a4] text-white shadow-xs hover:bg-[#533d8c]"
-                : "bg-[#e8def8] text-[#4a4458] hover:bg-[#decff5] active:bg-[#d0bbf0]"
-            }`}
-            title="WordPress Plugin & Automator"
-          >
-            <FolderArchive className="w-4 h-4" />
-            <span className="hidden sm:inline">WordPress Plugin</span>
-            <span className="text-[10px] bg-white/40 px-1.5 py-0.5 rounded-full font-semibold">ZIP</span>
-          </button>
-
-          <button
-            id="header-btn-python"
-            onClick={onTogglePythonLogic}
-            className={`h-10 px-3.5 sm:px-4 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
-              showPythonLogic
-                ? "bg-[#0b57d0] text-white shadow-xs hover:bg-[#0842a0]"
-                : "bg-[#e9eef6] text-[#1f1f1f] hover:bg-[#dfe4ed] active:bg-[#d3e3fd]"
-            }`}
-            title="Toggle Python engine logic"
-          >
-            {showPythonLogic ? (
-              <Code2 className="w-4 h-4" />
-            ) : (
-              <Terminal className="w-4 h-4 text-[#444746]" />
-            )}
-            <span className="hidden sm:inline">Engine Logic</span>
-          </button>
+        {/* Status / Quick Action */}
+        <div className="flex items-center gap-3 shrink-0">
+          {isAdmin ? (
+            <div className="flex items-center gap-2.5">
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] border border-[#a8dab5] tracking-wide shrink-0 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Admin Active</span>
+              </span>
+            </div>
+          ) : (
+            <button
+              onClick={onShowLogin}
+              className="h-9 px-3.5 rounded-lg text-xs font-bold bg-[#0b57d0] text-white hover:bg-[#0842a0] flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Admin Login</span>
+            </button>
+          )}
         </div>
       </div>
     </header>
   );
 };
-
-

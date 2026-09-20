@@ -1,6 +1,6 @@
 {
-  "name": "Webpage Button Link Extractor",
-  "description": "Unified pipeline to bypass URL shorteners, trace redirects, extract episode links, generate mobile buttons, and WordPress automator plugin.",
+  "name": "Movie Hub HQ Drive",
+  "description": "Shortlink resolver and episode button page gateway for Movie Hub HQ Drive with non-indexable public pages.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -5,6 +5,7 @@ Python standard library only.
 Supports both CLI interactive mode and JSON API mode for the Android/Web backend.
 """
 
+import html as html_lib
 import json
 import re
 import sys
@@ -348,6 +349,56 @@ def extract_from_html(html, base_url, button_only=True):
     parser.close()
     return process_results(parser.results, base_url, button_only=button_only)
 
+def derive_title_from_url(url):
+    if not url:
+        return "Episode Download Links"
+    m = re.search(r"/p/([a-zA-Z0-9_-]+)\.html", url, re.I)
+    if m:
+        slug = m.group(1).replace("-", " ").replace("_", " ")
+        return slug.title()
+    path = urlparse(url).path.strip("/")
+    if path:
+        last = path.split("/")[-1]
+        cleaned = re.sub(r"\.(html|php|asp)$", "", last, flags=re.I)
+        return cleaned.replace("-", " ").replace("_", " ").title()
+    return "Episode Download Links"
+
+def extract_page_title(html, url=None):
+    if not html:
+        return derive_title_from_url(url)
+
+    title = ""
+
+    # 1. <title> tag
+    m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+    if m:
+        title = clean_text(re.sub(r"<[^>]+>", " ", m.group(1)))
+
+    # 2. og:title or twitter:title
+    if not title or title.lower() in ("blogger", "blogspot", "home", "untitled"):
+        og_m = re.search(r"""<meta\s+[^>]*property=['"]og:title['"][^>]*content=['"]([^'"]+)['"]""", html, re.I)
+        if not og_m:
+            og_m = re.search(r"""<meta\s+[^>]*content=['"]([^'"]+)['"][^>]*property=['"]og:title['"]""", html, re.I)
+        if og_m:
+            title = clean_text(og_m.group(1))
+
+    # 3. h1 or post-title
+    if not title or title.lower() in ("blogger", "blogspot", "home", "untitled"):
+        h1_m = re.search(r"""<(?:h1|h2)[^>]*class=['"][^'"]*(?:post-title|entry-title|title)[^'"]*['"][^>]*>(.*?)</(?:h1|h2)>""", html, re.I | re.S)
+        if not h1_m:
+            h1_m = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.I | re.S)
+        if h1_m:
+            title = clean_text(re.sub(r"<[^>]+>", " ", h1_m.group(1)))
+
+    if title:
+        title = html_lib.unescape(title)
+        title = re.sub(r"\s*[-|–—:]\s*(?:Blogger|Blogspot|Watch Online|Download|HD Movies|MovieHubHQ|MovieHub).*$", "", title, flags=re.I).strip()
+        title = re.sub(r"\s*[-|–—:]\s*Home$", "", title, flags=re.I).strip()
+
+    if not title or title.lower() in ("blogger", "blogspot", "home", "untitled"):
+        return derive_title_from_url(url)
+    return title
+
 def run_extraction_api(url=None, html=None, base_url=None, button_only=True):
     try:
         if url:
@@ -355,9 +406,11 @@ def run_extraction_api(url=None, html=None, base_url=None, button_only=True):
                 return {"success": False, "error": f"Invalid URL: {url}"}
             final_url, fetched_html = fetch_page(url)
             items = extract_from_html(fetched_html, final_url, button_only=button_only)
+            page_title = extract_page_title(fetched_html, final_url)
             return {
                 "success": True,
                 "final_url": final_url,
+                "page_title": page_title,
                 "bytes": len(fetched_html),
                 "items": items,
                 "count": len(items)
@@ -365,9 +418,11 @@ def run_extraction_api(url=None, html=None, base_url=None, button_only=True):
         elif html:
             target_url = base_url or "https://example.com/page"
             items = extract_from_html(html, target_url, button_only=button_only)
+            page_title = extract_page_title(html, target_url)
             return {
                 "success": True,
                 "final_url": target_url,
+                "page_title": page_title,
                 "bytes": len(html),
                 "items": items,
                 "count": len(items)

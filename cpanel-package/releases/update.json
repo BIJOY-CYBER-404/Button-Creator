@@ -1,0 +1,13 @@
+{
+  "name": "Movie Hub HQ Drive",
+  "version": "3.9.3",
+  "release_date": "2026-09-20",
+  "download_url": "https://ais-pre-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/cpanel-app-package.zip",
+  "minimum_php": "8.0",
+  "checksum": "",
+  "release_notes": [
+    "New fully-customizable Maintenance Mode with On/Off toggle and customizable client message",
+    "Creative, highly interactive and visually responsive under-maintenance public page design",
+    "Version v-3.9.3 re-packed production bundle ready for automatic updates"
+  ]
+}

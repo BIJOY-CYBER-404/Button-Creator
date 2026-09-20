@@ -1,158 +1,211 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
+
+interface PageButton {
+  text: string;
+  url: string;
+  quality?: string | null;
+  episode?: number | null;
+  provider?: string;
+  is_button?: boolean;
+}
+
+interface ButtonPage {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string;
+  source_url?: string;
+  resolved_url?: string;
+  theme?: "indigo" | "emerald" | "crimson" | "slate" | "dark";
+  buttons: PageButton[];
+  views: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+const DATA_DIR = path.join(process.cwd(), "data");
+const PAGES_FILE = path.join(DATA_DIR, "pages.json");
+
+function initDatastore() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(PAGES_FILE)) {
+    // Seed with a sample page
+    const samplePage: ButtonPage = {
+      id: "p_sample_flp",
+      slug: "flp-120926",
+      title: "Fanletter, Please (Korean Drama in Hindi)",
+      description: "Direct download links for all episodes in 480p, 720p, and 1080p.",
+      source_url: "https://shrt.sohojgyan.com/Ij03ndJ",
+      resolved_url: "https://mydverse02.blogspot.com/p/flp-120926.html",
+      theme: "indigo",
+      views: 12,
+      created_at: new Date().toISOString(),
+      buttons: [
+        { text: "Episode 1 (720p HD)", url: "https://fastdl.example/flp-ep1-720p", quality: "720p", episode: 1, provider: "FastDL" },
+        { text: "Episode 2 (720p HD)", url: "https://fastdl.example/flp-ep2-720p", quality: "720p", episode: 2, provider: "FastDL" },
+        { text: "Episode 3 (720p HD)", url: "https://fastdl.example/flp-ep3-720p", quality: "720p", episode: 3, provider: "FastDL" },
+        { text: "Episode 4 (720p HD)", url: "https://fastdl.example/flp-ep4-720p", quality: "720p", episode: 4, provider: "FastDL" }
+      ]
+    };
+    fs.writeFileSync(PAGES_FILE, JSON.stringify([samplePage], null, 2));
+  }
+}
+
+function getStoredPages(): ButtonPage[] {
+  initDatastore();
+  try {
+    const raw = fs.readFileSync(PAGES_FILE, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredPages(pages: ButtonPage[]) {
+  initDatastore();
+  fs.writeFileSync(PAGES_FILE, JSON.stringify(pages, null, 2));
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  initDatastore();
+
   app.use(express.json({ limit: "10mb" }));
 
-  // API: Health check
+  // CORS Middleware for remote update checks from cPanel/shared hosting sites
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Token, User-Agent");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
+  // Explicit route for update.json with proper headers
+  app.get(["/releases/update.json", "/public/releases/update.json"], (_req, res) => {
+    const jsonPath = path.join(process.cwd(), "public", "releases", "update.json");
+    if (fs.existsSync(jsonPath)) {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.sendFile(jsonPath);
+    } else {
+      res.status(404).json({ error: "Update manifest not found" });
+    }
+  });
+
+  // In-memory admin tokens for session simulation
+  const validAdminTokens = new Set<string>(["admin_token_default_session"]);
+
+  const requireAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    const token = req.headers["x-admin-token"] as string || (authHeader ? authHeader.replace("Bearer ", "") : "");
+    if (!token || !validAdminTokens.has(token)) {
+      return res.status(401).json({
+        success: false,
+        error: "Unauthorized: Admin access required to access private functions."
+      });
+    }
+    next();
+  };
+
+  // Set non-indexable header on all public page routes
+  app.use((req, res, next) => {
+    if (
+      req.path.startsWith("/p/") ||
+      req.path.startsWith("/view/") ||
+      req.path.startsWith("/api/pages/") ||
+      req.path.startsWith("/api/public/")
+    ) {
+      res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
+    }
+    next();
+  });
+
+  // Health check
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", python: "available" });
+    res.json({ status: "ok", python: "available", cpanel_ready: true });
   });
 
-  // API: Download ready-to-install WordPress Plugin zip
-  app.get("/api/download-plugin-zip", (_req, res) => {
-    const zipFilePath = path.join(process.cwd(), "public", "source-link-episode-automator.zip");
-    res.download(zipFilePath, "source-link-episode-automator.zip");
-  });
-
-  // API: Python extractor endpoint
-  app.post("/api/extract", async (req, res) => {
-    const { url, html, base_url, button_only = true } = req.body;
-
-    if (!url && !html) {
-      return res.status(400).json({
-        success: false,
-        error: "Please provide a valid URL or HTML content.",
+  // Admin Auth: Login
+  app.post("/api/auth/login", (req, res) => {
+    const { username, password } = req.body;
+    if ((username === "admin" || !username) && password === "admin123") {
+      const token = `adm_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+      validAdminTokens.add(token);
+      return res.json({
+        success: true,
+        token,
+        username: "admin",
+        message: "Admin authentication successful"
       });
     }
-
-    try {
-      const pythonProcess = spawn("python3", ["extractor.py", "--json"]);
-
-      let stdoutData = "";
-      let stderrData = "";
-
-      pythonProcess.stdout.on("data", (data) => {
-        stdoutData += data.toString();
-      });
-
-      pythonProcess.stderr.on("data", (data) => {
-        stderrData += data.toString();
-      });
-
-      pythonProcess.on("close", (code) => {
-        if (code !== 0 && !stdoutData.trim()) {
-          return res.status(500).json({
-            success: false,
-            error: stderrData.trim() || `Python process exited with code ${code}`,
-          });
-        }
-
-        try {
-          const parsed = JSON.parse(stdoutData.trim());
-          return res.json(parsed);
-        } catch (e: any) {
-          return res.status(500).json({
-            success: false,
-            error: `Failed to parse Python output: ${e.message}`,
-            raw: stdoutData,
-          });
-        }
-      });
-
-      // Send JSON payload to Python's stdin
-      pythonProcess.stdin.write(
-        JSON.stringify({
-          url,
-          html,
-          base_url,
-          button_only,
-        })
-      );
-      pythonProcess.stdin.end();
-    } catch (err: any) {
-      res.status(500).json({
-        success: false,
-        error: `Failed to spawn Python process: ${err.message}`,
-      });
-    }
+    return res.status(401).json({
+      success: false,
+      error: "Invalid username or password. Default is admin / admin123"
+    });
   });
 
-  // API: Python URL Resolver endpoint (from uploaded app.py)
-  app.post("/api/resolve", async (req, res) => {
-    const { url } = req.body;
+  // Admin Auth: Check status
+  app.get("/api/auth/status", (req, res) => {
+    const token = req.headers["x-admin-token"] as string || (req.headers.authorization ? req.headers.authorization.replace("Bearer ", "") : "");
+    const isLoggedIn = Boolean(token && validAdminTokens.has(token));
+    res.json({ success: true, logged_in: isLoggedIn, username: isLoggedIn ? "admin" : null });
+  });
 
+  // Admin Auth: Logout
+  app.post("/api/auth/logout", (req, res) => {
+    const token = req.headers["x-admin-token"] as string || (req.headers.authorization ? req.headers.authorization.replace("Bearer ", "") : "");
+    if (token) {
+      validAdminTokens.delete(token);
+    }
+    res.json({ success: true, message: "Logged out" });
+  });
+
+  // Public: Get a single button page by slug (non-indexable)
+  app.get("/api/public/pages/:slug", (req, res) => {
+    const slug = req.params.slug;
+    const pages = getStoredPages();
+    const page = pages.find((p) => p.slug === slug || p.id === slug);
+    if (!page) {
+      return res.status(404).json({ success: false, error: "Button page not found" });
+    }
+    // Increment views
+    page.views = (page.views || 0) + 1;
+    saveStoredPages(pages);
+
+    res.json({ success: true, page });
+  });
+
+  // Protected: List all pages
+  app.get("/api/pages", requireAdmin, (_req, res) => {
+    const pages = getStoredPages();
+    res.json({ success: true, data: pages });
+  });
+
+  // Protected: Delete page
+  app.delete("/api/pages/:id", requireAdmin, (req, res) => {
+    const id = req.params.id;
+    const pages = getStoredPages();
+    const filtered = pages.filter((p) => p.id !== id && p.slug !== id);
+    saveStoredPages(filtered);
+    res.json({ success: true, message: "Page deleted successfully" });
+  });
+
+  // Protected: Create page from Shortlink (The Main Requested Admin Flow!)
+  app.post("/api/pages/create-from-shortlink", requireAdmin, async (req, res) => {
+    const { url, title_override, description_override, theme = "indigo" } = req.body;
     if (!url || typeof url !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: "Enter a shortened URL.",
-      });
-    }
-
-    try {
-      const pythonProcess = spawn("python3", ["resolver.py", "--json"]);
-
-      let stdoutData = "";
-      let stderrData = "";
-
-      pythonProcess.stdout.on("data", (data) => {
-        stdoutData += data.toString();
-      });
-
-      pythonProcess.stderr.on("data", (data) => {
-        stderrData += data.toString();
-      });
-
-      pythonProcess.on("close", (code) => {
-        if (code !== 0 && !stdoutData.trim()) {
-          return res.status(500).json({
-            success: false,
-            error: stderrData.trim() || `Resolver process exited with code ${code}`,
-          });
-        }
-
-        try {
-          const parsed = JSON.parse(stdoutData.trim());
-          return res.json(parsed);
-        } catch (e: any) {
-          return res.status(500).json({
-            success: false,
-            error: `Failed to parse Resolver output: ${e.message}`,
-            raw: stdoutData,
-          });
-        }
-      });
-
-      pythonProcess.stdin.write(JSON.stringify({ url: url.trim() }));
-      pythonProcess.stdin.end();
-    } catch (err: any) {
-      res.status(500).json({
-        success: false,
-        error: `Failed to spawn Python resolver: ${err.message}`,
-      });
-    }
-  });
-
-  // API: Unified Resolver & Link Extractor pipeline
-  app.post("/api/unified", async (req, res) => {
-    const {
-      url,
-      html,
-      base_url,
-      button_only = true,
-      auto_resolve = true,
-    } = req.body;
-
-    if (!url && !html) {
-      return res.status(400).json({
-        success: false,
-        error: "Please provide a valid URL or HTML content.",
-      });
+      return res.status(400).json({ success: false, error: "Enter a valid shortened URL." });
     }
 
     try {
@@ -173,38 +226,260 @@ async function startServer() {
         if (code !== 0 && !stdoutData.trim()) {
           return res.status(500).json({
             success: false,
-            error:
-              stderrData.trim() || `Unified engine exited with code ${code}`,
+            error: stderrData.trim() || `Engine exited with code ${code}`
           });
         }
 
         try {
           const parsed = JSON.parse(stdoutData.trim());
-          return res.json(parsed);
+          if (!parsed.success) {
+            return res.status(400).json(parsed);
+          }
+
+          const finalUrl = parsed.final_url || url;
+          const items: PageButton[] = (parsed.items || []).map((item: any) => ({
+            text: item.text || "Episode Link",
+            url: item.url,
+            quality: item.quality || (item.text?.includes("1080p") ? "1080p" : item.text?.includes("720p") ? "720p" : item.text?.includes("480p") ? "480p" : null),
+            episode: item.episode || (item.text?.match(/E(?:pisode|\.)?\s*(\d+)/i) ? parseInt(item.text.match(/E(?:pisode|\.)?\s*(\d+)/i)[1], 10) : null),
+            provider: item.url?.includes("drive.google") ? "Google Drive" : item.url?.includes("mega.") ? "Mega" : "Download Server",
+            is_button: true
+          }));
+
+          // Derive slug
+          let slug = `ep-${Math.random().toString(36).substring(2, 8)}`;
+          const blogspotMatch = finalUrl.match(/\/p\/([a-zA-Z0-9_-]+)\.html/i);
+          if (blogspotMatch) {
+            slug = blogspotMatch[1];
+          }
+
+          // Derive title
+          let pageTitle = title_override || "Episode Download Links";
+          if (!title_override && blogspotMatch) {
+            const cleanSlug = blogspotMatch[1].replace(/[-_]+/g, " ");
+            pageTitle = cleanSlug.toUpperCase();
+          }
+
+          const newPage: ButtonPage = {
+            id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            slug,
+            title: pageTitle,
+            description: description_override || "Direct high-speed episode download buttons.",
+            source_url: url,
+            resolved_url: finalUrl,
+            theme: theme as any,
+            buttons: items,
+            views: 0,
+            created_at: new Date().toISOString()
+          };
+
+          const pages = getStoredPages();
+          // Replace if exists with same slug, otherwise add
+          const existingIdx = pages.findIndex((p) => p.slug === slug);
+          if (existingIdx >= 0) {
+            pages[existingIdx] = newPage;
+          } else {
+            pages.unshift(newPage);
+          }
+          saveStoredPages(pages);
+
+          const host = req.get("host") || "localhost:3000";
+          const protocol = req.protocol || "http";
+          const cleanUrl = `${protocol}://${host}/p/${slug}`;
+
+          return res.json({
+            success: true,
+            data: {
+              id: newPage.id,
+              slug: newPage.slug,
+              title: newPage.title,
+              clean_url: cleanUrl,
+              view_url: `/p/${slug}`,
+              resolved_url: finalUrl,
+              target_valid: Boolean(parsed.target_destination_verified),
+              button_count: items.length,
+              buttons: items,
+              page: newPage
+            }
+          });
         } catch (e: any) {
           return res.status(500).json({
             success: false,
-            error: `Failed to parse Unified output: ${e.message}`,
-            raw: stdoutData,
+            error: `Failed to parse output: ${e.message}`,
+            raw: stdoutData
           });
         }
       });
 
       pythonProcess.stdin.write(
         JSON.stringify({
-          url: url ? url.trim() : "",
-          html: html || "",
-          base_url: base_url || "",
-          button_only: Boolean(button_only),
-          auto_resolve: Boolean(auto_resolve),
+          url: url.trim(),
+          button_only: true,
+          auto_resolve: true
         })
       );
       pythonProcess.stdin.end();
     } catch (err: any) {
       res.status(500).json({
         success: false,
-        error: `Failed to spawn unified engine: ${err.message}`,
+        error: `Process error: ${err.message}`
       });
+    }
+  });
+
+  // Protected: Python extractor endpoint
+  app.post("/api/extract", requireAdmin, async (req, res) => {
+    const { url, html, base_url, button_only = true } = req.body;
+    if (!url && !html) {
+      return res.status(400).json({ success: false, error: "Please provide a valid URL or HTML content." });
+    }
+
+    try {
+      const pythonProcess = spawn("python3", ["extractor.py", "--json"]);
+      let stdoutData = "";
+      let stderrData = "";
+      pythonProcess.stdout.on("data", (data) => { stdoutData += data.toString(); });
+      pythonProcess.stderr.on("data", (data) => { stderrData += data.toString(); });
+      pythonProcess.on("close", (code) => {
+        if (code !== 0 && !stdoutData.trim()) {
+          return res.status(500).json({ success: false, error: stderrData.trim() || `Python exited with code ${code}` });
+        }
+        try {
+          const parsed = JSON.parse(stdoutData.trim());
+          return res.json(parsed);
+        } catch (e: any) {
+          return res.status(500).json({ success: false, error: `Parse error: ${e.message}`, raw: stdoutData });
+        }
+      });
+      pythonProcess.stdin.write(JSON.stringify({ url, html, base_url, button_only }));
+      pythonProcess.stdin.end();
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Protected: Python URL Resolver endpoint
+  app.post("/api/resolve", requireAdmin, async (req, res) => {
+    const { url } = req.body;
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ success: false, error: "Enter a shortened URL." });
+    }
+
+    try {
+      const pythonProcess = spawn("python3", ["resolver.py", "--json"]);
+      let stdoutData = "";
+      let stderrData = "";
+      pythonProcess.stdout.on("data", (data) => { stdoutData += data.toString(); });
+      pythonProcess.stderr.on("data", (data) => { stderrData += data.toString(); });
+      pythonProcess.on("close", (code) => {
+        if (code !== 0 && !stdoutData.trim()) {
+          return res.status(500).json({ success: false, error: stderrData.trim() || `Resolver exited with code ${code}` });
+        }
+        try {
+          const parsed = JSON.parse(stdoutData.trim());
+          return res.json(parsed);
+        } catch (e: any) {
+          return res.status(500).json({ success: false, error: `Parse error: ${e.message}`, raw: stdoutData });
+        }
+      });
+      pythonProcess.stdin.write(JSON.stringify({ url: url.trim() }));
+      pythonProcess.stdin.end();
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Protected: Unified Pipeline
+  app.post("/api/unified", requireAdmin, async (req, res) => {
+    const { url, html, base_url, button_only = true, auto_resolve = true } = req.body;
+    if (!url && !html) {
+      return res.status(400).json({ success: false, error: "Please provide a valid URL or HTML content." });
+    }
+
+    try {
+      const pythonProcess = spawn("python3", ["unified_engine.py", "--json"]);
+      let stdoutData = "";
+      let stderrData = "";
+      pythonProcess.stdout.on("data", (data) => { stdoutData += data.toString(); });
+      pythonProcess.stderr.on("data", (data) => { stderrData += data.toString(); });
+      pythonProcess.on("close", (code) => {
+        if (code !== 0 && !stdoutData.trim()) {
+          return res.status(500).json({ success: false, error: stderrData.trim() || `Unified error: ${code}` });
+        }
+        try {
+          const parsed = JSON.parse(stdoutData.trim());
+          return res.json(parsed);
+        } catch (e: any) {
+          return res.status(500).json({ success: false, error: `Parse error: ${e.message}`, raw: stdoutData });
+        }
+      });
+      pythonProcess.stdin.write(JSON.stringify({
+        url: url ? url.trim() : "",
+        html: html || "",
+        base_url: base_url || "",
+        button_only: Boolean(button_only),
+        auto_resolve: Boolean(auto_resolve)
+      }));
+      pythonProcess.stdin.end();
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Serve public static assets (including cpanel-app-package.zip and /releases/update.json)
+  app.use(express.static(path.join(process.cwd(), "public")));
+
+  // Public CORS endpoints for remote cPanel auto-updater
+  app.get(["/releases/update.json", "/public/releases/update.json", "/cpanel-package/releases/update.json"], (_req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    const updatePath = path.join(process.cwd(), "public", "releases", "update.json");
+    if (fs.existsSync(updatePath)) {
+      return res.sendFile(updatePath);
+    }
+    return res.json({
+      name: "Movie Hub HQ Drive",
+      version: "3.9.3",
+      release_date: "2026-09-20",
+      download_url: "https://ais-pre-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/cpanel-app-package.zip",
+      minimum_php: "8.0",
+      release_notes: [
+        "New fully-customizable Maintenance Mode with On/Off toggle and customizable client message",
+        "Creative, highly interactive and visually responsive under-maintenance public page design",
+        "Version v-3.9.3 re-packed production bundle ready for automatic updates"
+      ]
+    });
+  });
+
+  app.get(["/cpanel-app-package.zip", "/public/cpanel-app-package.zip"], (_req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    const zipPath = path.join(process.cwd(), "public", "cpanel-app-package.zip");
+    if (fs.existsSync(zipPath)) {
+      return res.download(zipPath, "cpanel-app-package.zip");
+    }
+    return res.status(404).json({ error: "Zip package not found" });
+  });
+
+  // Downloads: cPanel zip package
+  app.get("/api/download-cpanel-zip", (_req, res) => {
+    const zipPath = path.join(process.cwd(), "public", "cpanel-app-package.zip");
+    if (fs.existsSync(zipPath)) {
+      res.download(zipPath, "cpanel-app-package.zip");
+    } else {
+      res.status(404).json({ error: "cPanel zip package not found" });
+    }
+  });
+
+  // Downloads: WordPress Plugin zip
+  app.get("/api/download-plugin-zip", (_req, res) => {
+    const zipFilePath = path.join(process.cwd(), "public", "source-link-episode-automator.zip");
+    if (fs.existsSync(zipFilePath)) {
+      res.download(zipFilePath, "source-link-episode-automator.zip");
+    } else {
+      res.status(404).json({ error: "Plugin zip not found" });
     }
   });
 
@@ -224,7 +499,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Android App Server running on http://0.0.0.0:${PORT}`);
+    console.log(`cPanel App Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

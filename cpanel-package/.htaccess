@@ -1,0 +1,31 @@
+# cPanel Apache Configuration & Clean URL Routing
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Route /p/{slug} and /page/{slug} to view.php?slug={slug}
+    RewriteRule ^p/([a-zA-Z0-9_-]+)/?$ view.php?slug=$1 [L,QSA]
+    RewriteRule ^page/([a-zA-Z0-9_-]+)/?$ view.php?slug=$1 [L,QSA]
+
+    # Clean Admin Routes
+    RewriteRule ^pages/?$ pages.php [L,QSA]
+    RewriteRule ^settings/?$ settings.php [L,QSA]
+    RewriteRule ^login/?$ login.php [L,QSA]
+    RewriteRule ^logout/?$ logout.php [L,QSA]
+    RewriteRule ^setup/?$ setup.php [L,QSA]
+
+    # Block direct browser access to sensitive backend directories and config files
+    RewriteRule ^data/ - [F,L]
+    RewriteRule ^includes/ - [F,L]
+    RewriteRule ^config\.php$ - [F,L]
+</IfModule>
+
+# Extra Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Disable Directory Listing
+Options -Indexes
