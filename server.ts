@@ -443,7 +443,7 @@ async function startServer() {
       name: "Movie Hub HQ Drive",
       version: "3.9.3",
       release_date: "2026-09-20",
-      download_url: "https://ais-pre-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/cpanel-app-package.zip",
+      download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/cpanel-app-package.zip",
       minimum_php: "8.0",
       release_notes: [
         "New fully-customizable Maintenance Mode with On/Off toggle and customizable client message",

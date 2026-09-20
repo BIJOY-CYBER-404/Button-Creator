@@ -48,8 +48,8 @@ class SLEA_Updater {
         $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
         $base = rtrim($protocol . $host . dirname($_SERVER['PHP_SELF'] ?? ''), '/\\');
 
-        $remote_manifest = "https://ais-pre-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/releases/update.json";
-        $remote_zip = "https://ais-pre-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/cpanel-app-package.zip";
+        $remote_manifest = "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/releases/update.json";
+        $remote_zip = "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/cpanel-app-package.zip";
 
         return [
             'manifest_url'          => $remote_manifest,
@@ -87,7 +87,7 @@ class SLEA_Updater {
 
         $candidate_urls = array_unique(array_filter([
             $saved_manifest,
-            "https://ais-pre-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/releases/update.json",
+            "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/releases/update.json",
             "https://ais-dev-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/releases/update.json",
             (!empty($_SERVER['HTTP_HOST']) ? ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . '/releases/update.json' : ''),
             dirname(__DIR__) . '/releases/update.json',

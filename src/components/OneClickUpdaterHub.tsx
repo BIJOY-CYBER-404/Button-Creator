@@ -62,7 +62,7 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
     remote_version: "3.9.3",
     update_available: false,
     release_date: "2026-09-20",
-    download_url: "https://ais-pre-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/cpanel-app-package.zip",
+    download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/cpanel-app-package.zip",
     release_notes: [
       "New fully-customizable Maintenance Mode with On/Off toggle and customizable client message",
       "Creative, highly interactive and visually responsive under-maintenance public page design",
@@ -72,7 +72,7 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
     checksum: "a81f9b30c4e123456789abcdef0123456789abcdef0123456789abcdef012345"
   });
 
-  const [manifestUrl, setManifestUrl] = useState<string>("https://ais-pre-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/releases/update.json");
+  const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/releases/update.json");
   const [backupRetention, setBackupRetention] = useState<number>(3);
   const [verifyChecksum, setVerifyChecksum] = useState<boolean>(true);
   const [maintenanceMode, setMaintenanceMode] = useState<boolean>(true);
