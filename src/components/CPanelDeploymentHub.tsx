@@ -23,7 +23,7 @@ export const CPanelDeploymentHub: React.FC<CPanelDeploymentHubProps> = ({ onNoti
                 cPanel Shared Hosting Deployment Package
               </h2>
               <span className="px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
-                v-3.9.4
+                v-3.9.5
               </span>
             </div>
             <p className="text-xs text-[#5f6368]">
@@ -99,7 +99,7 @@ export const CPanelDeploymentHub: React.FC<CPanelDeploymentHubProps> = ({ onNoti
         <div className="bg-[#f8f9fa] rounded-xl p-4 border border-[#e0e4eb] space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-xs font-bold text-[#1f1f1f]">Package Contents Summary:</div>
-            <span className="text-[11px] font-mono font-bold text-[#0b57d0]">Build: v-3.9.4 (Latest)</span>
+            <span className="text-[11px] font-mono font-bold text-[#0b57d0]">Build: v-3.9.5 (Latest)</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-[#5f6368]">
             <div>• <code>admin.php</code> (Private Admin Interface)</div>

@@ -103,6 +103,7 @@ class SLEA_Updater {
         $best_manifest = null;
         $best_version = null;
         $best_url = null;
+        $diagnostics = [];
 
         foreach ($candidate_urls as $url) {
             try {
@@ -110,24 +111,34 @@ class SLEA_Updater {
                 $fetched = $downloader->fetch_manifest($url);
                 if ($fetched && !empty($fetched['version'])) {
                     $candidate_ver = ltrim($fetched['version'], 'v-');
+                    $diagnostics[$url] = [
+                        'status' => 'success',
+                        'version' => $candidate_ver,
+                        'message' => 'Fetched successfully'
+                    ];
                     
                     if ($best_version === null || version_compare($candidate_ver, $best_version, '>')) {
                         $best_manifest = $fetched;
                         $best_version = $candidate_ver;
                         $best_url = $url;
                     }
+                } else {
+                    $diagnostics[$url] = [
+                        'status' => 'failed',
+                        'message' => 'Invalid manifest format'
+                    ];
                 }
             } catch (Exception $e) {
                 $last_error = $e->getMessage();
+                $diagnostics[$url] = [
+                    'status' => 'failed',
+                    'message' => $e->getMessage()
+                ];
             }
         }
 
         if ($best_manifest) {
             $manifest = $best_manifest;
-            $is_best_remote = preg_match('/^https?:\/\//i', $best_url);
-            if ($is_best_remote && $best_url !== ($config['manifest_url'] ?? '')) {
-                self::save_config(['manifest_url' => $best_url]);
-            }
         }
 
         if (!$manifest || empty($manifest['version'])) {
@@ -136,6 +147,7 @@ class SLEA_Updater {
                 'current_version'  => $current_version,
                 'update_available' => false,
                 'error'            => $last_error,
+                'diagnostics'      => $diagnostics,
                 'checked_at'       => date('Y-m-d H:i:s')
             ];
         }
@@ -153,6 +165,8 @@ class SLEA_Updater {
             'release_notes'     => $manifest['release_notes'] ?? ['General updates and security patches.'],
             'minimum_php'       => $manifest['minimum_php'] ?? '8.0',
             'checksum'          => $manifest['checksum'] ?? '',
+            'best_url'          => $best_url,
+            'diagnostics'       => $diagnostics,
             'checked_at'        => date('Y-m-d H:i:s')
         ];
     }

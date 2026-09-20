@@ -58,15 +58,15 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "3.9.4",
-    remote_version: "3.9.4",
+    current_version: "3.9.5",
+    remote_version: "3.9.5",
     update_available: false,
     release_date: "2026-09-20",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/cpanel-app-package.zip",
     release_notes: [
-      "Fixed core updater logic to preserve and protect existing database credentials and session secrets in config.php during updates",
-      "Enhanced full-scan highest-version priority remote update selector algorithm",
-      "Version v-3.9.4 re-packed production bundle ready for automatic updates"
+      "Fixed core config saving bug where manually saved manifest URL was overwritten during the next update scan",
+      "Added beautifully detailed Remote Update Diagnostics panel inside the updater interface",
+      "Version v-3.9.5 re-packed production bundle ready for automatic updates"
     ],
     minimum_php: "8.0",
     checksum: "a81f9b30c4e123456789abcdef0123456789abcdef0123456789abcdef012345"
@@ -128,8 +128,8 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       const mRes = await fetch("/releases/update.json");
       if (mRes.ok) {
         const mData = await mRes.json();
-        const remVer = mData.version ? mData.version.replace(/^v-?/, "") : "3.9.4";
-        const currVer = checkInfo.current_version || "3.9.4";
+        const remVer = mData.version ? mData.version.replace(/^v-?/, "") : "3.9.5";
+        const currVer = checkInfo.current_version || "3.9.5";
         setCheckInfo((prev) => ({
           ...prev,
           remote_version: remVer,

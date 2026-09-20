@@ -167,6 +167,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
 
+        <!-- Diagnostics and Check logs -->
+        <?php if (!empty($update_check['diagnostics'])): ?>
+            <div class="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm space-y-4">
+                <h3 class="text-base font-bold text-[#1f1f1f] flex items-center space-x-2">
+                    <svg class="w-5 h-5 text-[#5f6368]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <span>Remote Update Diagnostics Log</span>
+                </h3>
+                <p class="text-xs text-[#5f6368] leading-normal">
+                    This log details the results of querying all configured manifest check URLs during the last update scan. It shows whether a candidate was successfully reached or if it failed (e.g. redirected or blocked).
+                </p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-[#f8fafd] border-b border-[#e0e4eb] text-[#5f6368] font-bold uppercase tracking-wider">
+                                <th class="p-3">Tested Candidate URL</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3">Detected Version</th>
+                                <th class="p-3">Fetch Details / Error</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[#f1f3f4] font-mono text-[11px] text-[#3c4043]">
+                            <?php foreach ($update_check['diagnostics'] as $url => $diag): ?>
+                                <tr>
+                                    <td class="p-3 truncate max-w-xs sm:max-w-md" title="<?php echo htmlspecialchars($url); ?>"><?php echo htmlspecialchars($url); ?></td>
+                                    <td class="p-3">
+                                        <?php if ($diag['status'] === 'success'): ?>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#e6f4ea] text-[#137333]">SUCCESS</span>
+                                        <?php else: ?>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#fce8e6] text-[#c5221f]">FAILED</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="p-3"><?php echo htmlspecialchars($diag['version'] ?? 'N/A'); ?></td>
+                                    <td class="p-3 <?php echo $diag['status'] === 'success' ? 'text-[#137333]' : 'text-[#c5221f]'; ?>"><?php echo htmlspecialchars($diag['message']); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <!-- Release Notes Section -->
         <?php if (!empty($update_check['release_notes'])): ?>
             <div class="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm space-y-4">

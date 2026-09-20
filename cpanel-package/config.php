@@ -28,7 +28,7 @@ define('JSON_STORAGE_FILE', DATA_DIR . '/pages.json');
 // Application & Security Configuration
 // -------------------------------------------------------------
 define('APP_NAME', 'Movie Hub HQ Drive');
-define('APP_VERSION', 'v-3.9.4');
+define('APP_VERSION', 'v-3.9.5');
 define('DEFAULT_PAGE_THEME', 'indigo');
 define('AUTO_INCREMENT_VIEWS', true);
 define('ROBOTS_NOINDEX', true); // Enforce noindex, nofollow on all button pages
