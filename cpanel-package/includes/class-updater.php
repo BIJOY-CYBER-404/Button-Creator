@@ -272,11 +272,15 @@ class SLEA_Updater {
 
             // Step 8: Applying application files
             $logger->log("Applying application files", "Deploying new application files over production directory...");
-            self::copy_staging_files($staging_dir, APP_ROOT, [
+            $exclusions = [
                 APP_ROOT . '/backups',
                 APP_ROOT . '/temp',
                 APP_ROOT . '/data'
-            ]);
+            ];
+            if (file_exists(APP_ROOT . '/config.php')) {
+                $exclusions[] = APP_ROOT . '/config.php';
+            }
+            self::copy_staging_files($staging_dir, APP_ROOT, $exclusions);
 
             // Update APP_VERSION in config.php
             self::update_config_version($new_version);
