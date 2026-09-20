@@ -472,6 +472,16 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 <label class="text-xs font-bold text-[#444746] block">
                     Footer Copyright HTML Content:
                 </label>
+                <div class="flex flex-wrap gap-1.5 pb-2">
+                    <span class="text-[11px] font-bold text-slate-500 self-center mr-1">Quick Emojis & Symbols:</span>
+                    <?php foreach (['🍿', '🎬', '❤️', '🚀', '⭐', '🎥', '📺', '🛡️', '💬', '📅', '✨', '🔥', '⚡', '🔒', '©️'] as $emoji): ?>
+                        <button type="button" onclick="insertPhpEmoji('<?= $emoji ?>')"
+                            class="w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-sm transition-all cursor-pointer select-none active:scale-95"
+                            title="Insert <?= $emoji ?>">
+                            <?= $emoji ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
                 <textarea id="footerCopyrightInput" rows="4" oninput="updateFooterPreview()"
                     class="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($footer_copyright) ?></textarea>
             </div>
@@ -564,6 +574,12 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
         function updateFooterPreview() {
             const html = document.getElementById('footerCopyrightInput').value;
             document.getElementById('footerPreviewBox').innerHTML = html;
+        }
+
+        function insertPhpEmoji(emoji) {
+            const input = document.getElementById('footerCopyrightInput');
+            input.value = input.value + ' ' + emoji;
+            updateFooterPreview();
         }
 
         function addNewMenuItem() {

@@ -441,14 +441,14 @@ async function startServer() {
     }
     return res.json({
       name: "Movie Hub HQ Drive",
-      version: "3.9.6",
+      version: "3.9.7",
       release_date: "2026-09-20",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
       minimum_php: "8.0",
       release_notes: [
-        "Cleaned up cPanel shared hosting build automation script paths and parameters",
-        "Enhanced security checks and logging systems during automated archive updates",
-        "Version v-3.9.6 re-packed production bundle ready for automatic updates"
+        "Added footer copyright custom emoji buttons directly underneath the editor fields",
+        "Transitioned all dashboard notifications to the top-right corner with a sleek slide-down animation",
+        "Version v-3.9.7 compiled production bundle fully ready for secure remote updates"
       ]
     });
   });

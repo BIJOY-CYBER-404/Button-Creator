@@ -574,6 +574,20 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
         <form onSubmit={handleSaveFooter} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-[#444746] block">Footer Content (HTML allowed)</label>
+            <div className="flex flex-wrap gap-1.5 pb-2">
+              <span className="text-[11px] font-bold text-[#5f6368] self-center mr-1">Quick Emojis & Symbols:</span>
+              {["🍿", "🎬", "❤️", "🚀", "⭐", "🎥", "📺", "🛡️", "💬", "📅", "✨", "🔥", "⚡", "🔒", "©️"].map((emoji) => (
+                <button
+                  type="button"
+                  key={emoji}
+                  onClick={() => setFooterText((prev) => prev + " " + emoji)}
+                  className="w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 border border-[#e0e4eb] flex items-center justify-center text-sm transition-all cursor-pointer select-none active:scale-95"
+                  title={`Insert ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
             <textarea
               rows={3}
               value={footerText}
