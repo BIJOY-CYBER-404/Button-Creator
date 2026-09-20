@@ -349,11 +349,8 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-6 right-6 z-50 hidden bg-[#1f1f1f] text-white px-5 py-3 rounded-2xl shadow-xl border border-slate-700 text-xs font-semibold flex items-center gap-2.5 transition-all">
-        <span class="w-2 h-2 rounded-full bg-[#34a853]"></span>
-        <span id="toastMsg">Action completed successfully</span>
-    </div>
+    <!-- Floating Global Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full"></div>
 
     <script>
         const baseUrl = '<?= $base_url ?>';
@@ -404,13 +401,13 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                         thumb.className = 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out translate-x-0';
                         badge.className = 'px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#fff0d4] text-[#b06000]';
                         badge.innerText = 'Private';
-                        showToast('Page status changed to Private (Hidden)');
+                        showToast('Page status changed to Private (Hidden)', 'info');
                     }
                 } else {
-                    alert('Failed to update status: ' + (data.error || 'Unknown error'));
+                    showToast('Failed to update status: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                alert('Request failed: ' + e.message);
+                showToast('Request failed: ' + e.message, 'error');
             }
         }
 
@@ -480,19 +477,19 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     const row = document.getElementById('page-row-' + id);
                     if (row) row.remove();
                     ALL_PAGES = ALL_PAGES.filter(p => p.id != id);
-                    showToast('Page deleted successfully');
+                    showToast('Page deleted successfully', 'success');
                 } else {
-                    alert('Delete failed: ' + data.error);
+                    showToast('Delete failed: ' + data.error, 'error');
                 }
             } catch (e) {
-                alert('Error: ' + e.message);
+                showToast('Error: ' + e.message, 'error');
             }
         }
 
         function openEditModal(pageId) {
             const page = ALL_PAGES.find(p => p.id == pageId);
             if (!page) {
-                alert('Page data not found for ID: ' + pageId);
+                showToast('Page data not found for ID: ' + pageId, 'error');
                 return;
             }
 
@@ -634,23 +631,73 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     }
 
                     closeEditModal();
-                    showToast('Page updated successfully!');
+                    showToast('Page updated successfully!', 'success');
                 } else {
-                    alert('Error updating page: ' + (data.error || 'Unknown error'));
+                    showToast('Error updating page: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (err) {
-                alert('Request failed: ' + err.message);
+                showToast('Request failed: ' + err.message, 'error');
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.innerText = 'Save Changes';
             }
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toastMsg').innerText = msg;
-            toast.classList.remove('hidden');
-            setTimeout(() => { toast.classList.add('hidden'); }, 3500);
+        function escapeToastHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const id = 'toast_' + Math.random().toString(36).substring(2, 9);
+            const toast = document.createElement('div');
+            toast.id = id;
+            toast.className = 'pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-2xl shadow-xl border text-xs font-semibold transform transition-all duration-300 translate-y-[-10px] opacity-0';
+
+            if (type === 'error') {
+                toast.className += ' bg-[#2c0b0e] text-[#ffdad6] border-[#93000a]';
+                toast.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <svg class="w-4 h-4 text-[#ffb4ab] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>
+                        <span class="truncate">${escapeToastHtml(msg)}</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-full text-[#ffb4ab] hover:bg-white/10 shrink-0 cursor-pointer">✕</button>
+                `;
+            } else if (type === 'info') {
+                toast.className += ' bg-[#001d35] text-[#c2e7ff] border-[#004a77]';
+                toast.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <svg class="w-4 h-4 text-[#7fcfff] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="8" stroke-width="2"></line></svg>
+                        <span class="truncate">${escapeToastHtml(msg)}</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-full text-[#7fcfff] hover:bg-white/10 shrink-0 cursor-pointer">✕</button>
+                `;
+            } else {
+                toast.className += ' bg-[#052e16] text-[#bbf7d0] border-[#166534]';
+                toast.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <svg class="w-4 h-4 text-[#86efac] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span class="truncate">${escapeToastHtml(msg)}</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-full text-[#86efac] hover:bg-white/10 shrink-0 cursor-pointer">✕</button>
+                `;
+            }
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+            });
+
+            setTimeout(() => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.add('opacity-0', 'translate-y-[-10px]');
+                    setTimeout(() => el.remove(), 300);
+                }
+            }, 4000);
         }
 
         function escapeHtml(str) {

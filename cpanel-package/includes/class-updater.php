@@ -87,11 +87,16 @@ class SLEA_Updater {
 
         $candidate_urls = array_unique(array_filter([
             $saved_manifest,
+            "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json",
+            "https://cdn.jsdelivr.net/gh/BIJOY-CYBER-404/Button-Creator@main/public/releases/update.json",
             "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/releases/update.json",
-            "https://ais-dev-q5k3yktsv5752pohuptg2x-703813314855.asia-southeast1.run.app/releases/update.json",
             (!empty($_SERVER['HTTP_HOST']) ? ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . '/releases/update.json' : ''),
+            (!empty($_SERVER['HTTP_HOST']) ? ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . '/public/releases/update.json' : ''),
+            APP_ROOT . '/releases/update.json',
             dirname(__DIR__) . '/releases/update.json',
+            dirname(__DIR__) . '/public/releases/update.json',
             (!empty($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] . '/releases/update.json' : ''),
+            (!empty($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] . '/public/releases/update.json' : ''),
             (!empty($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] . '/cpanel-package/releases/update.json' : '')
         ]));
 

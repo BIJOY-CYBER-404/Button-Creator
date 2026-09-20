@@ -131,13 +131,11 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
             </div>
         </header>
 
+        <!-- Floating Global Toast Notification Container (Always visible regardless of scroll) -->
+        <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full"></div>
+
         <!-- Main Content Container -->
         <main class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full space-y-7">
-        <!-- Notification Banner -->
-        <div id="toast" class="hidden bg-[#e6f4ea] border border-[#a8dab5] text-[#137333] px-4 py-3 rounded-2xl text-xs font-bold shadow-xs flex items-center justify-between">
-            <span id="toastMsg">Settings saved successfully!</span>
-            <button onclick="document.getElementById('toast').classList.add('hidden')" class="text-sm font-bold">✕</button>
-        </div>
 
         <!-- 0. Site Branding & Logo Configuration (Google Material M3) -->
         <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-6">
@@ -472,8 +470,8 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 <label class="text-xs font-bold text-[#444746] block">
                     Footer Copyright HTML Content:
                 </label>
-                <div class="flex flex-wrap gap-1.5 pb-2">
-                    <span class="text-[11px] font-bold text-slate-500 self-center mr-1">Quick Emojis & Symbols:</span>
+                <div class="flex flex-wrap items-center gap-1.5 pb-2">
+                    <span class="text-[11px] font-bold text-slate-500 mr-1">Quick Emojis & Symbols:</span>
                     <?php foreach (['🍿', '🎬', '❤️', '🚀', '⭐', '🎥', '📺', '🛡️', '💬', '📅', '✨', '🔥', '⚡', '🔒', '©️'] as $emoji): ?>
                         <button type="button" onclick="insertPhpEmoji('<?= $emoji ?>')"
                             class="w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-sm transition-all cursor-pointer select-none active:scale-95"
@@ -481,9 +479,14 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                             <?= $emoji ?>
                         </button>
                     <?php endforeach; ?>
+                    <button type="button" onclick="resetFooterToDefault()"
+                        class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold transition-all cursor-pointer sm:ml-auto"
+                        title="Reset to default clean template with emojis">
+                        🔄 Restore Default with Emojis
+                    </button>
                 </div>
                 <textarea id="footerCopyrightInput" rows="4" oninput="updateFooterPreview()"
-                    class="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($footer_copyright) ?></textarea>
+                    class="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($footer_copyright, ENT_QUOTES, 'UTF-8') ?></textarea>
             </div>
 
             <!-- Live HTML Preview -->
@@ -559,12 +562,12 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Ad configurations saved successfully!');
+                    showToast('Ad configurations saved successfully!', 'success');
                 } else {
-                    alert('Error saving ads: ' + (data.error || 'Unknown error'));
+                    showToast('Error saving ads: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                alert('Request failed: ' + e.message);
+                showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Save Ad Configurations';
@@ -578,8 +581,22 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
 
         function insertPhpEmoji(emoji) {
             const input = document.getElementById('footerCopyrightInput');
-            input.value = input.value + ' ' + emoji;
+            const start = input.selectionStart !== undefined ? input.selectionStart : input.value.length;
+            const end = input.selectionEnd !== undefined ? input.selectionEnd : input.value.length;
+            const val = input.value;
+            input.value = val.substring(0, start) + ' ' + emoji + ' ' + val.substring(end);
+            input.focus();
+            const newPos = start + emoji.length + 2;
+            input.setSelectionRange(newPos, newPos);
             updateFooterPreview();
+            showToast(`Inserted emoji ${emoji}`, 'info');
+        }
+
+        function resetFooterToDefault() {
+            const defaultText = '&copy; <?= date("Y") ?> MovieHubHQ 🍿 • Made with ❤️ for Direct Episode Link Gateway 🎬 • All rights reserved 🚀';
+            document.getElementById('footerCopyrightInput').value = defaultText;
+            updateFooterPreview();
+            showToast('Reset footer to default template with emojis. Click "Save Footer Text" to persist.', 'info');
         }
 
         function addNewMenuItem() {
@@ -641,12 +658,12 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Navigation menu updated successfully!');
+                    showToast('Navigation menu updated successfully!', 'success');
                 } else {
-                    alert('Error: ' + data.error);
+                    showToast('Error saving navigation menu: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                alert('Request failed: ' + e.message);
+                showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Save Navigation Menu';
@@ -663,17 +680,17 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
             try {
                 const res = await fetch('api.php?action=save_footer_copyright', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
                     body: JSON.stringify({ footer_html: html })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Footer copyright updated successfully!');
+                    showToast('Footer copyright text updated successfully!', 'success');
                 } else {
-                    alert('Error: ' + data.error);
+                    showToast('Error saving footer: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                alert('Request failed: ' + e.message);
+                showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Save Footer Text';
@@ -717,12 +734,12 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Site branding & logo updated successfully!');
+                    showToast('Site branding & logo updated successfully!', 'success');
                 } else {
-                    alert('Error saving site identity: ' + (data.error || 'Unknown error'));
+                    showToast('Error saving site identity: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                alert('Request failed: ' + e.message);
+                showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Save Site Branding & Logo';
@@ -752,23 +769,73 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Maintenance settings saved successfully!');
+                    showToast('Maintenance settings saved successfully!', 'success');
                 } else {
-                    alert('Error saving maintenance settings: ' + (data.error || 'Unknown error'));
+                    showToast('Error saving maintenance settings: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                alert('Request failed: ' + e.message);
+                showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Save Maintenance Settings';
             }
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toastMsg').innerText = msg;
-            toast.classList.remove('hidden');
-            setTimeout(() => { toast.classList.add('hidden'); }, 3500);
+        function escapeToastHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const id = 'toast_' + Math.random().toString(36).substring(2, 9);
+            const toast = document.createElement('div');
+            toast.id = id;
+            toast.className = 'pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-2xl shadow-xl border text-xs font-semibold transform transition-all duration-300 translate-y-[-10px] opacity-0';
+
+            if (type === 'error') {
+                toast.className += ' bg-[#2c0b0e] text-[#ffdad6] border-[#93000a]';
+                toast.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <svg class="w-4 h-4 text-[#ffb4ab] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>
+                        <span class="truncate">${escapeToastHtml(msg)}</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-full text-[#ffb4ab] hover:bg-white/10 shrink-0 cursor-pointer">✕</button>
+                `;
+            } else if (type === 'info') {
+                toast.className += ' bg-[#001d35] text-[#c2e7ff] border-[#004a77]';
+                toast.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <svg class="w-4 h-4 text-[#7fcfff] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="16" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="8" x2="12.01" y2="8" stroke-width="2"></line></svg>
+                        <span class="truncate">${escapeToastHtml(msg)}</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-full text-[#7fcfff] hover:bg-white/10 shrink-0 cursor-pointer">✕</button>
+                `;
+            } else {
+                toast.className += ' bg-[#052e16] text-[#bbf7d0] border-[#166534]';
+                toast.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <svg class="w-4 h-4 text-[#86efac] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span class="truncate">${escapeToastHtml(msg)}</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-full text-[#86efac] hover:bg-white/10 shrink-0 cursor-pointer">✕</button>
+                `;
+            }
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+            });
+
+            setTimeout(() => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.add('opacity-0', 'translate-y-[-10px]');
+                    setTimeout(() => el.remove(), 300);
+                }
+            }, 4000);
         }
     </script>
 </body>

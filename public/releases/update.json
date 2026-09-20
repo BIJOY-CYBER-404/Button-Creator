@@ -4,7 +4,7 @@
   "release_date": "2026-09-20",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "8bad1d40334a294f1a43e69ca60d0457dcc6a24df0ddc425611f5f078e8c6dee",
+  "checksum": "050d54871b20eb71d7bf8df891f73d57c58bc520591fbe9713fd66d43e251c8b",
   "release_notes": [
     "Fixed generator indefinite loading by implementing 30-second timeout with friendly error messages",
     "Added full support for safe.sohojgyan.com shortlink format (e.g. https://safe.sohojgyan.com/JX6N5o) via official JSON decode API",

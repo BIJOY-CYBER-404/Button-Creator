@@ -391,17 +391,32 @@ class SLEA_Datastore {
             $stmt->execute();
             $row = $stmt->fetch();
             if ($row && isset($row['setting_value']) && trim($row['setting_value']) !== '') {
-                return $row['setting_value'];
+                $val = $row['setting_value'];
+                // If legacy MySQL corruption converted emojis to '??', auto-repair to clean UTF-8 emojis
+                if (strpos($val, '??') !== false) {
+                    $repaired = str_replace(
+                        ['?? • Made with ??', 'Gateway ?? • All rights reserved ??', 'MovieHubHQ ??'],
+                        ['🍿 • Made with ❤️', 'Gateway 🎬 • All rights reserved 🚀', 'MovieHubHQ 🍿'],
+                        $val
+                    );
+                    return $repaired;
+                }
+                return $val;
             }
         } catch (Exception $e) {
             error_log('Error loading footer copyright: ' . $e->getMessage());
         }
-        return '&copy; ' . date('Y') . ' Movie Hub HQ Drive. Non-Indexable Private Media Portal. All rights reserved.';
+        return '&copy; ' . date('Y') . ' MovieHubHQ 🍿 • Made with ❤️ for Direct Episode Link Gateway 🎬 • All rights reserved 🚀';
     }
 
     public static function save_footer_copyright($html) {
         $pdo = SLEA_DB::get_connection();
         $now = date('Y-m-d H:i:s');
+
+        // Ensure proper UTF-8 4-byte encoding for emojis
+        if (function_exists('mb_check_encoding') && !mb_check_encoding($html, 'UTF-8')) {
+            $html = mb_convert_encoding($html, 'UTF-8', mb_detect_encoding($html) ?: 'UTF-8');
+        }
 
         $stmt = $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, updated_at)

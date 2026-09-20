@@ -16,11 +16,12 @@ class SLEA_Downloader {
             throw new Exception("Update manifest URL is empty.");
         }
 
-        // Add a dynamic cache buster to remote HTTP URLs to bypass CDN caches like raw.githubusercontent.com Varnish caches
+        // Add dynamic random cache buster to remote HTTP URLs to bypass CDN caches like raw.githubusercontent.com Fastly/Varnish caches
         $fetch_url = $manifest_url;
         if (strpos($manifest_url, 'http://') === 0 || strpos($manifest_url, 'https://') === 0) {
             $separator = (strpos($manifest_url, '?') === false) ? '?' : '&';
-            $fetch_url = $manifest_url . $separator . 't=' . time();
+            $cb = time() . '_' . mt_rand(100000, 999999);
+            $fetch_url = $manifest_url . $separator . '_nocache=1&_cb=' . $cb . '&ts=' . microtime(true);
         }
 
         $this->logger->log("Checking update", "Fetching release manifest from " . $manifest_url);
@@ -67,19 +68,35 @@ class SLEA_Downloader {
             @unlink($target_file);
         }
 
+        // Ensure CDN cache bypass on package download URL
+        $fetch_package_url = $download_url;
+        if (strpos($download_url, 'http://') === 0 || strpos($download_url, 'https://') === 0) {
+            $separator = (strpos($download_url, '?') === false) ? '?' : '&';
+            $cb = time() . '_' . mt_rand(100000, 999999);
+            $fetch_package_url = $download_url . $separator . '_nocache=1&_cb=' . $cb;
+        }
+
         if (function_exists('curl_init')) {
-            $ch = curl_init($download_url);
+            $ch = curl_init($fetch_package_url);
             $fp = fopen($target_file, 'wb');
             curl_setopt($ch, CURLOPT_FILE, $fp);
             curl_setopt($ch, CURLOPT_HEADER, 0);
             if (!ini_get('open_basedir')) {
                 @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
             }
-            curl_setopt($ch, CURLOPT_TIMEOUT, 120);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/3.8');
+            curl_setopt($ch, CURLOPT_TIMEOUT, 180);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/3.9');
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
+            curl_setopt($ch, CURLOPT_FORBID_REUSE, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Cache-Control: no-cache, no-store, must-revalidate, max-age=0',
+                'Pragma: no-cache',
+                'Expires: 0',
+                'Accept: */*'
+            ]);
 
             $executed = curl_exec($ch);
             $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -95,20 +112,24 @@ class SLEA_Downloader {
             @unlink($target_file);
         }
 
-        // Stream Fallback
+        // Stream Fallback with anti-cache headers
         $ctx = stream_context_create([
             'http' => [
                 'method'          => 'GET',
-                'timeout'         => 120,
+                'timeout'         => 180,
                 'follow_location' => 1,
-                'header'          => "User-Agent: MovieHubHQ-Updater/3.8\r\nAccept: */*\r\n"
+                'header'          => "User-Agent: MovieHubHQ-Updater/3.9\r\n" .
+                                     "Cache-Control: no-cache, no-store, must-revalidate, max-age=0\r\n" .
+                                     "Pragma: no-cache\r\n" .
+                                     "Expires: 0\r\n" .
+                                     "Accept: */*\r\n"
             ],
             'ssl' => [
                 'verify_peer'      => false,
                 'verify_peer_name' => false
             ]
         ]);
-        $content = @file_get_contents($download_url, false, $ctx);
+        $content = @file_get_contents($fetch_package_url, false, $ctx);
         if ($content !== false && strlen($content) >= 1024) {
             file_put_contents($target_file, $content);
             $filesize = @filesize($target_file);
@@ -137,11 +158,19 @@ class SLEA_Downloader {
                 @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
                 @curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
             }
-            curl_setopt($ch, CURLOPT_TIMEOUT, 20);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/3.8');
+            curl_setopt($ch, CURLOPT_TIMEOUT, 25);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 12);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/3.9');
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
+            curl_setopt($ch, CURLOPT_FORBID_REUSE, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Cache-Control: no-cache, no-store, must-revalidate, max-age=0',
+                'Pragma: no-cache',
+                'Expires: 0',
+                'Accept: application/json, text/plain, */*'
+            ]);
 
             $resp = curl_exec($ch);
             $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -158,13 +187,16 @@ class SLEA_Downloader {
             }
         }
 
-        // Attempt 2: Stream context fallback
         $ctx = stream_context_create([
             'http' => [
                 'method'          => 'GET',
-                'timeout'         => 20,
+                'timeout'         => 25,
                 'follow_location' => 1,
-                'header'          => "User-Agent: MovieHubHQ-Updater/3.8\r\nAccept: application/json, */*\r\n"
+                'header'          => "User-Agent: MovieHubHQ-Updater/3.9\r\n" .
+                                     "Cache-Control: no-cache, no-store, must-revalidate, max-age=0\r\n" .
+                                     "Pragma: no-cache\r\n" .
+                                     "Expires: 0\r\n" .
+                                     "Accept: application/json, text/plain, */*\r\n"
             ],
             'ssl' => [
                 'verify_peer'      => false,

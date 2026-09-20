@@ -33,11 +33,14 @@ class SLEA_DB {
                 $options = [
                     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES   => true,
-                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
+                    PDO::ATTR_EMULATE_PREPARES   => false, // Native prepared statements preserve 4-byte UTF-8 emojis
+                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
                 ];
 
                 self::$pdo = new PDO($dsn, defined('DB_USER') ? DB_USER : '', defined('DB_PASS') ? DB_PASS : '', $options);
+                // Enforce 4-byte UTF-8 collation on connection to prevent emoji conversion to ??
+                self::$pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+                self::$pdo->exec("SET CHARACTER SET utf8mb4");
                 self::$driver = 'mysql';
                 self::ensure_schema();
                 return self::$pdo;
@@ -77,6 +80,26 @@ class SLEA_DB {
         $is_mysql = (self::$driver === 'mysql');
         $auto_inc = $is_mysql ? 'INT AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
         $text_type = $is_mysql ? 'LONGTEXT' : 'TEXT';
+        $table_engine = $is_mysql ? 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci' : '';
+
+        // For MySQL, upgrade existing tables to utf8mb4_unicode_ci so emojis are fully preserved
+        if ($is_mysql) {
+            try {
+                self::$pdo->exec("ALTER TABLE settings CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                self::$pdo->exec("ALTER TABLE settings MODIFY setting_value LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            } catch (Exception $e) { /* ignore if not exists */ }
+
+            try {
+                self::$pdo->exec("ALTER TABLE pages CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                self::$pdo->exec("ALTER TABLE pages MODIFY buttons_json LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                self::$pdo->exec("ALTER TABLE pages MODIFY title VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                self::$pdo->exec("ALTER TABLE pages MODIFY description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            } catch (Exception $e) { /* ignore if not exists */ }
+
+            try {
+                self::$pdo->exec("ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            } catch (Exception $e) { /* ignore if not exists */ }
+        }
 
         // 1. Users Table
         self::$pdo->exec("
@@ -89,7 +112,7 @@ class SLEA_DB {
                 permissions TEXT,
                 created_at DATETIME,
                 updated_at DATETIME
-            )
+            ) {$table_engine}
         ");
 
         // 2. Button Pages Table
@@ -108,7 +131,7 @@ class SLEA_DB {
                 is_public INT DEFAULT 1,
                 created_at DATETIME,
                 updated_at DATETIME
-            )
+            ) {$table_engine}
         ");
 
         // 3. Settings Table
@@ -117,7 +140,7 @@ class SLEA_DB {
                 setting_key VARCHAR(100) PRIMARY KEY,
                 setting_value {$text_type},
                 updated_at DATETIME
-            )
+            ) {$table_engine}
         ");
 
         // 4. Migrations History Table
@@ -127,7 +150,7 @@ class SLEA_DB {
                 migration_name VARCHAR(255) NOT NULL UNIQUE,
                 batch INT DEFAULT 1,
                 executed_at DATETIME
-            )
+            ) {$table_engine}
         ");
 
         // 5. Update History Table
@@ -145,7 +168,7 @@ class SLEA_DB {
                 started_at DATETIME,
                 completed_at DATETIME,
                 details_json {$text_type}
-            )
+            ) {$table_engine}
         ");
 
         // Seed initial default menu items if not set
@@ -179,16 +202,28 @@ class SLEA_DB {
             ]);
         }
 
-        // Seed initial footer copyright text if not set
+        // Seed initial footer copyright text if not set or if previous corruption had '??'
         $stmt_footer = self::$pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = 'footer_copyright'");
         $stmt_footer->execute();
-        if (!$stmt_footer->fetch()) {
+        $row_footer = $stmt_footer->fetch();
+        if (!$row_footer) {
             $default_footer = '&copy; ' . date('Y') . ' MovieHubHQ 🍿 • Made with ❤️ for Direct Episode Link Gateway 🎬 • All rights reserved 🚀';
             $insert_footer = self::$pdo->prepare("INSERT INTO settings (setting_key, setting_value, updated_at) VALUES ('footer_copyright', :val, :now)");
             $insert_footer->execute([
                 ':val' => $default_footer,
                 ':now' => date('Y-m-d H:i:s')
             ]);
+        } elseif (isset($row_footer['setting_value']) && strpos($row_footer['setting_value'], '??') !== false) {
+            // Repair previously corrupted '??' question marks from legacy 3-byte utf8
+            $repaired = str_replace(
+                ['?? • Made with ??', 'Gateway ?? • All rights reserved ??', 'MovieHubHQ ??'],
+                ['🍿 • Made with ❤️', 'Gateway 🎬 • All rights reserved 🚀', 'MovieHubHQ 🍿'],
+                $row_footer['setting_value']
+            );
+            if ($repaired !== $row_footer['setting_value']) {
+                $repair_stmt = self::$pdo->prepare("UPDATE settings SET setting_value = :val, updated_at = :now WHERE setting_key = 'footer_copyright'");
+                $repair_stmt->execute([':val' => $repaired, ':now' => date('Y-m-d H:i:s')]);
+            }
         }
     }
 }
