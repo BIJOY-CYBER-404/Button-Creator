@@ -17,6 +17,9 @@ header('Content-Type: application/json; charset=utf-8');
 // Strict Admin Authorization Check
 SLEA_Auth::require_admin();
 
+// Ensure script execution time doesn't exceed 40 seconds on shared hosting
+@set_time_limit(40);
+
 $action = isset($_GET['action']) ? trim($_GET['action']) : '';
 $raw_input = file_get_contents('php://input');
 $data = json_decode($raw_input, true) ?: [];
@@ -267,7 +270,7 @@ try {
         default:
             throw new Exception('Unknown API action.');
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     http_response_code(400);
     echo json_encode([
         'success' => false,

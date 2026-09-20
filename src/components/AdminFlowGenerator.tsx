@@ -59,6 +59,11 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
     setCreatedResult(null);
     setStep("resolving");
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 35000);
+
     try {
       // Step 1: Trigger Resolve & Page Generation via server API
       const res = await fetch("/api/pages/create-from-shortlink", {
@@ -73,10 +78,26 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
           title_override: customTitle.trim() || undefined,
           theme,
         }),
+        signal: controller.signal,
       });
 
-      const data: CreatePageResponse = await res.json();
-      if (!data.success || !data.data) {
+      clearTimeout(timeoutId);
+
+      const rawText = await res.text();
+      let data: CreatePageResponse;
+      try {
+        data = JSON.parse(rawText);
+      } catch (jsonErr) {
+        if (res.status === 401) {
+          throw new Error("Admin session expired. Please re-enter your admin password.");
+        } else if (res.status >= 500) {
+          throw new Error(`Server error (${res.status}): Engine timed out or encountered an internal error.`);
+        } else {
+          throw new Error("Unexpected server response: " + rawText.substring(0, 120));
+        }
+      }
+
+      if (!res.ok || !data.success || !data.data) {
         throw new Error(data.error || "Failed to resolve and generate button page.");
       }
 
@@ -85,9 +106,14 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
       onPageCreated(data.data.page);
       onNotify?.("✓ Episode Button Page created successfully!", "success");
     } catch (err: any) {
-      setError(err.message || "An unexpected error occurred during processing.");
+      clearTimeout(timeoutId);
+      let msg = err.message || "An unexpected error occurred during processing.";
+      if (err.name === "AbortError" || err.message?.includes("aborted")) {
+        msg = "Request timed out after 35 seconds. The target shortlink host or destination did not respond in time. Please verify the URL or try again.";
+      }
+      setError(msg);
       setStep("idle");
-      onNotify?.(err.message || "Failed to generate button page", "error");
+      onNotify?.(msg, "error");
     } finally {
       setLoading(false);
     }

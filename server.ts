@@ -214,6 +214,18 @@ async function startServer() {
       let stdoutData = "";
       let stderrData = "";
 
+      const timeoutId = setTimeout(() => {
+        try {
+          pythonProcess.kill("SIGTERM");
+        } catch (_) {}
+        if (!res.headersSent) {
+          res.status(504).json({
+            success: false,
+            error: "Resolution timed out after 35 seconds. The target shortlink host or destination did not respond in time."
+          });
+        }
+      }, 35000);
+
       pythonProcess.stdout.on("data", (data) => {
         stdoutData += data.toString();
       });
@@ -223,6 +235,9 @@ async function startServer() {
       });
 
       pythonProcess.on("close", (code) => {
+        clearTimeout(timeoutId);
+        if (res.headersSent) return;
+
         if (code !== 0 && !stdoutData.trim()) {
           return res.status(500).json({
             success: false,
@@ -441,14 +456,15 @@ async function startServer() {
     }
     return res.json({
       name: "Movie Hub HQ Drive",
-      version: "3.9.7",
+      version: "3.9.8",
       release_date: "2026-09-20",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
       minimum_php: "8.0",
       release_notes: [
-        "Added footer copyright custom emoji buttons directly underneath the editor fields",
-        "Transitioned all dashboard notifications to the top-right corner with a sleek slide-down animation",
-        "Version v-3.9.7 compiled production bundle fully ready for secure remote updates"
+        "Fixed generator indefinite loading by implementing 30-second timeout with friendly error messages",
+        "Added full support for safe.sohojgyan.com shortlink format (e.g. https://safe.sohojgyan.com/JX6N5o) via official JSON decode API",
+        "Enhanced error detection for expired admin sessions and network failures with top-right notification toasts",
+        "Version v-3.9.8 compiled production bundle fully ready for secure remote updates"
       ]
     });
   });

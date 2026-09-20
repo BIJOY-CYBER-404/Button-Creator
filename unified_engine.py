@@ -50,7 +50,7 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 # Check if input URL is already a shortened URL
                 parsed_in = urlparse(url)
                 host_in = (parsed_in.hostname or "").lower()
-                is_direct_shortlink = any(k in host_in for k in ["shrt.sohojgyan", "go.sohojgyan", "bit.ly", "tinyurl", "ouo.io"]) or (
+                is_direct_shortlink = any(k in host_in for k in ["shrt.sohojgyan", "safe.sohojgyan", "go.sohojgyan", "bit.ly", "tinyurl", "ouo.io"]) or (
                     "sohojgyan.com" in host_in and len(parsed_in.path.strip("/").split("/")) == 1
                 )
 

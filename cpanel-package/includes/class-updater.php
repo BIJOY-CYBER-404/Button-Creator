@@ -48,8 +48,8 @@ class SLEA_Updater {
         $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
         $base = rtrim($protocol . $host . dirname($_SERVER['PHP_SELF'] ?? ''), '/\\');
 
-        $remote_manifest = "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/releases/update.json";
-        $remote_zip = "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/cpanel-app-package.zip";
+        $remote_manifest = "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json";
+        $remote_zip = "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip";
 
         return [
             'manifest_url'          => $remote_manifest,

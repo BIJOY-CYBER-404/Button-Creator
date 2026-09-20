@@ -29,8 +29,8 @@ import time
 import zlib
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlparse
-from urllib.request import HTTPCookieProcessor, HTTPErrorProcessor, Request, build_opener
+from urllib.parse import parse_qs, quote, unquote, urlencode, urljoin, urlparse
+from urllib.request import HTTPCookieProcessor, HTTPErrorProcessor, Request, build_opener, urlopen
 
 MAX_REDIRECTS = 25
 TIMEOUT = 14
@@ -277,6 +277,42 @@ def decompress_body(raw, content_encoding=""):
     except Exception:
         pass
     return raw
+
+def resolve_safe_sohojgyan(url):
+    """
+    Direct resolver for safe.sohojgyan.com shortlinks (e.g. https://safe.sohojgyan.com/JX6N5o or ?code=JX6N5o).
+    Queries the official JSON decode endpoint: https://safe.sohojgyan.com/api/decode/{code}
+    """
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        code = None
+        if "safe.sohojgyan" in host:
+            code = parsed.path.strip("/").split("/")[-1]
+        elif "code=" in parsed.query:
+            qs = parse_qs(parsed.query)
+            if qs.get("code"):
+                code = qs["code"][0].strip()
+
+        if code and len(code) >= 3:
+            decode_url = f"https://safe.sohojgyan.com/api/decode/{quote(code)}"
+            req = Request(decode_url, headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json"
+            })
+            resp = urlopen(req, timeout=8)
+            raw = resp.read(MAX_HTML_BYTES).decode("utf-8", errors="replace")
+            resp.close()
+            data = json.loads(raw)
+            if data.get("success") and data.get("data", {}).get("original_url"):
+                orig = data["data"]["original_url"].strip()
+                if orig.startswith(("http://", "https://")):
+                    return orig
+    except Exception:
+        pass
+    return None
 
 # =========================================================
 # Safelink / Blogger / WordPress Shortener Multi-Step Bypass
@@ -822,9 +858,39 @@ def resolve_url(start_url, max_redirects=MAX_REDIRECTS, return_html=False):
                     pass
             break
 
-        # Fast Gateway: Direct jump from shrt.sohojgyan.com/{code} to go.sohojgyan.com/{code}
+        # Fast Gateway: Safe SohojGyan direct API decode
         parsed_cur = urlparse(current_url)
         cur_host = (parsed_cur.hostname or "").lower()
+        if "safe.sohojgyan" in cur_host or "code=" in parsed_cur.query:
+            safe_target = resolve_safe_sohojgyan(current_url)
+            if safe_target and safe_target != current_url:
+                chain.append({
+                    "step": number,
+                    "url": current_url,
+                    "status": 302,
+                    "type": "Safe SohojGyan Gateway Decoder"
+                })
+                current_url = safe_target
+                if is_target_destination(current_url):
+                    chain.append({
+                        "step": number + 1,
+                        "url": current_url,
+                        "status": 200,
+                        "type": "Target Destination (Blogspot Episode Page)"
+                    })
+                    if return_html:
+                        try:
+                            req_dest = Request(current_url, headers={"User-Agent": USER_AGENT})
+                            resp_dest = opener.open(req_dest, timeout=TIMEOUT)
+                            raw_dest = resp_dest.read(MAX_HTML_BYTES)
+                            html = decompress_body(raw_dest, resp_dest.headers.get("Content-Encoding", "")).decode("utf-8", errors="replace")
+                            resp_dest.close()
+                        except Exception:
+                            pass
+                    break
+                continue
+
+        # Fast Gateway: Direct jump from shrt.sohojgyan.com/{code} to go.sohojgyan.com/{code}
         if "shrt.sohojgyan" in cur_host:
             code = parsed_cur.path.strip("/").split("/")[-1]
             if code and len(code) >= 3 and not is_target_destination(current_url):
@@ -1040,6 +1106,32 @@ def resolve_shortlink_until_target(start_url, max_retries=4, return_html=False):
     """
     start_url = validate_url(start_url)
     last_res = None
+
+    # Fast direct check: safe.sohojgyan.com format
+    safe_direct = resolve_safe_sohojgyan(start_url)
+    if safe_direct and is_target_destination(safe_direct):
+        final_html = ""
+        if return_html:
+            try:
+                req_dest = Request(safe_direct, headers={"User-Agent": USER_AGENT})
+                resp_dest = urlopen(req_dest, timeout=TIMEOUT)
+                raw_dest = resp_dest.read(MAX_HTML_BYTES)
+                final_html = decompress_body(raw_dest, resp_dest.headers.get("Content-Encoding", "")).decode("utf-8", errors="replace")
+                resp_dest.close()
+            except Exception:
+                pass
+        return {
+            "original": start_url,
+            "final": safe_direct,
+            "redirects": 1,
+            "chain": [
+                {"step": 1, "url": start_url, "status": 302, "type": "Safe SohojGyan Shortlink Gateway"},
+                {"step": 2, "url": safe_direct, "status": 200, "type": "Target Destination (Blogspot Episode Page)"}
+            ],
+            "attempts": 1,
+            "target_destination_verified": True,
+            "final_html": final_html
+        }
 
     for attempt in range(1, max_retries + 1):
         try:

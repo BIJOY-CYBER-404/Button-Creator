@@ -27,11 +27,13 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 if resolver.is_target_destination(url):
                     _, final_html = extractor.fetch_page(url)
                     items = extractor.extract_from_html(final_html, url, button_only=button_only) if final_html else []
+                    page_title = extractor.extract_page_title(final_html, url) if final_html else extractor.derive_title_from_url(url)
                     return {
                         "success": True,
                         "resolved": True,
                         "original_url": url,
                         "final_url": url,
+                        "page_title": page_title,
                         "redirects": 0,
                         "target_destination_verified": True,
                         "chain": [{
@@ -48,7 +50,7 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 # Check if input URL is already a shortened URL
                 parsed_in = urlparse(url)
                 host_in = (parsed_in.hostname or "").lower()
-                is_direct_shortlink = any(k in host_in for k in ["shrt.sohojgyan", "go.sohojgyan", "bit.ly", "tinyurl", "ouo.io"]) or (
+                is_direct_shortlink = any(k in host_in for k in ["shrt.sohojgyan", "safe.sohojgyan", "go.sohojgyan", "bit.ly", "tinyurl", "ouo.io"]) or (
                     "sohojgyan.com" in host_in and len(parsed_in.path.strip("/").split("/")) == 1
                 )
 
@@ -67,11 +69,13 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
 
                     items = extractor.extract_from_html(final_html, final_dest_url, button_only=button_only) if final_html else []
                     is_target = resolver.is_target_destination(final_dest_url)
+                    page_title = extractor.extract_page_title(final_html, final_dest_url) if final_html else extractor.derive_title_from_url(final_dest_url)
                     return {
                         "success": True,
                         "resolved": True,
                         "original_url": url,
                         "final_url": final_dest_url,
+                        "page_title": page_title,
                         "target_destination_verified": is_target,
                         "redirects": resolve_res.get("redirects", 0),
                         "chain": resolve_res.get("chain", []),
@@ -108,8 +112,8 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
 
                     candidates = []
 
-                    # 1. Direct target Blogspot episode destination format
-                    for m_target in re.finditer(r'<a\s+[^>]*href=[\'"](https?://[a-zA-Z0-9.-]*blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html)[\'"]', final_html, re.I):
+                    # 1. Direct target Blogspot episode destination format (https://mydverse02.blogspot.com/p/*.html)
+                    for m_target in re.finditer(r'<a\s+[^>]*href=[\'"](https?://(?:www\.)?mydverse02\.blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html)[\'"]', final_html, re.I):
                         c = m_target.group(1).strip()
                         if resolver.is_target_destination(c) and c not in candidates:
                             candidates.append(c)
@@ -131,6 +135,12 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                     for m_shrt in re.finditer(r'<a\s+[^>]*href=[\'"](https?://(?:shrt\.[a-z0-9.-]+|go\.sohojgyan\.com)/[a-zA-Z0-9_-]+)[\'"]', final_html, re.I):
                         c = m_shrt.group(1).strip()
                         if is_valid_shortlink(c) and c not in candidates:
+                            candidates.append(c)
+
+                    # 5. Direct search in scripts for https://mydverse02.blogspot.com/p/*.html
+                    for m_script in re.finditer(r'[\'"](https?://(?:www\.)?mydverse02\.blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html)[\'"]', final_html, re.I):
+                        c = m_script.group(1).strip()
+                        if resolver.is_target_destination(c) and c not in candidates:
                             candidates.append(c)
 
                     # After finding candidate shortened URLs, resolve with retry until destination matches Blogspot structure:
@@ -199,11 +209,14 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 items = extractor.extract_from_html(final_html, final_dest_url, button_only=button_only) if final_html else []
                 is_target = resolver.is_target_destination(final_dest_url)
 
+                page_title = extractor.extract_page_title(final_html, final_dest_url) if final_html else extractor.derive_title_from_url(final_dest_url)
+
                 return {
                     "success": True,
                     "resolved": True,
                     "original_url": url,
                     "final_url": final_dest_url,
+                    "page_title": page_title,
                     "target_destination_verified": is_target,
                     "redirects": resolve_res.get("redirects", 0),
                     "chain": resolve_res.get("chain", []),
@@ -222,6 +235,7 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                     "resolved": False,
                     "original_url": url,
                     "final_url": ext_res.get("final_url", url),
+                    "page_title": ext_res.get("page_title") or extractor.derive_title_from_url(ext_res.get("final_url", url)),
                     "redirects": 0,
                     "chain": [
                         {

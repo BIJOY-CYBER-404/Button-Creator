@@ -74,10 +74,70 @@ class SLEA_Resolver {
     }
 
     /**
+     * Specialized direct resolver for safe.sohojgyan.com shortlinks
+     * e.g. https://safe.sohojgyan.com/JX6N5o or ?code=JX6N5o
+     * Calls the official JSON decode endpoint: https://safe.sohojgyan.com/api/decode/{code}
+     */
+    public static function resolve_safe_sohojgyan($url) {
+        if (empty($url) || !is_string($url)) {
+            return null;
+        }
+
+        $code = '';
+        if (preg_match('#safe\.sohojgyan\.com/([a-zA-Z0-9_-]+)#i', $url, $m)) {
+            $code = $m[1];
+        } elseif (preg_match('#[?&]code=([a-zA-Z0-9_-]+)#i', $url, $m)) {
+            $code = $m[1];
+        }
+
+        if (!empty($code) && strlen($code) >= 3) {
+            $api_url = "https://safe.sohojgyan.com/api/decode/" . urlencode($code);
+            $res = self::fetch_url_curl($api_url, 8);
+            if (!empty($res['body'])) {
+                $data = json_decode(trim($res['body']), true);
+                if (!empty($data['success']) && !empty($data['data']['original_url'])) {
+                    $orig = trim($data['data']['original_url']);
+                    if (!empty($orig) && filter_var($orig, FILTER_VALIDATE_URL)) {
+                        return $orig;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Resolves shortened URL with retry logic until the destination matches target Blogspot structure.
      */
-    public static function resolve_shortlink_until_target($initial_url, $options = [], $max_retries = 4) {
+    public static function resolve_shortlink_until_target($initial_url, $options = [], $max_retries = 3) {
         $last_res = null;
+
+        // Fast direct check: safe.sohojgyan.com format
+        $safe_direct = self::resolve_safe_sohojgyan($initial_url);
+        if (!empty($safe_direct) && self::is_target_destination($safe_direct)) {
+            return [
+                'original'                   => $initial_url,
+                'final'                      => $safe_direct,
+                'redirects'                  => 1,
+                'attempts'                   => 1,
+                'target_destination_verified'=> true,
+                'chain'                      => [
+                    [
+                        'step'   => 1,
+                        'url'    => $initial_url,
+                        'status' => 302,
+                        'type'   => 'Safe SohojGyan Shortlink Gateway'
+                    ],
+                    [
+                        'step'   => 2,
+                        'url'    => $safe_direct,
+                        'status' => 200,
+                        'type'   => 'Target Destination (Blogspot Episode Page)'
+                    ]
+                ],
+                'final_html'                 => ''
+            ];
+        }
 
         for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
             $target_url = $initial_url;
@@ -147,13 +207,14 @@ class SLEA_Resolver {
 
                 if (!empty($stdout)) {
                     $json = json_decode(trim($stdout), true);
-                    if (is_array($json) && !empty($json['final']) && self::is_target_destination($json['final'])) {
+                    $data = (!empty($json['data']) && is_array($json['data'])) ? $json['data'] : $json;
+                    if (is_array($data) && !empty($data['final']) && self::is_target_destination($data['final'])) {
                         return [
                             'original'   => $url,
-                            'final'      => $json['final'],
-                            'redirects'  => isset($json['redirects']) ? intval($json['redirects']) : 1,
-                            'chain'      => isset($json['chain']) ? $json['chain'] : [],
-                            'final_html' => isset($json['final_html']) ? $json['final_html'] : ''
+                            'final'      => $data['final'],
+                            'redirects'  => isset($data['redirects']) ? intval($data['redirects']) : 1,
+                            'chain'      => isset($data['chain']) ? $data['chain'] : [],
+                            'final_html' => isset($data['final_html']) ? $data['final_html'] : ''
                         ];
                     }
                 }
@@ -178,6 +239,36 @@ class SLEA_Resolver {
         $visited = [];
         $current = self::normalize_url($initial_url);
         $final_html = '';
+
+        // Immediate decode for safe.sohojgyan shortlink
+        if (stripos($current, 'safe.sohojgyan') !== false || (strpos($current, 'code=') !== false && stripos($current, 'sohojgyan') !== false)) {
+            $safe_first = self::resolve_safe_sohojgyan($current);
+            if (!empty($safe_first)) {
+                $chain[] = [
+                    'step'     => count($chain) + 1,
+                    'url'      => $current,
+                    'status'   => 302,
+                    'type'     => 'Safe SohojGyan Shortlink Decoded',
+                    'next_url' => $safe_first
+                ];
+                $current = $safe_first;
+                if (self::is_target_destination($current)) {
+                    $chain[] = [
+                        'step'   => count($chain) + 1,
+                        'url'    => $current,
+                        'status' => 200,
+                        'type'   => 'Target Destination (Blogspot Episode Page)'
+                    ];
+                    return [
+                        'original'  => $initial_url,
+                        'final'     => $current,
+                        'redirects' => count($chain) - 1,
+                        'chain'     => $chain,
+                        'final_html'=> ''
+                    ];
+                }
+            }
+        }
 
         while (count($chain) < $max_hops) {
             if (empty($current) || in_array($current, $visited, true)) {

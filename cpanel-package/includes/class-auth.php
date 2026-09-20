@@ -150,12 +150,14 @@ class SLEA_Auth {
     public static function require_admin() {
         self::start_session();
         if (!self::is_logged_in()) {
-            if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
+            if ((isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+                || (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'application/json') !== false)
+                || (isset($_SERVER['REQUEST_URI']) && stripos($_SERVER['REQUEST_URI'], 'api.php') !== false)) {
                 header('Content-Type: application/json; charset=utf-8');
                 http_response_code(401);
                 echo json_encode([
                     'success' => false,
-                    'error'   => 'Unauthorized: Admin authentication required.'
+                    'error'   => 'Unauthorized: Admin session expired or missing. Please log in again.'
                 ]);
                 exit;
             }

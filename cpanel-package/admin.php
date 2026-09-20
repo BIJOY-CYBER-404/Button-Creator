@@ -219,11 +219,40 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
     </main>
     </div>
 
+    <!-- Top Right Notification Toast Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
+
     <script>
         const baseUrl = '<?= $base_url ?>';
 
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-lg border text-sm font-semibold transform transition-all duration-300 translate-y-[-10px] opacity-0 ${
+                type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200' 
+                    : 'bg-rose-50 text-rose-900 border-rose-200'
+            }`;
+            const icon = type === 'success'
+                ? `<svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>`
+                : `<svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+            toast.innerHTML = `${icon} <div class="flex-1">${message}</div>`;
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+            });
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-10px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
         function setSample(url) {
             document.getElementById('shortenUrl').value = url;
+            showNotification('Sample shortlink loaded', 'success');
         }
 
         async function handleGenerate(e) {
@@ -236,27 +265,78 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             const outputSection = document.getElementById('outputSection');
 
             const url = input.value.trim();
-            if (!url) return;
+            if (!url) {
+                showNotification('Please enter a shortened URL or link first.', 'error');
+                return;
+            }
 
             submitBtn.disabled = true;
-            submitBtn.innerText = 'Resolving & Generating...';
+            submitBtn.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Resolving & Generating...
+            `;
             resultBox.className = 'rounded-2xl p-5 border border-blue-200 bg-blue-50/50 space-y-4';
             resultBox.classList.remove('hidden');
             outputSection.classList.add('hidden');
 
             statusBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700';
             statusBadge.innerText = 'Step 1/3: Resolving Destination...';
-            progressText.innerText = 'Bypassing gateway hops to reach target Blogspot destination...';
+            progressText.innerText = 'Contacting shortlink gateway and verifying target destination...';
+
+            // Progressive step updates
+            const stepTimers = [];
+            stepTimers.push(setTimeout(() => {
+                if (submitBtn.disabled) {
+                    statusBadge.innerText = 'Step 2/3: Bypassing Intermediate Gateway...';
+                    progressText.innerText = 'Bypassing gateway hops to reach target Blogspot destination...';
+                }
+            }, 3000));
+            stepTimers.push(setTimeout(() => {
+                if (submitBtn.disabled) {
+                    statusBadge.innerText = 'Step 3/3: Extracting Episode Buttons...';
+                    progressText.innerText = 'Target reached! Parsing and extracting verified download links...';
+                }
+            }, 8000));
+
+            // Setup AbortController for 30s timeout
+            const controller = new AbortController();
+            const timeoutDuration = 30000;
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+            }, timeoutDuration);
 
             try {
                 const res = await fetch('api.php?action=create_page_from_url', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ url: url }),
+                    signal: controller.signal
                 });
 
-                const data = await res.json();
-                if (!data.success) {
+                clearTimeout(timeoutId);
+                stepTimers.forEach(t => clearTimeout(t));
+
+                let data;
+                const rawText = await res.text();
+                try {
+                    data = JSON.parse(rawText);
+                } catch (jsonErr) {
+                    if (res.status === 401) {
+                        throw new Error('Unauthorized: Admin session expired. Please refresh the page and log in again.');
+                    } else if (res.status >= 500) {
+                        throw new Error('Server error (' + res.status + '): The cPanel host took too long or encountered a PHP execution error.');
+                    } else {
+                        throw new Error('Unexpected server response: ' + rawText.substring(0, 150));
+                    }
+                }
+
+                if (!res.ok || !data.success) {
                     throw new Error(data.error || 'Failed to generate page.');
                 }
 
@@ -278,15 +358,31 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 `;
 
                 outputSection.classList.remove('hidden');
+                showNotification('✓ Page generated and published successfully!', 'success');
 
             } catch (err) {
-                resultBox.className = 'rounded-2xl p-5 border border-red-200 bg-red-50/50 space-y-4';
-                statusBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800';
-                statusBadge.innerText = 'Generation Error';
-                progressText.innerText = err.message;
+                clearTimeout(timeoutId);
+                stepTimers.forEach(t => clearTimeout(t));
+
+                let friendlyMsg = err.message || 'An unexpected error occurred.';
+                if (err.name === 'AbortError' || err.message.includes('aborted')) {
+                    friendlyMsg = 'Request timed out after 30 seconds. The target shortlink host or Blogspot destination did not respond in time. Please check your network connection or verify the link.';
+                }
+
+                resultBox.className = 'rounded-2xl p-5 border border-rose-200 bg-rose-50/60 space-y-4';
+                statusBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800';
+                statusBadge.innerText = err.name === 'AbortError' ? 'Gateway Timeout' : 'Generation Error';
+                progressText.innerText = friendlyMsg;
+
+                showNotification(friendlyMsg, 'error');
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.innerText = 'Resolve & Create Page';
+                submitBtn.innerHTML = `
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Resolve & Create Page
+                `;
             }
         }
 
@@ -294,7 +390,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             const el = document.getElementById('pageUrlOutput');
             el.select();
             navigator.clipboard.writeText(el.value);
-            alert('Button Page Link copied to clipboard:\n' + el.value);
+            showNotification('✓ Button Page Link copied to clipboard!', 'success');
         }
     </script>
 </body>
