@@ -213,6 +213,8 @@ class SLEA_Extractor {
 
         return false;
     }
+
+    public static function fetch_page($url, $timeout = 12, $max_redirects = 5) {
         $current_url = $url;
         $visited = [];
         $html = '';
