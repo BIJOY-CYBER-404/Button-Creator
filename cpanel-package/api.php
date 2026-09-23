@@ -48,7 +48,7 @@ try {
                 $final_html = !empty($res_obj['final_html']) ? $res_obj['final_html'] : '';
 
                 if (!SLEA_Resolver::is_target_destination($resolved_dest)) {
-                    if (preg_match('/(https?:\/\/(?:www\.)?mydverse02\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)/i', $final_html, $tdm)) {
+                    if (preg_match('/(https?:\/\/(?:www\.)?[a-zA-Z0-9.-]+\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)/i', $final_html, $tdm)) {
                         $resolved_dest = $tdm[1];
                         list($_, $fetched_html) = SLEA_Extractor::fetch_page($resolved_dest);
                         if (!empty($fetched_html)) {
@@ -57,7 +57,7 @@ try {
                     }
                 }
 
-                if (empty($final_html) || strlen($final_html) < 200 || !SLEA_Resolver::is_target_destination($resolved_dest)) {
+                if (empty($final_html) || strlen($final_html) < 200) {
                     list($_, $fetched_html) = SLEA_Extractor::fetch_page($resolved_dest);
                     if (!empty($fetched_html)) {
                         $final_html = $fetched_html;
@@ -65,12 +65,12 @@ try {
                 }
             }
 
-            if (!SLEA_Resolver::is_target_destination($resolved_dest)) {
-                throw new Exception('Resolved destination is not a valid target destination: ' . $resolved_dest . '. Target must be structured as https://mydverse02.blogspot.com/p/*.html');
-            }
-
-            // 2. Extract Episode Buttons
+            // 2. Extract Episode Buttons first
             $buttons = SLEA_Extractor::extract_buttons_from_html($final_html, $resolved_dest, true);
+
+            if (!SLEA_Resolver::is_target_destination($resolved_dest) && empty($buttons)) {
+                throw new Exception('Resolved destination could not be matched to an episode page: ' . $resolved_dest);
+            }
 
             // 3. Extract Page Title strictly from this target HTML (or explicit admin title)
             $page_title = '';
@@ -80,6 +80,8 @@ try {
             if (empty($page_title)) {
                 $page_title = SLEA_Extractor::extract_page_title($final_html, $resolved_dest);
             }
+            // Sanitize title: if page title contains "DramaVerse 2", "mydverse", "mydverse 2" replace with "Movie Hub HQ"
+            $page_title = SLEA_Extractor::sanitize_page_title($page_title);
 
             // Derive Slug
             $slug_candidate = '';
@@ -133,9 +135,12 @@ try {
             $existing = SLEA_Datastore::get_page_by_id($id);
             if (!$existing) throw new Exception('Page not found.');
 
+            $raw_title = $data['title'] ?? $existing['title'];
+            $sanitized_title = SLEA_Extractor::sanitize_page_title($raw_title);
+
             $saved = SLEA_Datastore::save_page([
                 'id'          => $id,
-                'title'       => $data['title'] ?? $existing['title'],
+                'title'       => $sanitized_title,
                 'slug'        => $data['slug'] ?? $existing['slug'],
                 'description' => $data['description'] ?? $existing['description'],
                 'is_public'   => isset($data['is_public']) ? intval($data['is_public']) : $existing['is_public'],
@@ -145,6 +150,19 @@ try {
                 'resolved_url'=> $existing['resolved_url']
             ]);
             echo json_encode(['success' => true, 'page' => $saved]);
+            break;
+
+        case 'bulk_delete_pages':
+            $ids = $data['ids'] ?? [];
+            if (!is_array($ids) || empty($ids)) throw new Exception('No page IDs provided for bulk deletion.');
+            $deleted = 0;
+            foreach ($ids as $del_id) {
+                if (!empty($del_id)) {
+                    SLEA_Datastore::delete_page($del_id);
+                    $deleted++;
+                }
+            }
+            echo json_encode(['success' => true, 'deleted_count' => $deleted, 'message' => "Successfully deleted {$deleted} page(s)."]);
             break;
 
         case 'delete_page':

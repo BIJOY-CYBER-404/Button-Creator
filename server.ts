@@ -192,6 +192,32 @@ async function startServer() {
     res.json({ success: true, data: pages });
   });
 
+  // Helper: Sanitize title to replace DramaVerse / mydverse with Movie Hub HQ
+  function sanitizePageTitle(rawTitle: string): string {
+    if (!rawTitle) return "Episode Download Links";
+    return rawTitle
+      .replace(/\bDramaVerse\s*2\b/gi, "Movie Hub HQ")
+      .replace(/\bmydverse\s*2\b/gi, "Movie Hub HQ")
+      .replace(/\bmydverse\b/gi, "Movie Hub HQ")
+      .replace(/\bDramaVerse\b/gi, "Movie Hub HQ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Protected: Bulk delete pages
+  app.post("/api/pages/bulk-delete", requireAdmin, (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: "No page IDs provided for deletion." });
+    }
+    const idSet = new Set(ids.map((id) => String(id)));
+    const pages = getStoredPages();
+    const filtered = pages.filter((p) => !idSet.has(p.id) && !idSet.has(p.slug));
+    const deletedCount = pages.length - filtered.length;
+    saveStoredPages(filtered);
+    res.json({ success: true, message: `Deleted ${deletedCount} page(s) successfully.`, count: deletedCount });
+  });
+
   // Protected: Delete page
   app.delete("/api/pages/:id", requireAdmin, (req, res) => {
     const id = req.params.id;
@@ -269,11 +295,12 @@ async function startServer() {
           }
 
           // Derive title
-          let pageTitle = title_override || "Episode Download Links";
-          if (!title_override && blogspotMatch) {
+          let pageTitle = title_override || (parsed as any).title || "Episode Download Links";
+          if (!title_override && !(parsed as any).title && blogspotMatch) {
             const cleanSlug = blogspotMatch[1].replace(/[-_]+/g, " ");
             pageTitle = cleanSlug.toUpperCase();
           }
+          pageTitle = sanitizePageTitle(pageTitle);
 
           const newPage: ButtonPage = {
             id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -456,16 +483,16 @@ async function startServer() {
     }
     return res.json({
       name: "Movie Hub HQ Drive",
-      version: "3.9.9",
+      version: "4.0.0",
       release_date: "2026-09-23",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
       minimum_php: "8.0",
       release_notes: [
-        "High-performance pure-PHP native cURL resolver engine eliminating shared hosting Python execution timeouts",
-        "Bypasses AdLinkFly, Sohojgyan, and shortlink gateway intermediaries directly in pure PHP",
-        "Optimized Blogger and streaming host button extractor with fast connection pooling and gzip/deflate decoding",
-        "Popup style toast notifications with top-right corner positioning, animated slide-in, and dismiss actions across all pages",
-        "Increased client-side generation timeout to 45s with multi-step status feedback"
+        "Bulk page management with multi-checkbox selection and instant bulk deletion in React and cPanel admin panels",
+        "Overhauled pure-PHP shortlink resolver engine with universal Blogspot target matching and CakePHP CSRF compatibility",
+        "Automatic page title sanitization: automatically converts 'DramaVerse 2', 'mydverse 2', and 'mydverse' to 'Movie Hub HQ' before publishing",
+        "Safe temp directory cookie isolation supporting cPanel open_basedir environments",
+        "Top-right corner popup toast notifications with animated entries and auto-dismiss"
       ]
     });
   });

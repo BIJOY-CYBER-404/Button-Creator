@@ -145,9 +145,14 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 </p>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                <button type="button" id="bulkDeleteBtn" onclick="deleteSelectedPages()"
+                    class="hidden px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs items-center gap-1.5 cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <span>Delete Selected (<span id="selectedCountBadge">0</span>)</span>
+                </button>
                 <input type="text" id="filterInput" onkeyup="filterPages()" placeholder="Search title or slug..."
-                    class="px-3.5 py-2 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] outline-none text-xs w-48 sm:w-64" />
+                    class="px-3.5 py-2 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] outline-none text-xs w-44 sm:w-60" />
                 <a href="admin.php" class="px-4 py-2 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-bold transition-all shadow-2xs whitespace-nowrap flex items-center gap-1.5">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     <span>New Page</span>
@@ -161,6 +166,10 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 <table class="w-full text-left text-xs" id="pagesTable">
                     <thead class="bg-[#f8fafd] border-b border-[#e0e4eb] text-[#5f6368] font-bold uppercase tracking-wider text-[11px]">
                         <tr>
+                            <th class="py-4 px-4 sm:px-5 w-10 text-center">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)"
+                                    class="w-4 h-4 rounded border-slate-300 text-[#0b57d0] focus:ring-[#0b57d0] cursor-pointer" title="Select All Pages" />
+                            </th>
                             <th class="py-4 px-4 sm:px-6">Page Title & Slug</th>
                             <th class="py-4 px-4">Visibility Switch</th>
                             <th class="py-4 px-4 text-center">Buttons</th>
@@ -172,7 +181,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     <tbody class="divide-y divide-[#f0f4f9]">
                         <?php if (empty($pages)): ?>
                             <tr id="no-pages-row">
-                                <td colspan="6" class="py-12 text-center text-slate-400">
+                                <td colspan="7" class="py-12 text-center text-slate-400">
                                     No button pages created yet. Click "+ New Page" to generate your first page.
                                 </td>
                             </tr>
@@ -184,6 +193,10 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                 $btn_count = count($p['buttons'] ?? []);
                             ?>
                             <tr id="page-row-<?= $p['id'] ?>" class="hover:bg-[#fafcff] transition-colors">
+                                <td class="py-4 px-4 sm:px-5 w-10 text-center">
+                                    <input type="checkbox" class="page-checkbox w-4 h-4 rounded border-slate-300 text-[#0b57d0] focus:ring-[#0b57d0] cursor-pointer"
+                                        value="<?= $p['id'] ?>" onchange="updateSelectionState()" />
+                                </td>
                                 <td class="py-4 px-4 sm:px-6 min-w-[240px]">
                                     <div class="font-bold text-sm text-[#111827] truncate max-w-xs sm:max-w-sm" id="row-title-<?= $p['id'] ?>">
                                         <?= htmlspecialchars($p['title']) ?>
@@ -478,11 +491,108 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     if (row) row.remove();
                     ALL_PAGES = ALL_PAGES.filter(p => p.id != id);
                     showToast('Page deleted successfully', 'success');
+                    updateSelectionState();
                 } else {
                     showToast('Delete failed: ' + data.error, 'error');
                 }
             } catch (e) {
                 showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        function toggleSelectAll(checked) {
+            const checkboxes = document.querySelectorAll('.page-checkbox');
+            checkboxes.forEach(cb => {
+                const row = cb.closest('tr');
+                if (row && row.style.display !== 'none') {
+                    cb.checked = checked;
+                }
+            });
+            updateSelectionState();
+        }
+
+        function updateSelectionState() {
+            const checkedBoxes = document.querySelectorAll('.page-checkbox:checked');
+            const totalBoxes = document.querySelectorAll('.page-checkbox');
+            const bulkBtn = document.getElementById('bulkDeleteBtn');
+            const badge = document.getElementById('selectedCountBadge');
+            const selectAll = document.getElementById('selectAllCheckbox');
+
+            const count = checkedBoxes.length;
+            if (badge) badge.innerText = count;
+
+            if (count > 0) {
+                if (bulkBtn) {
+                    bulkBtn.classList.remove('hidden');
+                    bulkBtn.classList.add('inline-flex');
+                }
+            } else {
+                if (bulkBtn) {
+                    bulkBtn.classList.remove('inline-flex');
+                    bulkBtn.classList.add('hidden');
+                }
+            }
+
+            if (selectAll && totalBoxes.length > 0) {
+                selectAll.checked = count === totalBoxes.length;
+                selectAll.indeterminate = count > 0 && count < totalBoxes.length;
+            }
+        }
+
+        async function deleteSelectedPages() {
+            const checkedBoxes = document.querySelectorAll('.page-checkbox:checked');
+            const ids = Array.from(checkedBoxes).map(cb => cb.value);
+            if (ids.length === 0) return;
+
+            if (!confirm(`Are you sure you want to permanently delete ${ids.length} selected page(s)? This action cannot be undone.`)) {
+                return;
+            }
+
+            const bulkBtn = document.getElementById('bulkDeleteBtn');
+            if (bulkBtn) {
+                bulkBtn.disabled = true;
+                bulkBtn.innerText = `Deleting ${ids.length}...`;
+            }
+
+            try {
+                const res = await fetch('api.php?action=bulk_delete_pages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: ids })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    ids.forEach(id => {
+                        const row = document.getElementById('page-row-' + id);
+                        if (row) row.remove();
+                        ALL_PAGES = ALL_PAGES.filter(p => p.id != id);
+                    });
+                    showToast(`Successfully deleted ${ids.length} page(s).`, 'success');
+                    updateSelectionState();
+
+                    const remainingRows = document.querySelectorAll('.page-checkbox');
+                    if (remainingRows.length === 0) {
+                        const tbody = document.querySelector('#pagesTable tbody');
+                        if (tbody) {
+                            tbody.innerHTML = `
+                                <tr id="no-pages-row">
+                                    <td colspan="7" class="py-12 text-center text-slate-400">
+                                        No button pages created yet. Click "+ New Page" to generate your first page.
+                                    </td>
+                                </tr>
+                            `;
+                        }
+                    }
+                } else {
+                    showToast('Bulk delete failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (err) {
+                showToast('Bulk delete request error: ' + err.message, 'error');
+            } finally {
+                if (bulkBtn) {
+                    bulkBtn.disabled = false;
+                    updateSelectionState();
+                }
             }
         }
 

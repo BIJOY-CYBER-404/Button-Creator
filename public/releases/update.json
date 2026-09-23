@@ -1,15 +1,15 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "3.9.9",
+  "version": "4.0.0",
   "release_date": "2026-09-23",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "907daa16c03eb4169338268cb2c91387537cdeb16185f7bc2562bbad68ba8e24",
+  "checksum": "a1418c0fed9b224534db15073d2086c6fd7d822d681b5b1d413bfac20485a4ed",
   "release_notes": [
-    "High-performance pure-PHP native cURL resolver engine eliminating shared hosting Python execution timeouts",
-    "Bypasses AdLinkFly, Sohojgyan, and shortlink gateway intermediaries directly in pure PHP",
-    "Optimized Blogger and streaming host button extractor with fast connection pooling and gzip/deflate decoding",
-    "Popup style toast notifications with top-right corner positioning, animated slide-in, and dismiss actions across all pages",
-    "Increased client-side generation timeout to 45s with multi-step status feedback"
+    "Bulk page management with checkbox selection and instant 'Delete Selected' bulk deletion in React and cPanel pages manager",
+    "Overhauled pure-PHP shortlink resolver engine with universal Blogspot target matching and CakePHP CSRF compatibility",
+    "Automatic page title sanitization: automatically converts 'DramaVerse 2', 'mydverse 2', and 'mydverse' to 'Movie Hub HQ' before publishing",
+    "Safe temp directory cookie isolation supporting cPanel open_basedir environments",
+    "Top-right corner popup toast notifications with animated entries and auto-dismiss"
   ]
 }

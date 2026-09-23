@@ -80,23 +80,37 @@ class SLEA_Extractor {
         }
 
         if (empty($title) || preg_match('/^(?:Blogger|Blogspot|Home|Untitled)$/i', $title)) {
-            return self::derive_title_from_url($url);
+            return self::sanitize_page_title(self::derive_title_from_url($url));
         }
 
+        return self::sanitize_page_title($title);
+    }
+
+    public static function sanitize_page_title($title) {
+        if (empty($title) || !is_string($title)) return '';
+        // If the page title contains "DramaVerse 2", "mydverse", "mydverse 2" then replace with "Movie Hub HQ"
+        $patterns = [
+            '/\bDramaVerse\s*2\b/i',
+            '/\bmydverse\s*2\b/i',
+            '/\bmydverse\b/i',
+            '/\bDramaVerse\b/i',
+        ];
+        $title = preg_replace($patterns, 'Movie Hub HQ', $title);
+        $title = trim(preg_replace('/\s+/', ' ', $title));
         return $title;
     }
 
     public static function derive_title_from_url($url) {
         if (empty($url)) return 'Episode Download Links';
         if (preg_match('/\/p\/([a-zA-Z0-9_-]+)\.html/i', $url, $m)) {
-            return ucwords(str_replace(['-', '_'], ' ', $m[1]));
+            return self::sanitize_page_title(ucwords(str_replace(['-', '_'], ' ', $m[1])));
         }
         $path = trim(parse_url($url, PHP_URL_PATH) ?: '', '/');
         $segments = explode('/', $path);
         $last = end($segments);
         if (!empty($last)) {
             $cleaned = preg_replace('/\.(html|php|asp)$/i', '', $last);
-            return ucwords(str_replace(['-', '_'], ' ', $cleaned));
+            return self::sanitize_page_title(ucwords(str_replace(['-', '_'], ' ', $cleaned)));
         }
         return 'Episode Download Links';
     }

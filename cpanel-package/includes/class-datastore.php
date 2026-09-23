@@ -166,8 +166,8 @@ class SLEA_Datastore {
 
     public static function delete_page($id) {
         $pdo = SLEA_DB::get_connection();
-        $stmt = $pdo->prepare("DELETE FROM pages WHERE id = :id OR page_key = :k");
-        return $stmt->execute([':id' => $id, ':k' => $id]);
+        $stmt = $pdo->prepare("DELETE FROM pages WHERE id = :id OR page_key = :k OR slug = :s");
+        return $stmt->execute([':id' => $id, ':k' => $id, ':s' => $id]);
     }
 
     public static function increment_views($slug) {
