@@ -143,11 +143,26 @@ class SLEA_Resolver {
         }
 
         $code = '';
-        if (preg_match('#safe\.sohojgyan\.com/([a-zA-Z0-9_-]+)#i', $url, $m)) {
-            $candidate = trim($m[1]);
-            if ($candidate !== 'api' && $candidate !== 'decode') {
-                $code = $candidate;
+        $parsed = parse_url($url);
+        $host = strtolower($parsed['host'] ?? '');
+        $path = trim($parsed['path'] ?? '', '/');
+        $query = $parsed['query'] ?? '';
+
+        if (strpos($host, 'sohojgyan') !== false) {
+            $segments = explode('/', $path);
+            $last = end($segments);
+            if (!empty($last) && !in_array($last, ['api', 'decode', 'choose-the-right-web-hosting', 'seo-tips', 'sitemap', 'privacy', 'about', 'contact'])) {
+                $code = $last;
             }
+        }
+        if (empty($code) && !empty($query)) {
+            parse_str($query, $qp);
+            if (!empty($qp['code'])) $code = trim($qp['code']);
+            elseif (!empty($qp['safelink_code'])) $code = trim($qp['safelink_code']);
+            elseif (!empty($qp['token'])) $code = trim($qp['token']);
+        }
+        if (empty($code) && preg_match('#safe\.sohojgyan\.com/([a-zA-Z0-9_-]+)#i', $url, $m)) {
+            $code = trim($m[1]);
         }
         if (empty($code) && preg_match('#[?&]code=([a-zA-Z0-9_-]+)#i', $url, $m)) {
             $code = trim($m[1]);
@@ -164,8 +179,8 @@ class SLEA_Resolver {
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $api_url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
             curl_setopt($ch, CURLOPT_USERAGENT, self::$user_agent);
             curl_setopt($ch, CURLOPT_REFERER, 'https://sohojgyan.com/choose-the-right-web-hosting/');
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -175,6 +190,7 @@ class SLEA_Resolver {
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
             curl_setopt($ch, CURLOPT_ENCODING, '');
+            curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
             $raw_json = curl_exec($ch);
             curl_close($ch);
 
@@ -184,7 +200,7 @@ class SLEA_Resolver {
                     'http' => [
                         'method' => 'GET',
                         'header' => "Accept: application/json, text/plain, */*\r\nReferer: https://sohojgyan.com/choose-the-right-web-hosting/\r\nUser-Agent: " . self::$user_agent . "\r\n",
-                        'timeout' => 12,
+                        'timeout' => 10,
                         'follow_location' => 1
                     ],
                     'ssl' => [
@@ -755,6 +771,7 @@ class SLEA_Resolver {
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_ENCODING, ''); // Accepts gzip / deflate for 5x faster network transfer
+        curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
         if ($cookie_file) {
             curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_file);
@@ -778,6 +795,39 @@ class SLEA_Resolver {
 
         curl_close($ch);
 
+        // Fallback to stream context if cURL failed or returned 0
+        if (($raw_response === false || $status === 0) && function_exists('file_get_contents')) {
+            $context = stream_context_create([
+                'http' => [
+                    'method'          => 'GET',
+                    'header'          => "User-Agent: " . self::$user_agent . "\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n",
+                    'timeout'         => $timeout,
+                    'follow_location' => 0,
+                    'ignore_errors'   => true
+                ],
+                'ssl' => [
+                    'verify_peer'      => false,
+                    'verify_peer_name' => false
+                ]
+            ]);
+            $stream_body = @file_get_contents($url, false, $context);
+            if ($stream_body !== false) {
+                $body = $stream_body;
+                $status = 200;
+                $error = '';
+                if (isset($http_response_header) && is_array($http_response_header)) {
+                    foreach ($http_response_header as $hdr) {
+                        if (preg_match('#^HTTP/\d\.\d\s+(\d{3})#i', $hdr, $sm)) {
+                            $status = intval($sm[1]);
+                        }
+                        if (preg_match('#^Location:\s*(.+)#i', $hdr, $lm)) {
+                            $redirect_url = trim($lm[1]);
+                        }
+                    }
+                }
+            }
+        }
+
         return [
             'status'       => $status,
             'body'         => $body,
@@ -797,6 +847,7 @@ class SLEA_Resolver {
         curl_setopt($ch, CURLOPT_USERAGENT, self::$user_agent);
         curl_setopt($ch, CURLOPT_REFERER, $referer);
         curl_setopt($ch, CURLOPT_ENCODING, '');
+        curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Accept: application/json, text/javascript, */*; q=0.01',
             'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',

@@ -7,7 +7,11 @@ class SLEA_Extractor {
     private static $button_indicators = [
         'btn', 'button', 'download', 'ep', 'episode', 'watch', 'server', 'drive',
         'mega', 'fast', 'play', 'stream', 'link', 'dlink', 'click', 'quality',
-        '480p', '720p', '1080p', '4k', '2160p', 'hevc', 'x264', 'x265', 'batch'
+        '480p', '720p', '1080p', '4k', '2160p', 'hevc', 'x264', 'x265', 'batch',
+        'xcloud', 'filemoon', 'streamtape', 'doodstream', 'mixdrop', 'gdrive',
+        'mediafire', 'hubcloud', 'gdtot', 'fastdl', 'filepress', 'katdrive',
+        'gdflix', 'streamwish', 'vidhide', 'mp4upload', 'vidoza', 'dropload',
+        'hexupload', 'terabox', 'dood', 'stream', 'direct', 'mirror'
     ];
 
     private static $excluded_domains = [
@@ -44,6 +48,7 @@ class SLEA_Extractor {
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
             curl_setopt($ch, CURLOPT_ENCODING, ''); // Auto decode gzip/deflate
+            curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
                 'Accept-Language: en-US,en;q=0.9'
@@ -186,13 +191,15 @@ class SLEA_Extractor {
         $items = [];
         $seen = [];
 
-        // Match all <a> tags
-        if (preg_match_all('/<a\s+([^>]*?)href=[\'"]([^\'"]+)[\'"]([^>]*)>([\s\S]*?)<\/a>/i', $html, $matches, PREG_SET_ORDER)) {
+        // Match all <a> tags along with their match position
+        if (preg_match_all('/<a\s+([^>]*?)href=[\'"]([^\'"]+)[\'"]([^>]*)>([\s\S]*?)<\/a>/i', $html, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
             foreach ($matches as $match) {
-                $attrs_before = $match[1];
-                $href         = trim($match[2]);
-                $attrs_after  = $match[3];
-                $inner_html   = $match[4];
+                $full_tag     = $match[0][0];
+                $tag_offset   = $match[0][1];
+                $attrs_before = $match[1][0];
+                $href         = trim($match[2][0]);
+                $attrs_after  = $match[3][0];
+                $inner_html   = $match[4][0];
 
                 $all_attrs = $attrs_before . ' ' . $attrs_after;
                 $text = trim(strip_tags($inner_html));
@@ -219,27 +226,56 @@ class SLEA_Extractor {
                 }
                 if ($is_excluded) continue;
 
-                // Extract qualities, episode numbers, etc.
-                $quality = self::detect_quality($text . ' ' . $all_attrs . ' ' . $full_url);
+                // Inspect surrounding DOM (180 chars before <a) for episode names or numbers
+                $start_pos = max(0, $tag_offset - 180);
+                $preceding_chunk = substr($html, $start_pos, $tag_offset - $start_pos);
+
                 $episode_num = self::detect_episode($text);
+                $ep_label = '';
+                if (empty($episode_num)) {
+                    if (preg_match_all('/(?:Episode|Ep\.?|E)\s*(\d{1,3}(?:\s*-\s*\d{1,3})?)/i', $preceding_chunk, $ep_matches)) {
+                        $last_ep = end($ep_matches[1]);
+                        $ep_label = 'Episode ' . trim($last_ep);
+                        if (preg_match('/^(\d+)/', trim($last_ep), $num_m)) {
+                            $episode_num = intval($num_m[1]);
+                        }
+                    }
+                }
+
+                // Extract quality
+                $quality = self::detect_quality($text . ' ' . $all_attrs . ' ' . $full_url . ' ' . $preceding_chunk);
+
+                // Provider
+                $provider = self::detect_provider($full_url);
 
                 // Button score filter
-                $is_button = self::is_button_element($all_attrs, $text, $full_url);
+                $is_button = self::is_button_element($all_attrs, $text, $full_url) || ($provider !== 'Download Server');
 
-                if ($button_only && !$is_button && empty($quality) && empty($episode_num)) {
+                if ($button_only && !$is_button && empty($quality) && empty($episode_num) && empty($ep_label)) {
                     continue;
+                }
+
+                // Format button label nicely
+                $button_title = !empty($text) ? $text : 'Download Link';
+                if (!empty($ep_label) && stripos($button_title, 'episode') === false) {
+                    $button_title = $ep_label . ' - ' . $button_title;
                 }
 
                 $seen[] = $full_url;
                 $items[] = [
-                    'text'        => !empty($text) ? $text : 'Episode Link',
+                    'text'        => $button_title,
                     'url'         => $full_url,
                     'quality'     => $quality,
                     'episode'     => $episode_num,
                     'is_button'   => $is_button,
-                    'provider'    => self::detect_provider($full_url)
+                    'provider'    => $provider
                 ];
             }
+        }
+
+        // Fallback: If strict button filtering returned 0 items on a valid episode page, collect all action links
+        if (empty($items) && !empty($html) && $button_only) {
+            return self::extract_buttons_from_html($html, $base_url, false);
         }
 
         // Sort items naturally if episode numbers exist
@@ -272,12 +308,22 @@ class SLEA_Extractor {
 
     private static function detect_provider($url) {
         $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
+        if (strpos($host, 'xcloud') !== false) return 'XCloud';
         if (strpos($host, 'drive.google') !== false) return 'Google Drive';
         if (strpos($host, 'mega.nz') !== false || strpos($host, 'mega.io') !== false) return 'Mega';
         if (strpos($host, 'gdtot') !== false) return 'GDTot';
         if (strpos($host, 'filepress') !== false) return 'FilePress';
         if (strpos($host, 'hubcloud') !== false) return 'HubCloud';
         if (strpos($host, 'fastdl') !== false) return 'FastDL';
+        if (strpos($host, 'mediafire') !== false) return 'MediaFire';
+        if (strpos($host, 'filemoon') !== false) return 'FileMoon';
+        if (strpos($host, 'streamtape') !== false) return 'StreamTape';
+        if (strpos($host, 'dood') !== false) return 'DoodStream';
+        if (strpos($host, 'vidhide') !== false) return 'VidHide';
+        if (strpos($host, 'streamwish') !== false) return 'StreamWish';
+        if (strpos($host, 'terabox') !== false) return 'TeraBox';
+        if (strpos($host, 'katdrive') !== false) return 'KatDrive';
+        if (strpos($host, 'gdflix') !== false) return 'GDFlix';
         if (strpos($host, 'blogspot') !== false) return 'Blogspot Server';
         return 'Download Server';
     }
@@ -288,6 +334,10 @@ class SLEA_Extractor {
             if (strpos($combined, $kw) !== false) {
                 return true;
             }
+        }
+        $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
+        if (!empty($host) && self::detect_provider($url) !== 'Download Server') {
+            return true;
         }
         return false;
     }
