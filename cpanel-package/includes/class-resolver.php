@@ -1,7 +1,9 @@
 <?php
 /**
  * Standalone cPanel URL Resolver Engine
- * Bypasses URL shorteners, follows redirect hops, and validates Blogspot episode destination format.
+ * High-performance, pure-PHP cURL resolver with session cookie persistence,
+ * AdLinkFly/Sohojgyan gateway bypassing, and Blogspot episode destination validation.
+ * Optimized for shared hosting without requiring external Python binaries or CLI dependencies.
  */
 
 class SLEA_Resolver {
@@ -23,7 +25,7 @@ class SLEA_Resolver {
 
         // Intermediate safelink / tracker query parameters are NEVER the final destination
         if (!empty($query)) {
-            $bad_params = ['url=', 'dest=', 'link=', 'token=', 'go='];
+            $bad_params = ['url=', 'dest=', 'link=', 'token=', 'go=', 'safelink='];
             foreach ($bad_params as $bp) {
                 if (stripos($query, $bp) !== false) {
                     return false;
@@ -92,7 +94,7 @@ class SLEA_Resolver {
 
         if (!empty($code) && strlen($code) >= 3) {
             $api_url = "https://safe.sohojgyan.com/api/decode/" . urlencode($code);
-            $res = self::fetch_url_curl($api_url, 8);
+            $res = self::fetch_url_curl($api_url, 6);
             if (!empty($res['body'])) {
                 $data = json_decode(trim($res['body']), true);
                 if (!empty($data['success']) && !empty($data['data']['original_url'])) {
@@ -107,30 +109,118 @@ class SLEA_Resolver {
     }
 
     /**
+     * Resolves an AdLinkFly / MightyScripts gateway page (such as go.sohojgyan.com/{code})
+     * Pure PHP cURL with session cookie jar, counter wait, and AJAX POST token validation.
+     */
+    public static function bypass_adlinkfly_gateway($gateway_url, &$chain_log = []) {
+        $cookie_file = tempnam(sys_get_temp_dir(), 'slea_ck_');
+
+        try {
+            // Step 1: GET gateway page to establish session cookies and load CSRF tokens
+            $get_res = self::fetch_url_curl($gateway_url, 8, $cookie_file);
+            if (empty($get_res['body'])) {
+                @unlink($cookie_file);
+                return null;
+            }
+
+            $html = $get_res['body'];
+            $chain_log[] = [
+                'step'   => count($chain_log) + 1,
+                'url'    => $gateway_url,
+                'status' => $get_res['status'],
+                'type'   => 'AdLinkFly Shortener Gateway'
+            ];
+
+            // Step 2: Parse form action and inputs
+            if (!preg_match('/<form[^>]*action=[\'"]([^\'"]*\/links\/go[^\'"]*)[\'"][^>]*>([\s\S]*?)<\/form>/i', $html, $form_m)) {
+                @unlink($cookie_file);
+                return null;
+            }
+
+            $form_action = $form_m[1];
+            $form_html   = $form_m[0];
+            $action_url  = self::normalize_url($form_action, $gateway_url);
+
+            // Extract all form inputs
+            $post_data = [];
+            if (preg_match_all('/<input\b[^>]*>/i', $form_html, $input_tags)) {
+                foreach ($input_tags[0] as $tag) {
+                    if (preg_match('/\bname=[\'"]([^\'"]+)[\'"]/i', $tag, $nm)) {
+                        $name = $nm[1];
+                        $val = '';
+                        if (preg_match('/\bvalue=[\'"]([^\'"]*)[\'"]/i', $tag, $vm)) {
+                            $val = html_entity_decode($vm[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                        }
+                        $post_data[$name] = $val;
+                    }
+                }
+            }
+
+            if (empty($post_data)) {
+                @unlink($cookie_file);
+                return null;
+            }
+
+            // Step 3: Determine counter wait time (default 5s)
+            $counter = 5;
+            if (preg_match('/counter_value["\']?\s*:\s*(\d+)/i', $html, $cm)) {
+                $counter = intval($cm[1]);
+            }
+            $wait_seconds = max($counter, 4) + 1; // Add 1 second buffer to avoid clock-skew rejection
+            sleep($wait_seconds);
+
+            // Step 4: Send AJAX POST request with session cookies
+            $parsed_url = parse_url($gateway_url);
+            $origin = ($parsed_url['scheme'] ?? 'https') . '://' . ($parsed_url['host'] ?? 'go.sohojgyan.com');
+
+            $post_res = self::post_curl_json($action_url, $post_data, $gateway_url, $origin, $cookie_file);
+
+            // Attempt retry once if clock-skew or network hiccup occurs
+            if (empty($post_res['url'])) {
+                sleep(1);
+                $post_res = self::post_curl_json($action_url, $post_data, $gateway_url, $origin, $cookie_file);
+            }
+
+            @unlink($cookie_file);
+
+            if (!empty($post_res['url'])) {
+                $final_dest = trim($post_res['url']);
+                $chain_log[] = [
+                    'step'     => count($chain_log) + 1,
+                    'url'      => $action_url,
+                    'status'   => 200,
+                    'type'     => 'AdLinkFly AJAX Bypass Success',
+                    'next_url' => $final_dest
+                ];
+                return $final_dest;
+            }
+
+        } catch (Throwable $e) {
+            @unlink($cookie_file);
+        }
+
+        @unlink($cookie_file);
+        return null;
+    }
+
+    /**
      * Resolves shortened URL with retry logic until the destination matches target Blogspot structure.
      */
-    public static function resolve_shortlink_until_target($initial_url, $options = [], $max_retries = 3) {
-        $last_res = null;
+    public static function resolve_shortlink_until_target($initial_url, $options = [], $max_retries = 2) {
+        $initial_url = trim($initial_url);
 
-        // Fast direct check: safe.sohojgyan.com format
-        $safe_direct = self::resolve_safe_sohojgyan($initial_url);
-        if (!empty($safe_direct) && self::is_target_destination($safe_direct)) {
+        // Fast Check 0: Already the verified target destination
+        if (self::is_target_destination($initial_url)) {
             return [
                 'original'                   => $initial_url,
-                'final'                      => $safe_direct,
-                'redirects'                  => 1,
+                'final'                      => $initial_url,
+                'redirects'                  => 0,
                 'attempts'                   => 1,
                 'target_destination_verified'=> true,
                 'chain'                      => [
                     [
                         'step'   => 1,
                         'url'    => $initial_url,
-                        'status' => 302,
-                        'type'   => 'Safe SohojGyan Shortlink Gateway'
-                    ],
-                    [
-                        'step'   => 2,
-                        'url'    => $safe_direct,
                         'status' => 200,
                         'type'   => 'Target Destination (Blogspot Episode Page)'
                     ]
@@ -139,18 +229,72 @@ class SLEA_Resolver {
             ];
         }
 
+        // Fast Check 1: Safe SohojGyan direct format
+        if (stripos($initial_url, 'safe.sohojgyan') !== false) {
+            $safe_direct = self::resolve_safe_sohojgyan($initial_url);
+            if (!empty($safe_direct) && self::is_target_destination($safe_direct)) {
+                return [
+                    'original'                   => $initial_url,
+                    'final'                      => $safe_direct,
+                    'redirects'                  => 1,
+                    'attempts'                   => 1,
+                    'target_destination_verified'=> true,
+                    'chain'                      => [
+                        [
+                            'step'   => 1,
+                            'url'    => $initial_url,
+                            'status' => 302,
+                            'type'   => 'Safe SohojGyan Shortlink Gateway'
+                        ],
+                        [
+                            'step'   => 2,
+                            'url'    => $safe_direct,
+                            'status' => 200,
+                            'type'   => 'Target Destination (Blogspot Episode Page)'
+                        ]
+                    ],
+                    'final_html'                 => ''
+                ];
+            }
+        }
+
+        // Fast Check 2: Direct SohojGyan Shortlink bypass (shrt.sohojgyan.com/{code})
+        // Immediately route to go.sohojgyan.com/{code} and execute bypass in ~6s
+        if (preg_match('#(?:shrt\.sohojgyan\.com|go\.sohojgyan\.com)/([a-zA-Z0-9_-]{3,30})#i', $initial_url, $cm)) {
+            $short_code = $cm[1];
+            $gateway_url = "https://go.sohojgyan.com/{$short_code}";
+            $chain = [
+                [
+                    'step'   => 1,
+                    'url'    => $initial_url,
+                    'status' => 302,
+                    'type'   => 'Shortlink Gateway'
+                ]
+            ];
+            $bypassed = self::bypass_adlinkfly_gateway($gateway_url, $chain);
+            if (!empty($bypassed) && self::is_target_destination($bypassed)) {
+                $chain[] = [
+                    'step'   => count($chain) + 1,
+                    'url'    => $bypassed,
+                    'status' => 200,
+                    'type'   => 'Target Destination (Blogspot Episode Page)'
+                ];
+                return [
+                    'original'                   => $initial_url,
+                    'final'                      => $bypassed,
+                    'redirects'                  => count($chain) - 1,
+                    'attempts'                   => 1,
+                    'target_destination_verified'=> true,
+                    'chain'                      => $chain,
+                    'final_html'                 => ''
+                ];
+            }
+        }
+
+        // General Resolution Loop
+        $last_res = null;
         for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
             $target_url = $initial_url;
-
-            // On retry attempt 2, if shrt.sohojgyan is used, try direct gateway variant
-            if ($attempt === 2 && stripos($initial_url, 'shrt.sohojgyan') !== false) {
-                $path = trim(parse_url($initial_url, PHP_URL_PATH) ?: '', '/');
-                $parts = explode('/', $path);
-                $code = end($parts);
-                if ($code && strlen($code) >= 3) {
-                    $target_url = "https://go.sohojgyan.com/{$code}";
-                }
-            }
 
             $res = self::resolve_url($target_url, $options);
             $last_res = $res;
@@ -161,23 +305,414 @@ class SLEA_Resolver {
                 return $last_res;
             }
 
+            // If not verified and Python is available on hosting, try Python as final fallback
+            if ($attempt === $max_retries && !self::is_target_destination($last_res['final'] ?? '')) {
+                $py_res = self::resolve_via_python($initial_url);
+                if ($py_res && self::is_target_destination($py_res['final'] ?? '')) {
+                    $py_res['attempts'] = $attempt;
+                    $py_res['target_destination_verified'] = true;
+                    return $py_res;
+                }
+            }
+
             if ($attempt < $max_retries) {
-                sleep(1 * $attempt);
+                sleep(1);
             }
         }
 
         if ($last_res) {
             $last_res['attempts'] = $max_retries;
-            $last_res['target_destination_verified'] = self::is_target_destination(isset($last_res['final']) ? $last_res['final'] : '');
+            $last_res['target_destination_verified'] = self::is_target_destination($last_res['final'] ?? '');
         }
 
         return $last_res;
     }
 
     /**
-     * Attempt resolving via Python engine if python3 is available on cPanel hosting.
+     * Resolve a URL through all HTTP redirects, meta refreshes, AdLinkFly forms, and script hops.
+     * Pure PHP cURL with persistent session cookie jar.
+     */
+    public static function resolve_url($initial_url, $options = []) {
+        $max_hops = isset($options['max_redirects']) ? intval($options['max_redirects']) : 12;
+        $timeout  = isset($options['timeout']) ? intval($options['timeout']) : 8;
+
+        $chain   = [];
+        $visited = [];
+        $current = self::normalize_url($initial_url);
+        $final_html = '';
+
+        $cookie_file = tempnam(sys_get_temp_dir(), 'slea_chain_');
+
+        while (count($chain) < $max_hops) {
+            if (empty($current) || in_array($current, $visited, true)) {
+                break;
+            }
+            $visited[] = $current;
+
+            // Fast Check: If current is already target destination
+            if (self::is_target_destination($current)) {
+                $chain[] = [
+                    'step'   => count($chain) + 1,
+                    'url'    => $current,
+                    'status' => 200,
+                    'type'   => 'Target Destination (Blogspot Episode Page)'
+                ];
+                break;
+            }
+
+            // Check if current is go.sohojgyan.com gateway: execute bypass
+            if (stripos($current, 'go.sohojgyan.com') !== false && !stripos($current, '/links/go')) {
+                $bypassed = self::bypass_adlinkfly_gateway($current, $chain);
+                if (!empty($bypassed)) {
+                    $current = $bypassed;
+                    if (self::is_target_destination($current)) {
+                        $chain[] = [
+                            'step'   => count($chain) + 1,
+                            'url'    => $current,
+                            'status' => 200,
+                            'type'   => 'Target Destination (Blogspot Episode Page)'
+                        ];
+                        break;
+                    }
+                    continue;
+                }
+            }
+
+            // Execute HTTP Request with cURL
+            $response = self::fetch_url_curl($current, $timeout, $cookie_file);
+
+            if ($response['error']) {
+                $chain[] = [
+                    'step'   => count($chain) + 1,
+                    'url'    => $current,
+                    'status' => 0,
+                    'type'   => 'Fetch Error: ' . $response['error']
+                ];
+                break;
+            }
+
+            $status = $response['status'];
+            $body   = $response['body'];
+            $final_html = $body;
+
+            // 1. Check HTTP Redirect (301, 302, 303, 307, 308)
+            if ($response['redirect_url']) {
+                $next = self::normalize_url($response['redirect_url'], $current);
+                $chain[] = [
+                    'step'     => count($chain) + 1,
+                    'url'      => $current,
+                    'status'   => $status,
+                    'type'     => "HTTP Redirect ({$status})",
+                    'next_url' => $next
+                ];
+
+                if (self::is_target_destination($next)) {
+                    $chain[] = [
+                        'step'   => count($chain) + 1,
+                        'url'    => $next,
+                        'status' => 200,
+                        'type'   => 'Target Destination (Blogspot Episode Page)'
+                    ];
+                    $current = $next;
+                    break;
+                }
+
+                $current = $next;
+                continue;
+            }
+
+            // 2. Check if current URL is already the target destination
+            if (self::is_target_destination($current)) {
+                $chain[] = [
+                    'step'   => count($chain) + 1,
+                    'url'    => $current,
+                    'status' => $status,
+                    'type'   => 'Target Destination (Blogspot Episode Page)'
+                ];
+                break;
+            }
+
+            // 3. Inspect URL query parameters for encoded safelink destination or token
+            // e.g. mydriveverse.blogspot.com/p/...html?url=SWowM25kSg%3D%3D
+            $token_dest = self::extract_safelink_token_dest($current, $body);
+            if ($token_dest && $token_dest !== $current && !in_array($token_dest, $visited, true)) {
+                $chain[] = [
+                    'step'     => count($chain) + 1,
+                    'url'      => $current,
+                    'status'   => $status,
+                    'type'     => 'Safelink Query Token Unpacked',
+                    'next_url' => $token_dest
+                ];
+                $current = $token_dest;
+                continue;
+            }
+
+            // 4. Inspect HTML for AdLinkFly form
+            if (stripos($body, '/links/go') !== false) {
+                $bypassed = self::bypass_adlinkfly_gateway($current, $chain);
+                if (!empty($bypassed)) {
+                    $current = $bypassed;
+                    if (self::is_target_destination($current)) {
+                        $chain[] = [
+                            'step'   => count($chain) + 1,
+                            'url'    => $current,
+                            'status' => 200,
+                            'type'   => 'Target Destination (Blogspot Episode Page)'
+                        ];
+                        break;
+                    }
+                    continue;
+                }
+            }
+
+            // 5. Inspect HTML for Meta Refresh
+            $meta_url = self::extract_meta_refresh($body, $current);
+            if ($meta_url && $meta_url !== $current && !in_array($meta_url, $visited, true)) {
+                $chain[] = [
+                    'step'     => count($chain) + 1,
+                    'url'      => $current,
+                    'status'   => $status,
+                    'type'     => 'HTML Meta Refresh',
+                    'next_url' => $meta_url
+                ];
+                $current = $meta_url;
+                continue;
+            }
+
+            // 6. Inspect JavaScript location redirects
+            $js_url = self::extract_js_redirect($body, $current);
+            if ($js_url && $js_url !== $current && !in_array($js_url, $visited, true)) {
+                $chain[] = [
+                    'step'     => count($chain) + 1,
+                    'url'      => $current,
+                    'status'   => $status,
+                    'type'     => 'JavaScript Location Redirect',
+                    'next_url' => $js_url
+                ];
+                $current = $js_url;
+                continue;
+            }
+
+            // 7. Inspect direct Blogspot episode link in HTML
+            $direct_link = self::extract_target_link_from_html($body, $current);
+            if ($direct_link && $direct_link !== $current && !in_array($direct_link, $visited, true)) {
+                $chain[] = [
+                    'step'     => count($chain) + 1,
+                    'url'      => $current,
+                    'status'   => $status,
+                    'type'     => 'Identified Blogspot Episode Link in HTML',
+                    'next_url' => $direct_link
+                ];
+                $current = $direct_link;
+                continue;
+            }
+
+            // Terminal page reached
+            $chain[] = [
+                'step'   => count($chain) + 1,
+                'url'    => $current,
+                'status' => $status,
+                'type'   => 'Destination Page'
+            ];
+            break;
+        }
+
+        @unlink($cookie_file);
+
+        return [
+            'original'   => $initial_url,
+            'final'      => $current,
+            'redirects'  => max(0, count($chain) - 1),
+            'chain'      => $chain,
+            'final_html' => $final_html
+        ];
+    }
+
+    /**
+     * Inspects query parameters (e.g. ?url=..., ?token=..., ?link=...) for base64 encoded destination or shortcode.
+     */
+    private static function extract_safelink_token_dest($current_url, $html = '') {
+        $parsed = parse_url($current_url);
+        $query_str = $parsed['query'] ?? '';
+        if (empty($query_str)) return null;
+
+        parse_str($query_str, $params);
+        $keys = ['url', 'link', 'token', 'dest', 'go', 'safelink', 'code'];
+        foreach ($keys as $k) {
+            if (!empty($params[$k])) {
+                $raw = trim($params[$k]);
+                $decoded = self::safe_base64_decode($raw);
+                if (!empty($decoded)) {
+                    // Case A: Directly decodes to a valid URL
+                    if (filter_var($decoded, FILTER_VALIDATE_URL)) {
+                        $p = parse_url($decoded);
+                        if (!empty($p['host']) && $p['host'] !== ($parsed['host'] ?? '')) {
+                            return $decoded;
+                        }
+                    }
+                    // Case B: Decodes to a shortcode (e.g. "Ij03ndJ" or "AAhg")
+                    if (preg_match('/^[a-zA-Z0-9_-]{3,30}$/', $decoded)) {
+                        return "https://go.sohojgyan.com/{$decoded}";
+                    }
+                }
+            }
+        }
+
+        // Look for mainUrl or template strings in html
+        if (!empty($html)) {
+            if (preg_match('/(?:mainUrl|goUrl|redirectUrl|targetUrl)\s*=\s*[`\'"](https?:\/\/go\.sohojgyan\.com\/[^`\'"]+)[`\'"]/i', $html, $tm)) {
+                return $tm[1];
+            }
+        }
+
+        return null;
+    }
+
+    private static function safe_base64_decode($str) {
+        $str = rawurldecode($str);
+        $padding = (4 - (strlen($str) % 4)) % 4;
+        $str .= str_repeat('=', $padding);
+        $decoded = @base64_decode($str, true);
+        return $decoded ? trim($decoded) : '';
+    }
+
+    private static function fetch_url_curl($url, $timeout = 8, $cookie_file = null) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+        curl_setopt($ch, CURLOPT_HEADER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
+        curl_setopt($ch, CURLOPT_USERAGENT, self::$user_agent);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_ENCODING, ''); // Accepts gzip / deflate for 5x faster network transfer
+
+        if ($cookie_file) {
+            curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_file);
+            curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie_file);
+        }
+
+        $raw_response = curl_exec($ch);
+        $error = curl_error($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+
+        $headers = substr($raw_response ?: '', 0, $header_size);
+        $body    = substr($raw_response ?: '', $header_size);
+
+        $redirect_url = null;
+        if (in_array($status, [301, 302, 303, 307, 308])) {
+            if (preg_match('/^Location:\s*([^\r\n]+)/mi', $headers, $matches)) {
+                $redirect_url = trim($matches[1]);
+            }
+        }
+
+        curl_close($ch);
+
+        return [
+            'status'       => $status,
+            'body'         => $body,
+            'error'        => $error,
+            'redirect_url' => $redirect_url
+        ];
+    }
+
+    private static function post_curl_json($url, $post_data, $referer, $origin, $cookie_file) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post_data));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
+        curl_setopt($ch, CURLOPT_USERAGENT, self::$user_agent);
+        curl_setopt($ch, CURLOPT_REFERER, $referer);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: application/json, text/javascript, */*; q=0.01',
+            'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With: XMLHttpRequest',
+            'Origin: ' . $origin
+        ]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+        if ($cookie_file) {
+            curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_file);
+            curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie_file);
+        }
+
+        $result = curl_exec($ch);
+        curl_close($ch);
+
+        if ($result) {
+            $json = json_decode($result, true);
+            if (is_array($json)) {
+                return $json;
+            }
+        }
+        return null;
+    }
+
+    private static function extract_meta_refresh($html, $base_url) {
+        if (preg_match('/<meta[^>]*http-equiv=[\'"]refresh[\'"][^>]*content=[\'"]\s*\d+\s*;\s*url=([^\'\"]+)[\'"]/i', $html, $m)) {
+            return self::normalize_url(trim($m[1]), $base_url);
+        }
+        return null;
+    }
+
+    private static function extract_js_redirect($html, $base_url) {
+        $patterns = [
+            '/(?:window\.)?location(?:\.href)?\s*=\s*[\'"]([^\'"]+)[\'"]/i',
+            '/location\.replace\([\'"]([^\'"]+)[\'"]\)/i'
+        ];
+        foreach ($patterns as $p) {
+            if (preg_match($p, $html, $m)) {
+                $cand = trim($m[1]);
+                if (!empty($cand) && !preg_match('/^(?:javascript:|#)/i', $cand)) {
+                    return self::normalize_url($cand, $base_url);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static function extract_target_link_from_html($html, $base_url) {
+        if (empty($html)) return null;
+
+        // 1. Exact match https://mydverse02.blogspot.com/p/*.html in anchor tags
+        if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/(?:www\.)?mydverse02\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)[\'"]/i', $html, $m)) {
+            return $m[1];
+        }
+
+        // 2. Look inside script tags or JavaScript variables
+        if (preg_match('/[\'"](https?:\/\/(?:www\.)?mydverse02\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)[\'"]/i', $html, $sm)) {
+            return $sm[1];
+        }
+
+        // 3. Look for Episode Wise Links anchor (shortlink candidate to resolve next)
+        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise|Download[\s_-]*Episodes?)[\s\S]*?<\/a>/i', $html, $ewm)) {
+            $cand = $ewm[1];
+            if (stripos($cand, 'mydriveverse') === false) {
+                return self::normalize_url($cand, $base_url);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Fallback resolution via Python engine ONLY if python3 is confirmed installed on the hosting server.
      */
     private static function resolve_via_python($url) {
+        // Check if exec is disabled in php.ini
+        $disabled = explode(',', ini_get('disable_functions') ?: '');
+        $disabled = array_map('trim', $disabled);
+        if (in_array('proc_open', $disabled) || in_array('exec', $disabled)) {
+            return null;
+        }
+
         $python_bin = null;
         @exec('python3 --version 2>&1', $out, $code);
         if ($code === 0) {
@@ -220,327 +755,6 @@ class SLEA_Resolver {
                 }
             }
         }
-        return null;
-    }
-
-    /**
-     * Resolve a URL through all HTTP redirects, meta refreshes, AdLinkFly forms, and script hops.
-     */
-    public static function resolve_url($initial_url, $options = []) {
-        $py_res = self::resolve_via_python($initial_url);
-        if ($py_res) {
-            return $py_res;
-        }
-
-        $max_hops = isset($options['max_redirects']) ? intval($options['max_redirects']) : 25;
-        $timeout  = isset($options['timeout']) ? intval($options['timeout']) : 20;
-
-        $chain   = [];
-        $visited = [];
-        $current = self::normalize_url($initial_url);
-        $final_html = '';
-
-        // Immediate decode for safe.sohojgyan shortlink
-        if (stripos($current, 'safe.sohojgyan') !== false || (strpos($current, 'code=') !== false && stripos($current, 'sohojgyan') !== false)) {
-            $safe_first = self::resolve_safe_sohojgyan($current);
-            if (!empty($safe_first)) {
-                $chain[] = [
-                    'step'     => count($chain) + 1,
-                    'url'      => $current,
-                    'status'   => 302,
-                    'type'     => 'Safe SohojGyan Shortlink Decoded',
-                    'next_url' => $safe_first
-                ];
-                $current = $safe_first;
-                if (self::is_target_destination($current)) {
-                    $chain[] = [
-                        'step'   => count($chain) + 1,
-                        'url'    => $current,
-                        'status' => 200,
-                        'type'   => 'Target Destination (Blogspot Episode Page)'
-                    ];
-                    return [
-                        'original'  => $initial_url,
-                        'final'     => $current,
-                        'redirects' => count($chain) - 1,
-                        'chain'     => $chain,
-                        'final_html'=> ''
-                    ];
-                }
-            }
-        }
-
-        while (count($chain) < $max_hops) {
-            if (empty($current) || in_array($current, $visited, true)) {
-                break;
-            }
-            $visited[] = $current;
-
-            // Execute HTTP Request with cURL
-            $response = self::fetch_url_curl($current, $timeout);
-
-            if ($response['error']) {
-                $chain[] = [
-                    'step'   => count($chain) + 1,
-                    'url'    => $current,
-                    'status' => 0,
-                    'type'   => 'Fetch Error: ' . $response['error']
-                ];
-                break;
-            }
-
-            $status = $response['status'];
-            $body   = $response['body'];
-            $final_html = $body;
-
-            // 1. Check HTTP Redirect
-            if ($response['redirect_url']) {
-                $next = self::normalize_url($response['redirect_url'], $current);
-                $chain[] = [
-                    'step'     => count($chain) + 1,
-                    'url'      => $current,
-                    'status'   => $status,
-                    'type'     => "HTTP Redirect ({$status})",
-                    'next_url' => $next
-                ];
-
-                if (self::is_target_destination($next)) {
-                    $chain[] = [
-                        'step'   => count($chain) + 1,
-                        'url'    => $next,
-                        'status' => 200,
-                        'type'   => 'Target Destination (Blogspot Episode Page)'
-                    ];
-                    $current = $next;
-                    break;
-                }
-
-                $current = $next;
-                continue;
-            }
-
-            // 2. Check if current URL is already the target destination
-            if (self::is_target_destination($current)) {
-                $chain[] = [
-                    'step'   => count($chain) + 1,
-                    'url'    => $current,
-                    'status' => $status,
-                    'type'   => 'Target Destination (Blogspot Episode Page)'
-                ];
-                break;
-            }
-
-            // 3. Inspect HTML for AdLinkFly token form or auto-submit bypass
-            $bypass_url = self::check_adlinkfly_form_or_ajax($current, $body);
-            if ($bypass_url) {
-                $chain[] = [
-                    'step'     => count($chain) + 1,
-                    'url'      => $current,
-                    'status'   => $status,
-                    'type'     => 'Shortener Gateway Bypass Form',
-                    'next_url' => $bypass_url
-                ];
-                $current = $bypass_url;
-                continue;
-            }
-
-            // 4. Inspect HTML for Meta Refresh
-            $meta_url = self::extract_meta_refresh($body, $current);
-            if ($meta_url && $meta_url !== $current && !in_array($meta_url, $visited, true)) {
-                $chain[] = [
-                    'step'     => count($chain) + 1,
-                    'url'      => $current,
-                    'status'   => $status,
-                    'type'     => 'HTML Meta Refresh',
-                    'next_url' => $meta_url
-                ];
-                $current = $meta_url;
-                continue;
-            }
-
-            // 5. Inspect JavaScript location redirects
-            $js_url = self::extract_js_redirect($body, $current);
-            if ($js_url && $js_url !== $current && !in_array($js_url, $visited, true)) {
-                $chain[] = [
-                    'step'     => count($chain) + 1,
-                    'url'      => $current,
-                    'status'   => $status,
-                    'type'     => 'JavaScript Location Redirect',
-                    'next_url' => $js_url
-                ];
-                $current = $js_url;
-                continue;
-            }
-
-            // 6. Inspect direct Blogspot episode link in HTML
-            $direct_link = self::extract_target_link_from_html($body, $current);
-            if ($direct_link && $direct_link !== $current && !in_array($direct_link, $visited, true)) {
-                $chain[] = [
-                    'step'     => count($chain) + 1,
-                    'url'      => $current,
-                    'status'   => $status,
-                    'type'     => 'Identified Blogspot Episode Link in HTML',
-                    'next_url' => $direct_link
-                ];
-                $current = $direct_link;
-                continue;
-            }
-
-            // Terminal page reached
-            $chain[] = [
-                'step'   => count($chain) + 1,
-                'url'    => $current,
-                'status' => $status,
-                'type'   => 'Destination Page'
-            ];
-            break;
-        }
-
-        return [
-            'original'   => $initial_url,
-            'final'      => $current,
-            'redirects'  => max(0, count($chain) - 1),
-            'chain'      => $chain,
-            'final_html' => $final_html
-        ];
-    }
-
-    private static function fetch_url_curl($url, $timeout = 15) {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-        curl_setopt($ch, CURLOPT_HEADER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_USERAGENT, self::$user_agent);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_ENCODING, '');
-
-        $raw_response = curl_exec($ch);
-        $error = curl_error($ch);
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-
-        $headers = substr($raw_response, 0, $header_size);
-        $body    = substr($raw_response, $header_size);
-
-        $redirect_url = null;
-        if (in_array($status, [301, 302, 303, 307, 308])) {
-            if (preg_match('/^Location:\s*([^\r\n]+)/mi', $headers, $matches)) {
-                $redirect_url = trim($matches[1]);
-            }
-        }
-
-        curl_close($ch);
-
-        return [
-            'status'       => $status,
-            'body'         => $body,
-            'error'        => $error,
-            'redirect_url' => $redirect_url
-        ];
-    }
-
-    private static function check_adlinkfly_form_or_ajax($current_url, $html) {
-        if (empty($html)) return null;
-
-        // Check for Sohojgyan / AdLinkFly form action
-        if (preg_match('/<form[^>]*action=[\'"]([^\'"]*\/links\/go[^\'"]*)[\'"][^>]*>([\s\S]*?)<\/form>/i', $html, $form_match)) {
-            $form_action = $form_match[1];
-            $form_body   = $form_match[2];
-
-            $post_data = [];
-            if (preg_match_all('/<input[^>]*name=[\'"]([^\'"]+)[\'"][^>]*value=[\'"]([^\'"]*)[\'"]/i', $form_body, $inputs, PREG_SET_ORDER)) {
-                foreach ($inputs as $inp) {
-                    $post_data[$inp[1]] = $inp[2];
-                }
-            }
-
-            if (!empty($post_data)) {
-                $action_url = self::normalize_url($form_action, $current_url);
-                $resp = self::post_curl_json($action_url, $post_data, $current_url);
-                if (!empty($resp['url'])) {
-                    return $resp['url'];
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static function post_curl_json($url, $data, $referer) {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_USERAGENT, self::$user_agent);
-        curl_setopt($ch, CURLOPT_REFERER, $referer);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'X-Requested-With: XMLHttpRequest',
-            'Accept: application/json, text/javascript, */*; q=0.01'
-        ]);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-
-        $result = curl_exec($ch);
-        curl_close($ch);
-
-        if ($result) {
-            $json = json_decode($result, true);
-            if (is_array($json)) {
-                return $json;
-            }
-        }
-        return null;
-    }
-
-    private static function extract_meta_refresh($html, $base_url) {
-        if (preg_match('/<meta[^>]*http-equiv=[\'"]refresh[\'"][^>]*content=[\'"]\s*\d+\s*;\s*url=([^\'\"]+)[\'"]/i', $html, $m)) {
-            return self::normalize_url(trim($m[1]), $base_url);
-        }
-        return null;
-    }
-
-    private static function extract_js_redirect($html, $base_url) {
-        $patterns = [
-            '/(?:window\.)?location(?:\.href)?\s*=\s*[\'"]([^\'"]+)[\'"]/i',
-            '/location\.replace\([\'"]([^\'"]+)[\'"]\)/i'
-        ];
-        foreach ($patterns as $p) {
-            if (preg_match($p, $html, $m)) {
-                $cand = trim($m[1]);
-                if (!empty($cand) && !preg_match('/^(?:javascript:|#)/i', $cand)) {
-                    return self::normalize_url($cand, $base_url);
-                }
-            }
-        }
-        return null;
-    }
-
-    private static function extract_target_link_from_html($html, $base_url) {
-        if (empty($html)) return null;
-
-        // 1. Highest priority: exact match https://mydverse02.blogspot.com/p/*.html
-        if (preg_match('/<a\s+[^>]*href=[\'"](https?:\/\/(?:www\.)?mydverse02\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)[\'"]/i', $html, $m)) {
-            return $m[1];
-        }
-
-        // 2. Look inside script tags or variables for target link https://mydverse02.blogspot.com/p/*.html
-        if (preg_match('/[\'"](https?:\/\/(?:www\.)?mydverse02\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)[\'"]/i', $html, $sm)) {
-            return $sm[1];
-        }
-
-        // 3. Look for Episode Wise Links anchor (shortlink candidate to resolve next)
-        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise|Download[\s_-]*Episodes?)[\s\S]*?<\/a>/i', $html, $ewm)) {
-            $cand = $ewm[1];
-            if (stripos($cand, 'mydriveverse') === false) {
-                return self::normalize_url($cand, $base_url);
-            }
-        }
-
         return null;
     }
 

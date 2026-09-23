@@ -17,39 +17,60 @@ export const Toast: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
   return (
     <aside
       aria-label="Notifications"
-      className="fixed top-6 right-6 z-50 flex flex-col items-end gap-2.5 pointer-events-none max-w-sm w-[calc(100%-3rem)]"
+      className="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-[calc(100%-2.5rem)]"
     >
       <AnimatePresence>
-        {toasts.map((toast) => (
-          <motion.div
-            key={toast.id}
-            initial={{ opacity: 0, y: -20, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -15, scale: 0.96 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            onClick={() => onDismiss(toast.id)}
-            className="pointer-events-auto bg-[#303030] text-[#f2f2f2] text-xs px-4 py-3 rounded-2xl m3-elevation-2 flex items-center justify-between gap-3 w-full cursor-pointer hover:bg-[#3c3c3c] transition-colors"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              {toast.type === "success" && (
-                <CheckCircle2 className="w-4 h-4 text-[#c2e7ff] shrink-0" />
-              )}
-              {toast.type === "error" && (
-                <AlertCircle className="w-4 h-4 text-[#ffb4ab] shrink-0" />
-              )}
-              {(!toast.type || toast.type === "info") && (
-                <Info className="w-4 h-4 text-[#c2e7ff] shrink-0" />
-              )}
-              <span className="truncate leading-normal font-normal text-[13px] tracking-wide">{toast.text}</span>
-            </div>
-            <button
-              type="button"
-              className="p-1 rounded-full text-[#c4c7c5] hover:text-white hover:bg-white/10 shrink-0 transition-colors"
+        {toasts.map((toast) => {
+          const type = toast.type || "info";
+          return (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: 40, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 40, scale: 0.95 }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+              className={`pointer-events-auto bg-white rounded-2xl shadow-xl border p-3.5 flex items-start gap-3 w-full ring-1 ${
+                type === "success"
+                  ? "border-emerald-200 ring-emerald-500/10"
+                  : type === "error"
+                  ? "border-rose-200 ring-rose-500/10"
+                  : "border-blue-200 ring-blue-500/10"
+              }`}
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </motion.div>
-        ))}
+              <div
+                className={`p-2 rounded-xl shrink-0 mt-0.5 ${
+                  type === "success"
+                    ? "bg-emerald-50 text-emerald-600"
+                    : type === "error"
+                    ? "bg-rose-50 text-rose-600"
+                    : "bg-blue-50 text-blue-600"
+                }`}
+              >
+                {type === "success" && <CheckCircle2 className="w-4 h-4" />}
+                {type === "error" && <AlertCircle className="w-4 h-4" />}
+                {type === "info" && <Info className="w-4 h-4" />}
+              </div>
+
+              <div className="flex-1 min-w-0 pr-1">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  {type === "success" ? "Success" : type === "error" ? "Notice / Error" : "Information"}
+                </div>
+                <div className="text-xs font-medium text-slate-800 leading-snug mt-0.5 break-words">
+                  {toast.text}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onDismiss(toast.id)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 transition-colors cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
     </aside>
   );

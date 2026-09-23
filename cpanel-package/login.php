@@ -45,46 +45,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Private Portal Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#0f172a] text-slate-200 min-h-screen flex items-center justify-center p-4 font-sans antialiased">
-    <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-7 sm:p-8 space-y-6 shadow-2xl">
+<body class="bg-[#f0f4f9] text-[#1f1f1f] min-h-screen flex items-center justify-center p-4 font-sans antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
+    <div class="max-w-md w-full bg-white border border-[#e0e4eb] rounded-3xl p-7 sm:p-8 space-y-6 shadow-xs">
         <div class="text-center space-y-2">
-            <div class="w-13 h-13 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto text-xl font-bold shadow-inner">
+            <div class="w-14 h-14 bg-[#e8f0fe] border border-[#d3e3fd] text-[#0b57d0] rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold shadow-2xs">
                 🔐
             </div>
-            <h1 class="text-xl font-bold text-white tracking-tight">Private Administrator Sign In</h1>
-            <p class="text-xs text-slate-400 max-w-xs mx-auto">
+            <h1 class="text-xl font-bold text-[#1f1f1f] tracking-tight">Private Administrator Sign In</h1>
+            <p class="text-xs text-[#5f6368] max-w-xs mx-auto">
                 Restricted portal for link extraction, URL resolution, and episode page publishing.
             </p>
         </div>
 
         <?php if (!empty($error)): ?>
-            <div class="bg-red-500/10 border border-red-500/30 text-red-300 text-xs p-3.5 rounded-xl font-medium flex items-center gap-2">
+            <div class="bg-[#fce8e6] border border-[#f7d0cd] text-[#c5221f] text-xs p-3.5 rounded-2xl font-medium flex items-center gap-2">
                 <span>⚠️</span>
                 <span><?= htmlspecialchars($error) ?></span>
             </div>
         <?php endif; ?>
 
         <form method="POST" action="login.php" class="space-y-4">
-            <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-300 block">Username or Email</label>
+            <div class="space-y-1.5">
+                <label class="text-xs font-bold text-[#444746] block">Username or Email</label>
                 <input type="text" name="username" required value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"
                     autocomplete="username"
-                    class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm text-white outline-none transition-all" />
+                    placeholder="e.g. admin"
+                    class="w-full px-4 py-3 rounded-2xl bg-white border border-[#dadce0] focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 text-sm text-[#1f1f1f] outline-none transition-all" />
             </div>
 
-            <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-300 block">Password</label>
+            <div class="space-y-1.5">
+                <label class="text-xs font-bold text-[#444746] block">Password</label>
                 <input type="password" name="password" required
                     autocomplete="current-password"
-                    class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm text-white outline-none transition-all font-mono" />
+                    placeholder="••••••••"
+                    class="w-full px-4 py-3 rounded-2xl bg-white border border-[#dadce0] focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 text-sm text-[#1f1f1f] outline-none transition-all font-mono" />
             </div>
 
-            <button type="submit" class="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition-all">
+            <button type="submit" class="w-full py-3.5 px-4 rounded-2xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:shadow-md transition-all">
                 Sign In to Dashboard
             </button>
         </form>
 
-        <div class="text-center text-[10px] text-slate-500">
+        <div class="text-center text-[11px] text-[#747775]">
             Private Access Only • MySQL Authenticated
         </div>
     </div>

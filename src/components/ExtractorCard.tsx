@@ -299,13 +299,13 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
               onKeyDown={(e) => e.key === "Enter" && handleScan()}
               placeholder="https://example.com/page"
               autoComplete="off"
-              className="w-full min-w-0 flex-1 px-3.5 py-3 border border-[#ccd3d9] rounded-[9px] outline-none text-sm sm:text-[15px] focus:border-[#111] transition-colors placeholder:text-slate-400"
+              className="w-full min-w-0 flex-1 px-3.5 py-3 border border-[#ccd3d9] rounded-[9px] outline-none text-sm sm:text-[15px] focus:border-[#0b57d0] transition-colors placeholder:text-slate-400 bg-white"
             />
             <button
               id="scanBtn"
               onClick={() => handleScan()}
               disabled={loading}
-              className="w-full sm:w-auto bg-[#111] hover:bg-black text-white font-medium px-5 py-3 rounded-[9px] text-sm cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0 transition-all active:scale-[0.98]"
+              className="w-full sm:w-auto bg-[#0b57d0] hover:bg-[#0842a0] text-white font-medium px-5 py-3 rounded-[9px] text-sm cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0 transition-all active:scale-[0.98] shadow-xs"
             >
               {loading ? (
                 <>

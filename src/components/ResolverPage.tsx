@@ -255,7 +255,7 @@ export const ResolverPage: React.FC<ResolverPageProps> = ({
           id="resolveBtn"
           onClick={() => handleResolve()}
           disabled={loading}
-          className="w-full h-[52px] sm:h-[55px] mt-3 rounded-[13px] bg-[#0d0d0d] hover:bg-[#1d1d1d] text-white text-sm sm:text-[15px] font-bold cursor-pointer transition-all active:scale-[0.99] disabled:opacity-55 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-xs"
+          className="w-full h-[52px] sm:h-[55px] mt-3 rounded-[13px] bg-[#0b57d0] hover:bg-[#0842a0] text-white text-sm sm:text-[15px] font-bold cursor-pointer transition-all active:scale-[0.99] disabled:opacity-55 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-xs"
         >
           {loading ? (
             <>

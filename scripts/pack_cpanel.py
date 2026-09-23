@@ -77,7 +77,7 @@ def main():
         shutil.copy2(primary_zip, mirror)
         print(f"[*] Mirrored bundle to: {mirror}")
 
-    print(f"[✓] Deployment bundle ready! Version: v-3.9.8 | SHA256: {checksum[:12]}...")
+    print(f"[✓] Deployment bundle ready! Version: v-3.9.9 | SHA256: {checksum[:12]}...")
 
 if __name__ == "__main__":
     main()

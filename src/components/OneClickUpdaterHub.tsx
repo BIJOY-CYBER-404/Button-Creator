@@ -58,16 +58,17 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "3.9.8",
-    remote_version: "3.9.8",
+    current_version: "3.9.9",
+    remote_version: "3.9.9",
     update_available: false,
-    release_date: "2026-09-20",
+    release_date: "2026-09-23",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Fixed generator indefinite loading by implementing 30-second timeout with friendly error messages",
-      "Added full support for safe.sohojgyan.com shortlink format (e.g. https://safe.sohojgyan.com/JX6N5o) via official JSON decode API",
-      "Enhanced error detection for expired admin sessions and network failures with top-right notification toasts",
-      "Version v-3.9.8 compiled production bundle fully ready for secure remote updates"
+      "High-performance pure-PHP native cURL resolver engine eliminating shared hosting Python execution timeouts",
+      "Bypasses AdLinkFly, Sohojgyan, and shortlink gateway intermediaries directly in pure PHP",
+      "Optimized Blogger and streaming host button extractor with fast connection pooling and gzip/deflate decoding",
+      "Popup style toast notifications with top-right corner positioning, animated slide-in, and dismiss actions across all pages",
+      "Increased client-side generation timeout to 45s with multi-step status feedback"
     ],
     minimum_php: "8.0",
     checksum: "a81f9b30c4e123456789abcdef0123456789abcdef0123456789abcdef012345"
@@ -145,8 +146,8 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       });
       if (mRes.ok) {
         const mData = await mRes.json();
-        const remVer = mData.version ? mData.version.replace(/^v-?/, "") : "3.9.8";
-        const currVer = checkInfo.current_version || "3.9.8";
+        const remVer = mData.version ? mData.version.replace(/^v-?/, "") : "3.9.9";
+        const currVer = checkInfo.current_version || "3.9.9";
         setCheckInfo((prev) => ({
           ...prev,
           remote_version: remVer,
@@ -380,9 +381,9 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
         {/* Log Window */}
         <div className="space-y-2">
           <span className="text-[11px] font-bold text-[#5f6368] uppercase tracking-wider block">Log Terminal Output</span>
-          <div className="bg-[#1e1e1e] text-[#d4d4d4] font-mono text-xs p-4 rounded-xl max-h-60 overflow-y-auto space-y-1 border border-[#333]">
+          <div className="bg-[#f8fafd] text-[#1e293b] font-mono text-xs p-4 rounded-xl max-h-60 overflow-y-auto space-y-1 border border-[#dadce0] shadow-inner">
             {logs.length === 0 ? (
-              <div className="text-[#808080]">[IDLE] Ready to execute One-Click Application Update.</div>
+              <div className="text-[#64748b]">[IDLE] Ready to execute One-Click Application Update.</div>
             ) : (
               logs.map((l, i) => <div key={i} className="leading-relaxed">{l}</div>)
             )}

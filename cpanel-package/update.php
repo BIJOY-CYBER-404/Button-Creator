@@ -282,11 +282,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <!-- Terminal Log Window -->
+            <!-- Terminal Log Window (Light Theme) -->
             <div class="space-y-2">
                 <span class="text-xs font-bold text-[#5f6368] uppercase tracking-wider block">Live Execution Output</span>
-                <div id="terminalLog" class="bg-[#1e1e1e] text-[#d4d4d4] font-mono text-xs p-4 rounded-xl max-h-64 overflow-y-auto space-y-1 leading-relaxed border border-[#333]">
-                    <div class="text-[#808080]">[LOG START] Initializing One-Click Updater...</div>
+                <div id="terminalLog" class="bg-[#f8fafd] text-[#1e293b] font-mono text-xs p-4 rounded-xl max-h-64 overflow-y-auto space-y-1 leading-relaxed border border-[#dadce0] shadow-inner">
+                    <div class="text-[#64748b]">[LOG START] Initializing One-Click Updater...</div>
                 </div>
             </div>
         </div>
@@ -384,7 +384,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     </main>
 
+    <!-- Top Right Notification Toast Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-full"></div>
+
     <script>
+        function escapeToastHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const id = 'toast_' + Math.random().toString(36).substring(2, 9);
+            const toast = document.createElement('div');
+            toast.id = id;
+            toast.className = `pointer-events-auto bg-white rounded-2xl shadow-xl border p-3.5 flex items-start gap-3 w-full ring-1 transform transition-all duration-300 translate-x-8 opacity-0 scale-95 ${
+                type === 'success' 
+                    ? 'border-emerald-200 ring-emerald-500/10' 
+                    : (type === 'info' ? 'border-blue-200 ring-blue-500/10' : 'border-rose-200 ring-rose-500/10')
+            }`;
+
+            const iconClass = type === 'success'
+                ? 'bg-emerald-50 text-emerald-600'
+                : (type === 'info' ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600');
+
+            const iconSvg = type === 'success'
+                ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>`
+                : (type === 'info'
+                    ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>`
+                    : `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`);
+
+            const title = type === 'success' ? 'Success' : (type === 'info' ? 'Information' : 'Notice');
+
+            toast.innerHTML = `
+                <div class="p-2 rounded-xl shrink-0 mt-0.5 ${iconClass}">
+                    ${iconSvg}
+                </div>
+                <div class="flex-1 min-w-0 pr-1">
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500">${title}</div>
+                    <div class="text-xs font-medium text-slate-800 leading-snug mt-0.5 break-words">${escapeToastHtml(msg)}</div>
+                </div>
+                <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 transition-colors cursor-pointer" title="Dismiss">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            `;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-8', 'opacity-0', 'scale-95');
+                toast.classList.add('translate-x-0', 'opacity-100', 'scale-100');
+            });
+
+            setTimeout(() => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('translate-x-0', 'opacity-100', 'scale-100');
+                    el.classList.add('translate-x-8', 'opacity-0', 'scale-95');
+                    setTimeout(() => el.remove(), 250);
+                }
+            }, 4500);
+        }
+
         function checkUpdateNow() {
             const btn = document.getElementById('btnCheck');
             const spin = document.getElementById('iconCheckSpin');
@@ -401,16 +462,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 spin.classList.remove('animate-spin');
                 btn.disabled = false;
                 if (data.success) {
-                    alert('Update Check Complete! Remote version: v' + data.remote_version + (data.update_available ? ' (Update Available)' : ' (Up to date)'));
-                    window.location.reload();
+                    showToast('Update check complete! Remote: v' + data.remote_version + (data.update_available ? ' (Update Available)' : ' (Up to date)'), data.update_available ? 'info' : 'success');
+                    setTimeout(() => window.location.reload(), 1500);
                 } else {
-                    alert('Check failed: ' + (data.error || 'Unknown error'));
+                    showToast('Check failed: ' + (data.error || 'Unknown error'), 'error');
                 }
             })
             .catch(err => {
                 spin.classList.remove('animate-spin');
                 btn.disabled = false;
-                alert('Network error during check: ' + err.message);
+                showToast('Network error during check: ' + err.message, 'error');
             });
         }
 
@@ -428,9 +489,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    alert('Updater settings saved successfully!');
+                    showToast('Updater settings saved successfully!', 'success');
                 } else {
-                    alert('Failed to save settings: ' + data.error);
+                    showToast('Failed to save settings: ' + data.error, 'error');
                 }
             });
         }
@@ -508,17 +569,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if (data.success) {
                     term.innerHTML += '<div class="text-[#00ff00] font-bold">[SUCCESS] ' + data.message + '</div>';
-                    alert(data.message);
-                    window.location.reload();
+                    showToast(data.message, 'success');
+                    setTimeout(() => window.location.reload(), 2000);
                 } else {
                     term.innerHTML += '<div class="text-[#ff5252] font-bold">[FAILED] ' + data.error + '</div>';
-                    alert(data.error);
+                    showToast(data.error, 'error');
                 }
             })
             .catch(err => {
                 clearInterval(interval);
                 term.innerHTML += '<div class="text-[#ff5252] font-bold">[NETWORK ERROR] ' + err.message + '</div>';
-                alert('Update execution error: ' + err.message);
+                showToast('Update execution error: ' + err.message, 'error');
             });
         }
     </script>

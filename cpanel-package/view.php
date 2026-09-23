@@ -241,31 +241,31 @@ function resolve_server_info($provider, $url, $btn_text) {
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
     <?php if ($is_admin): ?>
-    <!-- Admin Quick Controls Bar (Visible only when logged in as admin) -->
-    <div class="w-full bg-[#1e293b] text-white border-b border-slate-800 px-4 py-2 text-xs z-50 sticky top-0 shadow-md">
+    <!-- Admin Quick Controls Bar (Visible only when logged in as admin - Light Theme) -->
+    <div class="w-full bg-white text-[#1f1f1f] border-b border-[#e1e7f0] px-4 py-2 text-xs z-50 sticky top-0 shadow-2xs">
         <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-bold text-[10px] uppercase tracking-wider">Admin View</span>
-                <span class="text-slate-300 hidden sm:inline">| Page #<?= $page_id ?> (<?= intval($page['views'] ?? 0) ?> views)</span>
+                <span class="px-2.5 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] font-bold text-[10px] uppercase tracking-wider">Admin View</span>
+                <span class="text-[#5f6368] hidden sm:inline">| Page #<?= $page_id ?> (<?= intval($page['views'] ?? 0) ?> views)</span>
             </div>
             
                 <div class="flex items-center gap-3">
                     <!-- Public / Private Live Toggle Switch -->
                     <div class="flex items-center gap-2">
-                        <span class="text-slate-300 text-[11px]">Visibility:</span>
+                        <span class="text-[#444746] text-[11px] font-medium">Visibility:</span>
                         <button type="button" id="adminViewToggleBtn" onclick="toggleAdminStatus(<?= $page_id ?>)" role="switch" aria-checked="<?= $is_public ? 'true' : 'false' ?>"
-                            class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none <?= $is_public ? 'bg-[#137333]' : 'bg-slate-600' ?>">
+                            class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none <?= $is_public ? 'bg-[#137333]' : 'bg-slate-300' ?>">
                             <span id="adminViewToggleThumb" class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out <?= $is_public ? 'translate-x-4' : 'translate-x-0' ?>"></span>
                         </button>
-                        <span id="adminViewStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-bold <?= $is_public ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300' ?>">
+                        <span id="adminViewStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-bold <?= $is_public ? 'bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]' : 'bg-[#fff0d4] text-[#b06000] border border-[#ffd599]' ?>">
                             <?= $is_public ? 'Public' : 'Private' ?>
                         </span>
                     </div>
 
-                    <a href="pages.php?edit=<?= $page_id ?>" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition-colors inline-flex items-center gap-1">
+                    <a href="pages.php?edit=<?= $page_id ?>" class="px-2.5 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-[11px] transition-colors inline-flex items-center gap-1 shadow-2xs">
                         <span>Edit Page</span>
                     </a>
-                    <a href="pages.php" class="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-[11px] transition-colors">
+                    <a href="pages.php" class="px-2.5 py-1 rounded-lg bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#1f1f1f] border border-[#dadce0] font-bold text-[11px] transition-colors">
                         Pages Manager
                     </a>
                 </div>
@@ -478,6 +478,9 @@ function resolve_server_info($provider, $url, $btn_text) {
         </div>
     </footer>
 
+    <!-- Top Right Notification Toast Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-full"></div>
+
     <script>
         function openMobileMenu() {
             const sidebar = document.getElementById('mobileSidebar');
@@ -526,6 +529,64 @@ function resolve_server_info($provider, $url, $btn_text) {
             }
         });
 
+        function escapeToastHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const id = 'toast_' + Math.random().toString(36).substring(2, 9);
+            const toast = document.createElement('div');
+            toast.id = id;
+            toast.className = `pointer-events-auto bg-white rounded-2xl shadow-xl border p-3.5 flex items-start gap-3 w-full ring-1 transform transition-all duration-300 translate-x-8 opacity-0 scale-95 ${
+                type === 'success' 
+                    ? 'border-emerald-200 ring-emerald-500/10' 
+                    : (type === 'info' ? 'border-blue-200 ring-blue-500/10' : 'border-rose-200 ring-rose-500/10')
+            }`;
+
+            const iconClass = type === 'success'
+                ? 'bg-emerald-50 text-emerald-600'
+                : (type === 'info' ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600');
+
+            const iconSvg = type === 'success'
+                ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>`
+                : (type === 'info'
+                    ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>`
+                    : `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`);
+
+            const title = type === 'success' ? 'Success' : (type === 'info' ? 'Information' : 'Notice');
+
+            toast.innerHTML = `
+                <div class="p-2 rounded-xl shrink-0 mt-0.5 ${iconClass}">
+                    ${iconSvg}
+                </div>
+                <div class="flex-1 min-w-0 pr-1">
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500">${title}</div>
+                    <div class="text-xs font-medium text-slate-800 leading-snug mt-0.5 break-words">${escapeToastHtml(msg)}</div>
+                </div>
+                <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 transition-colors cursor-pointer" title="Dismiss">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            `;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-8', 'opacity-0', 'scale-95');
+                toast.classList.add('translate-x-0', 'opacity-100', 'scale-100');
+            });
+
+            setTimeout(() => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('translate-x-0', 'opacity-100', 'scale-100');
+                    el.classList.add('translate-x-8', 'opacity-0', 'scale-95');
+                    setTimeout(() => el.remove(), 250);
+                }
+            }, 4500);
+        }
+
         <?php if ($is_admin): ?>
         async function toggleAdminStatus(id) {
             const btn = document.getElementById('adminViewToggleBtn');
@@ -546,21 +607,23 @@ function resolve_server_info($provider, $url, $btn_text) {
                     if (isPub) {
                         btn.className = 'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-[#137333]';
                         thumb.className = 'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-4';
-                        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300';
+                        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]';
                         badge.innerText = 'Public';
                         if (banner) banner.classList.add('hidden');
+                        showToast('Page visibility changed to Public', 'success');
                     } else {
-                        btn.className = 'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-slate-600';
+                        btn.className = 'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-slate-300';
                         thumb.className = 'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0';
-                        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300';
+                        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-[#fff0d4] text-[#b06000] border border-[#ffd599]';
                         badge.innerText = 'Private';
                         if (banner) banner.classList.remove('hidden');
+                        showToast('Page visibility changed to Private', 'info');
                     }
                 } else {
-                    alert('Could not update status: ' + (data.error || 'Unknown error'));
+                    showToast('Could not update status: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (err) {
-                alert('Request failed: ' + err.message);
+                showToast('Request failed: ' + err.message, 'error');
             }
         }
         <?php endif; ?>

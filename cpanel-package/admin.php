@@ -220,7 +220,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
     </div>
 
     <!-- Top Right Notification Toast Container -->
-    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-full"></div>
 
     <script>
         const baseUrl = '<?= $base_url ?>';
@@ -228,26 +228,54 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
         function showNotification(message, type = 'success') {
             const container = document.getElementById('toastContainer');
             if (!container) return;
+            const id = 'toast_' + Math.random().toString(36).substring(2, 9);
             const toast = document.createElement('div');
-            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-lg border text-sm font-semibold transform transition-all duration-300 translate-y-[-10px] opacity-0 ${
+            toast.id = id;
+            toast.className = `pointer-events-auto bg-white rounded-2xl shadow-xl border p-3.5 flex items-start gap-3 w-full ring-1 transform transition-all duration-300 translate-x-8 opacity-0 scale-95 ${
                 type === 'success' 
-                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200' 
-                    : 'bg-rose-50 text-rose-900 border-rose-200'
+                    ? 'border-emerald-200 ring-emerald-500/10' 
+                    : (type === 'info' ? 'border-blue-200 ring-blue-500/10' : 'border-rose-200 ring-rose-500/10')
             }`;
-            const icon = type === 'success'
-                ? `<svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>`
-                : `<svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
-            toast.innerHTML = `${icon} <div class="flex-1">${message}</div>`;
+
+            const iconClass = type === 'success'
+                ? 'bg-emerald-50 text-emerald-600'
+                : (type === 'info' ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600');
+
+            const iconSvg = type === 'success'
+                ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>`
+                : (type === 'info'
+                    ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>`
+                    : `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`);
+
+            const title = type === 'success' ? 'Success' : (type === 'info' ? 'Information' : 'Notice');
+
+            toast.innerHTML = `
+                <div class="p-2 rounded-xl shrink-0 mt-0.5 ${iconClass}">
+                    ${iconSvg}
+                </div>
+                <div class="flex-1 min-w-0 pr-1">
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500">${title}</div>
+                    <div class="text-xs font-medium text-slate-800 leading-snug mt-0.5 break-words">${message}</div>
+                </div>
+                <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 transition-colors cursor-pointer" title="Dismiss">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            `;
+
             container.appendChild(toast);
             requestAnimationFrame(() => {
-                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
-                toast.classList.add('translate-y-0', 'opacity-100');
+                toast.classList.remove('translate-x-8', 'opacity-0', 'scale-95');
+                toast.classList.add('translate-x-0', 'opacity-100', 'scale-100');
             });
+
             setTimeout(() => {
-                toast.classList.remove('translate-y-0', 'opacity-100');
-                toast.classList.add('translate-y-[-10px]', 'opacity-0');
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('translate-x-0', 'opacity-100', 'scale-100');
+                    el.classList.add('translate-x-8', 'opacity-0', 'scale-95');
+                    setTimeout(() => el.remove(), 250);
+                }
+            }, 4500);
         }
 
         function setSample(url) {
@@ -301,9 +329,9 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 }
             }, 8000));
 
-            // Setup AbortController for 30s timeout
+            // Setup AbortController for 45s timeout to allow gateway counter wait and redirects
             const controller = new AbortController();
-            const timeoutDuration = 30000;
+            const timeoutDuration = 45000;
             const timeoutId = setTimeout(() => {
                 controller.abort();
             }, timeoutDuration);

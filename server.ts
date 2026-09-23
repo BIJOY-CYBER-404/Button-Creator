@@ -456,15 +456,16 @@ async function startServer() {
     }
     return res.json({
       name: "Movie Hub HQ Drive",
-      version: "3.9.8",
-      release_date: "2026-09-20",
+      version: "3.9.9",
+      release_date: "2026-09-23",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
       minimum_php: "8.0",
       release_notes: [
-        "Fixed generator indefinite loading by implementing 30-second timeout with friendly error messages",
-        "Added full support for safe.sohojgyan.com shortlink format (e.g. https://safe.sohojgyan.com/JX6N5o) via official JSON decode API",
-        "Enhanced error detection for expired admin sessions and network failures with top-right notification toasts",
-        "Version v-3.9.8 compiled production bundle fully ready for secure remote updates"
+        "High-performance pure-PHP native cURL resolver engine eliminating shared hosting Python execution timeouts",
+        "Bypasses AdLinkFly, Sohojgyan, and shortlink gateway intermediaries directly in pure PHP",
+        "Optimized Blogger and streaming host button extractor with fast connection pooling and gzip/deflate decoding",
+        "Popup style toast notifications with top-right corner positioning, animated slide-in, and dismiss actions across all pages",
+        "Increased client-side generation timeout to 45s with multi-step status feedback"
       ]
     });
   });
