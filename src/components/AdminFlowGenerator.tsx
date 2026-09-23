@@ -312,6 +312,39 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
               </div>
             </div>
 
+            {/* Target / Final Destination URL Box (Admin Only) */}
+            <div className="space-y-1.5 min-w-0">
+              <label className="text-xs font-bold text-[#444746]">
+                Target / Final Destination URL:
+              </label>
+              <div className="flex items-center gap-2 bg-white rounded-xl p-2 border border-[#e0e4eb] shadow-2xs flex-wrap sm:flex-nowrap min-w-0">
+                <input
+                  type="text"
+                  readOnly
+                  value={createdResult.resolved_url}
+                  className="flex-1 min-w-0 px-2 py-1 font-mono text-xs font-medium text-[#1f1f1f] bg-transparent outline-none truncate select-all"
+                />
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => copyLink(createdResult.resolved_url)}
+                    className="px-3 py-1.5 rounded-lg bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#1f1f1f] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                  >
+                    <Copy className="w-3.5 h-3.5" /> Copy Target
+                  </button>
+                  <a
+                    href={createdResult.resolved_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#0b57d0] font-bold text-xs flex items-center gap-1.5 transition-colors shrink-0"
+                  >
+                    <span>Visit Target</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
             {/* Extraction Metadata Info */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-[#444746] bg-white/70 rounded-xl p-3 border border-[#e0e4eb]">
               <div className="min-w-0">
@@ -321,10 +354,6 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
               <div className="min-w-0">
                 <span className="text-[#747775]">Extracted Buttons:</span>{" "}
                 <span className="font-bold text-[#137333] block">{createdResult.button_count} episodes</span>
-              </div>
-              <div className="sm:col-span-2 min-w-0">
-                <span className="text-[#747775]">Destination:</span>{" "}
-                <span className="font-mono text-[11px] text-[#041e49] break-all block">{createdResult.resolved_url}</span>
               </div>
             </div>
 

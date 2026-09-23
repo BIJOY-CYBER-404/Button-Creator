@@ -26,8 +26,17 @@ ACTION_WORDS = {
     "download", "watch", "stream", "play", "open", "direct",
     "server", "link", "links", "get", "view", "continue", "mirror",
     "xcloud", "filemoon", "streamtape", "doodstream", "mixdrop",
-    "episode", "episodes", "ep", "wise", "gdrive", "drive", "mediafire", "mega"
+    "episode", "episodes", "ep", "wise", "gdrive", "drive", "mediafire", "mega",
+    "hubcloud", "gdtot", "fastdl", "filepress", "katdrive", "gdflix",
+    "streamwish", "vidhide", "mp4upload", "vidoza", "dropload", "hexupload", "terabox"
 }
+
+KNOWN_MEDIA_HOSTS = (
+    "xcloud.", "hubcloud.", "gdtot.", "filepress.", "drive.google.", "mega.nz",
+    "mega.io", "mediafire.", "streamtape.", "filemoon.", "dood.", "vidhide.",
+    "streamwish.", "terabox.", "katdrive.", "gdflix.", "fastdl.", "vidoza.",
+    "dropload.", "hexupload.", "mp4upload.", "send.cm", "krakenfiles."
+)
 
 VOID_ELEMENTS = {
     "area", "base", "br", "col", "embed", "hr", "img", "input",
@@ -35,10 +44,11 @@ VOID_ELEMENTS = {
 }
 
 INTERNAL_NAV_WORDS = {
-    "home", "about", "contact", "privacy", "privacy-policy",
+    "home", "about", "about-us", "contact", "contact-us", "privacy", "privacy-policy",
     "cookie", "cookie-policy", "sitemap", "search", "login",
-    "register", "rtl", "category", "categories", "archive",
-    "next", "previous", "prev",
+    "register", "rtl", "category", "categories", "archive", "archives",
+    "next", "previous", "prev", "terms", "dmca", "disclaimer", "faq",
+    "share", "facebook", "twitter", "telegram", "whatsapp", "newer", "older", "comment", "reply"
 }
 
 EXCLUDED_EXPLICIT_TESTS = (
@@ -112,16 +122,20 @@ def looks_like_action_link(item, base_url):
     text = clean_text(item.get("text", ""))
     css = f"{item.get('class', '')} {item.get('id', '')}".lower()
     url = item.get("raw_url", "")
+    url_lower = (url or "").lower()
 
     if is_blocked_test_link(text, url):
         return False
 
     # Exclude comment response and reply anchor links
-    if "#respond" in url.lower() or "cancel reply" in text.lower() or "comment-reply" in css:
+    if "#respond" in url_lower or "cancel reply" in text.lower() or "comment-reply" in css:
+        return False
+
+    # Check internal nav word exact text match
+    if text.lower() in INTERNAL_NAV_WORDS:
         return False
 
     words = normalized_words(f"{text} {css}")
-
     if words & ACTION_WORDS:
         return True
 
@@ -129,13 +143,12 @@ def looks_like_action_link(item, base_url):
         x in css
         for x in (
             "btn", "button", "download", "watch", "stream",
-            "server", "mirror", "play", "action"
+            "server", "mirror", "play", "action", "epitem", "epgdrive"
         )
     ):
         return True
 
-    normalized = normalize_url(url, base_url)
-    if normalized and not same_site(normalized, base_url):
+    if any(host in url_lower for host in KNOWN_MEDIA_HOSTS):
         return True
 
     return False

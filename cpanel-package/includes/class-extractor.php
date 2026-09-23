@@ -15,12 +15,204 @@ class SLEA_Extractor {
     ];
 
     private static $excluded_domains = [
-        'facebook.com', 'twitter.com', 'instagram.com', 'youtube.com', 't.me',
-        'telegram.org', 'pinterest.com', 'reddit.com', 'linkedin.com', 'whatsapp.com',
-        'google.com/search', 'policies.google.com', 'schema.org', 'w3.org'
+        'facebook.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com',
+        'youtu.be', 't.me', 'telegram.me', 'telegram.org', 'pinterest.com',
+        'reddit.com', 'linkedin.com', 'whatsapp.com', 'tiktok.com', 'disqus.com',
+        'blogger.com', 'google.com/search', 'policies.google.com', 'schema.org',
+        'w3.org', 'pagespeed.web.dev', 'web.dev', 'rich-results'
     ];
 
-    public static function fetch_page($url, $timeout = 12, $max_redirects = 5) {
+    private static $nav_words = [
+        'home', 'about', 'about us', 'contact', 'contact us', 'privacy',
+        'privacy policy', 'terms', 'terms of service', 'dmca', 'disclaimer',
+        'faq', 'sitemap', 'search', 'login', 'sign in', 'register', 'sign up',
+        'rtl', 'category', 'categories', 'archive', 'archives', 'next',
+        'previous', 'prev', 'back', 'newer posts', 'older posts', 'load more',
+        'read more', 'share on facebook', 'share on twitter', 'share on telegram',
+        'share on whatsapp', 'share', 'pin it', 'tweet', 'comment', 'cancel reply',
+        'reply', 'post a comment', 'subscribe', 'rss', 'feed'
+    ];
+
+    public static function extract_buttons_from_html($html, $base_url = '', $button_only = true) {
+        if (empty($html)) return [];
+
+        // 1. Strip non-content structural elements (header, footer, nav, aside, script, style, comments)
+        $clean_html = preg_replace('/<(?:script|style|noscript|header|footer|nav|aside)[^>]*>[\s\S]*?<\/(?:script|style|noscript|header|footer|nav|aside)>/i', ' ', $html);
+        
+        // Strip common navigation, widget, header, footer, social, sidebar, comment containers
+        $clean_html = preg_replace('/<(?:div|section|aside|ul|nav)[^>]*class=[\'"][^\'"]*(?:header|footer|navbar|nav-menu|main-menu|site-header|site-footer|topbar|bottombar|sidebar|widget|popular-posts|recent-posts|label-list|breadcrumb|breadcrumbs|comments|comment-reply|widget-social|social-share|author-box)[^\'"]*[\'"][^>]*>[\s\S]*?<\/(?:div|section|aside|ul|nav)>/i', ' ', $clean_html);
+
+        $items = [];
+        $seen = [];
+
+        // Match all <a> tags along with their character position
+        if (preg_match_all('/<a\s+([^>]*?)href=[\'"]([^\'"]+)[\'"]([^>]*)>([\s\S]*?)<\/a>/i', $clean_html, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+            foreach ($matches as $match) {
+                $full_tag     = $match[0][0];
+                $tag_offset   = $match[0][1];
+                $attrs_before = $match[1][0];
+                $href         = trim($match[2][0]);
+                $attrs_after  = $match[3][0];
+                $inner_html   = $match[4][0];
+
+                $all_attrs = $attrs_before . ' ' . $attrs_after;
+                $text = trim(strip_tags($inner_html));
+                $text = preg_replace('/\s+/', ' ', $text);
+
+                // Filter invalid / protocol links
+                if (empty($href) || preg_match('/^(?:javascript:|mailto:|tel:|sms:|#)/i', $href)) {
+                    continue;
+                }
+
+                $full_url = self::resolve_relative_url($href, $base_url);
+                if (empty($full_url) || in_array($full_url, $seen, true)) {
+                    continue;
+                }
+
+                // Check domain exclusions (social media, search, analytics, etc.)
+                $host = strtolower(parse_url($full_url, PHP_URL_HOST) ?: '');
+                $is_excluded = false;
+                foreach (self::$excluded_domains as $ex) {
+                    if (strpos($host, $ex) !== false || strpos($full_url, $ex) !== false) {
+                        $is_excluded = true;
+                        break;
+                    }
+                }
+                if ($is_excluded) continue;
+
+                // Check text exclusion against navigation, menu, icon, or footer labels
+                $text_lower = strtolower($text);
+                if (in_array($text_lower, self::$nav_words, true)) {
+                    continue;
+                }
+
+                // Inspect surrounding DOM (180 chars before <a) for episode names or numbers
+                $start_pos = max(0, $tag_offset - 180);
+                $preceding_chunk = substr($clean_html, $start_pos, $tag_offset - $start_pos);
+
+                $episode_num = self::detect_episode($text);
+                $ep_label = '';
+                if (empty($episode_num)) {
+                    if (preg_match_all('/(?:Episode|Ep\.?|E)\s*(\d{1,3}(?:\s*-\s*\d{1,3})?)/i', $preceding_chunk, $ep_matches)) {
+                        $last_ep = end($ep_matches[1]);
+                        $ep_label = 'Episode ' . trim($last_ep);
+                        if (preg_match('/^(\d+)/', trim($last_ep), $num_m)) {
+                            $episode_num = intval($num_m[1]);
+                        }
+                    }
+                }
+
+                // Extract quality
+                $quality = self::detect_quality($text . ' ' . $all_attrs . ' ' . $full_url . ' ' . $preceding_chunk);
+
+                // Provider
+                $provider = self::detect_provider($full_url);
+
+                // Strict Button / Button Component filter
+                $is_button = self::is_button_element($all_attrs, $text, $full_url, $preceding_chunk) || ($provider !== 'Download Server');
+
+                if ($button_only && !$is_button && empty($quality) && empty($episode_num) && empty($ep_label)) {
+                    continue;
+                }
+
+                // Format button label nicely
+                $button_title = !empty($text) ? $text : ($provider !== 'Download Server' ? $provider : 'Download Link');
+                if (!empty($ep_label) && stripos($button_title, 'episode') === false) {
+                    $button_title = $ep_label . ' - ' . $button_title;
+                }
+
+                $seen[] = $full_url;
+                $items[] = [
+                    'text'        => $button_title,
+                    'url'         => $full_url,
+                    'quality'     => $quality,
+                    'episode'     => $episode_num,
+                    'is_button'   => $is_button,
+                    'provider'    => $provider
+                ];
+            }
+        }
+
+        // Sort items naturally if episode numbers exist
+        usort($items, function($a, $b) {
+            if (!empty($a['episode']) && !empty($b['episode'])) {
+                return intval($a['episode']) - intval($b['episode']);
+            }
+            return 0;
+        });
+
+        return $items;
+    }
+
+    private static function detect_quality($content) {
+        $content = strtolower($content);
+        if (strpos($content, '1080p') !== false || strpos($content, 'fhd') !== false) return '1080p';
+        if (strpos($content, '720p') !== false || strpos($content, 'hd') !== false) return '720p';
+        if (strpos($content, '480p') !== false || strpos($content, 'sd') !== false) return '480p';
+        if (strpos($content, '4k') !== false || strpos($content, '2160p') !== false) return '4K';
+        if (strpos($content, 'hevc') !== false) return 'HEVC';
+        return null;
+    }
+
+    private static function detect_episode($text) {
+        if (preg_match('/(?:Episode|Ep\.?|E)\s*(\d{1,3})/i', $text, $m)) {
+            return intval($m[1]);
+        }
+        return null;
+    }
+
+    private static function detect_provider($url) {
+        $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
+        if (strpos($host, 'xcloud') !== false) return 'XCloud';
+        if (strpos($host, 'drive.google') !== false) return 'Google Drive';
+        if (strpos($host, 'mega.nz') !== false || strpos($host, 'mega.io') !== false) return 'Mega';
+        if (strpos($host, 'gdtot') !== false) return 'GDTot';
+        if (strpos($host, 'filepress') !== false) return 'FilePress';
+        if (strpos($host, 'hubcloud') !== false) return 'HubCloud';
+        if (strpos($host, 'fastdl') !== false) return 'FastDL';
+        if (strpos($host, 'mediafire') !== false) return 'MediaFire';
+        if (strpos($host, 'filemoon') !== false) return 'FileMoon';
+        if (strpos($host, 'streamtape') !== false) return 'StreamTape';
+        if (strpos($host, 'dood') !== false) return 'DoodStream';
+        if (strpos($host, 'vidhide') !== false) return 'VidHide';
+        if (strpos($host, 'streamwish') !== false) return 'StreamWish';
+        if (strpos($host, 'terabox') !== false) return 'TeraBox';
+        if (strpos($host, 'katdrive') !== false) return 'KatDrive';
+        if (strpos($host, 'gdflix') !== false) return 'GDFlix';
+        if (strpos($host, 'vidoza') !== false) return 'Vidoza';
+        if (strpos($host, 'mp4upload') !== false) return 'Mp4Upload';
+        if (strpos($host, 'blogspot') !== false) return 'Blogspot Server';
+        return 'Download Server';
+    }
+
+    private static function is_button_element($attrs, $text, $url, $preceding = '') {
+        $combined = strtolower($attrs . ' ' . $text . ' ' . $url . ' ' . $preceding);
+        
+        // 1. Explicit button classes / roles / components
+        if (preg_match('/\b(?:btn|button|btn-[a-z0-9_-]+|button-[a-z0-9_-]+|epgdrive|epitem|eplist|download-btn|dl-btn|action-btn|dlink|download-button|post-button)\b/i', $attrs)) {
+            return true;
+        }
+
+        // 2. Button indicators in keywords
+        foreach (self::$button_indicators as $kw) {
+            if (strpos($combined, $kw) !== false) {
+                return true;
+            }
+        }
+
+        // 3. Known media / cloud download / stream providers
+        $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
+        if (!empty($host) && self::detect_provider($url) !== 'Download Server') {
+            return true;
+        }
+
+        // 4. Action text match
+        if (preg_match('/^(?:Episode\s*\d+|Ep\.?\s*\d+|Download|Watch|Stream|XCloud|FastDL|Mega|G-?Drive|1080p|720p|480p|4k)\b/i', trim($text))) {
+            return true;
+        }
+
+        return false;
+    }
         $current_url = $url;
         $visited = [];
         $html = '';
@@ -183,163 +375,6 @@ class SLEA_Extractor {
             return self::sanitize_page_title(ucwords(str_replace(['-', '_'], ' ', $cleaned)));
         }
         return 'Episode Download Links';
-    }
-
-    public static function extract_buttons_from_html($html, $base_url = '', $button_only = true) {
-        if (empty($html)) return [];
-
-        $items = [];
-        $seen = [];
-
-        // Match all <a> tags along with their match position
-        if (preg_match_all('/<a\s+([^>]*?)href=[\'"]([^\'"]+)[\'"]([^>]*)>([\s\S]*?)<\/a>/i', $html, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
-            foreach ($matches as $match) {
-                $full_tag     = $match[0][0];
-                $tag_offset   = $match[0][1];
-                $attrs_before = $match[1][0];
-                $href         = trim($match[2][0]);
-                $attrs_after  = $match[3][0];
-                $inner_html   = $match[4][0];
-
-                $all_attrs = $attrs_before . ' ' . $attrs_after;
-                $text = trim(strip_tags($inner_html));
-                $text = preg_replace('/\s+/', ' ', $text);
-
-                // Filter invalid links
-                if (empty($href) || preg_match('/^(?:javascript:|mailto:|tel:|#)/i', $href)) {
-                    continue;
-                }
-
-                $full_url = self::resolve_relative_url($href, $base_url);
-                if (empty($full_url) || in_array($full_url, $seen, true)) {
-                    continue;
-                }
-
-                // Check exclusions
-                $host = strtolower(parse_url($full_url, PHP_URL_HOST) ?: '');
-                $is_excluded = false;
-                foreach (self::$excluded_domains as $ex) {
-                    if (strpos($host, $ex) !== false) {
-                        $is_excluded = true;
-                        break;
-                    }
-                }
-                if ($is_excluded) continue;
-
-                // Inspect surrounding DOM (180 chars before <a) for episode names or numbers
-                $start_pos = max(0, $tag_offset - 180);
-                $preceding_chunk = substr($html, $start_pos, $tag_offset - $start_pos);
-
-                $episode_num = self::detect_episode($text);
-                $ep_label = '';
-                if (empty($episode_num)) {
-                    if (preg_match_all('/(?:Episode|Ep\.?|E)\s*(\d{1,3}(?:\s*-\s*\d{1,3})?)/i', $preceding_chunk, $ep_matches)) {
-                        $last_ep = end($ep_matches[1]);
-                        $ep_label = 'Episode ' . trim($last_ep);
-                        if (preg_match('/^(\d+)/', trim($last_ep), $num_m)) {
-                            $episode_num = intval($num_m[1]);
-                        }
-                    }
-                }
-
-                // Extract quality
-                $quality = self::detect_quality($text . ' ' . $all_attrs . ' ' . $full_url . ' ' . $preceding_chunk);
-
-                // Provider
-                $provider = self::detect_provider($full_url);
-
-                // Button score filter
-                $is_button = self::is_button_element($all_attrs, $text, $full_url) || ($provider !== 'Download Server');
-
-                if ($button_only && !$is_button && empty($quality) && empty($episode_num) && empty($ep_label)) {
-                    continue;
-                }
-
-                // Format button label nicely
-                $button_title = !empty($text) ? $text : 'Download Link';
-                if (!empty($ep_label) && stripos($button_title, 'episode') === false) {
-                    $button_title = $ep_label . ' - ' . $button_title;
-                }
-
-                $seen[] = $full_url;
-                $items[] = [
-                    'text'        => $button_title,
-                    'url'         => $full_url,
-                    'quality'     => $quality,
-                    'episode'     => $episode_num,
-                    'is_button'   => $is_button,
-                    'provider'    => $provider
-                ];
-            }
-        }
-
-        // Fallback: If strict button filtering returned 0 items on a valid episode page, collect all action links
-        if (empty($items) && !empty($html) && $button_only) {
-            return self::extract_buttons_from_html($html, $base_url, false);
-        }
-
-        // Sort items naturally if episode numbers exist
-        usort($items, function($a, $b) {
-            if (!empty($a['episode']) && !empty($b['episode'])) {
-                return intval($a['episode']) - intval($b['episode']);
-            }
-            return 0;
-        });
-
-        return $items;
-    }
-
-    private static function detect_quality($content) {
-        $content = strtolower($content);
-        if (strpos($content, '1080p') !== false || strpos($content, 'fhd') !== false) return '1080p';
-        if (strpos($content, '720p') !== false || strpos($content, 'hd') !== false) return '720p';
-        if (strpos($content, '480p') !== false || strpos($content, 'sd') !== false) return '480p';
-        if (strpos($content, '4k') !== false || strpos($content, '2160p') !== false) return '4K';
-        if (strpos($content, 'hevc') !== false) return 'HEVC';
-        return null;
-    }
-
-    private static function detect_episode($text) {
-        if (preg_match('/(?:Episode|Ep\.?|E)\s*(\d{1,3})/i', $text, $m)) {
-            return intval($m[1]);
-        }
-        return null;
-    }
-
-    private static function detect_provider($url) {
-        $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
-        if (strpos($host, 'xcloud') !== false) return 'XCloud';
-        if (strpos($host, 'drive.google') !== false) return 'Google Drive';
-        if (strpos($host, 'mega.nz') !== false || strpos($host, 'mega.io') !== false) return 'Mega';
-        if (strpos($host, 'gdtot') !== false) return 'GDTot';
-        if (strpos($host, 'filepress') !== false) return 'FilePress';
-        if (strpos($host, 'hubcloud') !== false) return 'HubCloud';
-        if (strpos($host, 'fastdl') !== false) return 'FastDL';
-        if (strpos($host, 'mediafire') !== false) return 'MediaFire';
-        if (strpos($host, 'filemoon') !== false) return 'FileMoon';
-        if (strpos($host, 'streamtape') !== false) return 'StreamTape';
-        if (strpos($host, 'dood') !== false) return 'DoodStream';
-        if (strpos($host, 'vidhide') !== false) return 'VidHide';
-        if (strpos($host, 'streamwish') !== false) return 'StreamWish';
-        if (strpos($host, 'terabox') !== false) return 'TeraBox';
-        if (strpos($host, 'katdrive') !== false) return 'KatDrive';
-        if (strpos($host, 'gdflix') !== false) return 'GDFlix';
-        if (strpos($host, 'blogspot') !== false) return 'Blogspot Server';
-        return 'Download Server';
-    }
-
-    private static function is_button_element($attrs, $text, $url) {
-        $combined = strtolower($attrs . ' ' . $text . ' ' . $url);
-        foreach (self::$button_indicators as $kw) {
-            if (strpos($combined, $kw) !== false) {
-                return true;
-            }
-        }
-        $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
-        if (!empty($host) && self::detect_provider($url) !== 'Download Server') {
-            return true;
-        }
-        return false;
     }
 
     private static function resolve_relative_url($url, $base) {

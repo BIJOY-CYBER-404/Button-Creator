@@ -197,7 +197,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     </div>
 
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-700 block">Button Page Link:</label>
+                        <label class="text-[11px] font-bold text-slate-700 block">Button Page Link (Public):</label>
                         <div class="flex items-center gap-2 bg-white rounded-xl p-2 border border-slate-300 shadow-2xs">
                             <input type="text" id="pageUrlOutput" readonly class="flex-1 px-2 py-1 font-mono text-xs sm:text-sm font-bold text-blue-700 bg-transparent outline-none select-all" />
                             <button type="button" onclick="copyResultLink()" class="px-3 py-1.5 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-bold cursor-pointer">
@@ -208,6 +208,20 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                             </a>
                             <a href="#" id="pageEditLink" class="px-3 py-1.5 rounded-lg bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#1f1f1f] text-xs font-bold inline-flex items-center gap-1">
                                 <span>Edit</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Final / Target Destination URL (Admin Only) -->
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-700 block">Target / Final Destination URL:</label>
+                        <div class="flex items-center gap-2 bg-white rounded-xl p-2 border border-slate-300 shadow-2xs">
+                            <input type="text" id="targetUrlOutput" readonly class="flex-1 px-2 py-1 font-mono text-xs text-slate-700 bg-transparent outline-none select-all truncate" />
+                            <button type="button" onclick="copyTargetLink()" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer">
+                                Copy Target
+                            </button>
+                            <a href="#" id="targetUrlOpenLink" target="_blank" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold inline-flex items-center gap-1">
+                                <span>Visit Target ↗</span>
                             </a>
                         </div>
                     </div>
@@ -378,10 +392,15 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 document.getElementById('pageOpenLink').href = data.data.view_url || pageUrl;
                 document.getElementById('pageEditLink').href = 'pages.php?edit=' + data.data.id;
 
+                const targetUrl = data.data.resolved_url || data.data.original_url || '';
+                document.getElementById('targetUrlOutput').value = targetUrl;
+                document.getElementById('targetUrlOpenLink').href = targetUrl || '#';
+
                 const summary = document.getElementById('extractedSummary');
                 summary.innerHTML = `
                     <div><strong>Page Title:</strong> ${data.data.title}</div>
-                    <div><strong>Extracted Buttons:</strong> ${data.data.button_count} episode links</div>
+                    <div><strong>Extracted Buttons:</strong> ${data.data.button_count} episode buttons</div>
+                    <div><strong>Final Destination:</strong> <a href="${targetUrl}" target="_blank" class="text-blue-600 hover:underline font-mono">${targetUrl}</a></div>
                     <div><strong>Access:</strong> Public (Non-Indexable)</div>
                 `;
 
@@ -419,6 +438,13 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             el.select();
             navigator.clipboard.writeText(el.value);
             showNotification('✓ Button Page Link copied to clipboard!', 'success');
+        }
+
+        function copyTargetLink() {
+            const el = document.getElementById('targetUrlOutput');
+            el.select();
+            navigator.clipboard.writeText(el.value);
+            showNotification('✓ Target Destination URL copied to clipboard!', 'success');
         }
     </script>
 </body>

@@ -1,15 +1,15 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "4.1.1",
+  "version": "4.1.2",
   "release_date": "2026-09-23",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "796687c54855a3a8cb2bb15ec5159450b5931f0f49c480f2dde4f820f6050996",
+  "checksum": "7665ea6dde44222f82ffe2db26f6053b84d0aef72955d3e36bdf8cb848ffabde",
   "release_notes": [
-    "Overhauled cPanel shortlink resolver with IPv4 enforcement and stream context fallback",
-    "Expanded episode button detection with surrounding DOM context and cloud hosting providers (XCloud, HubCloud, GDTot, FilePress, TeraBox, FastDL, etc.)",
-    "Fixed empty button list and destination mismatch on Blogspot episode pages",
-    "Enhanced safe.sohojgyan.com shortlink direct decoder and query string parser",
-    "Preserved unique randomized slugs (ep-xxxxxxxx) for every published page"
+    "Strict button filter: excluded headers, footers, navigation menus, social icons, sidebars, and plain text hyperlinks",
+    "Preserved only genuine button components, action tags, and verified media cloud download links",
+    "Added dedicated Final/Target Destination URL display with quick copy & preview in admin panel after generation",
+    "Enhanced DOM context parser for episode numbering and provider identification",
+    "Updated both cPanel distribution bundle and React admin dashboard"
   ]
 }
