@@ -57,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>One-Click Application Updater - <?php echo htmlspecialchars(APP_NAME); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -64,11 +65,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     fontFamily: {
                         sans: ['"Plus Jakarta Sans"', 'sans-serif'],
                         mono: ['"JetBrains Mono"', 'monospace']
+                    },
+                    animation: {
+                        'pulse-glow': 'pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'spin-slow': 'spin 4s linear infinite',
+                        'bounce-slow': 'bounceSlow 2s ease-in-out infinite',
+                        'shimmer': 'shimmer 2s infinite linear'
+                    },
+                    keyframes: {
+                        pulseGlow: {
+                            '0%, 100%': { transform: 'scale(1)', opacity: '0.8', filter: 'drop-shadow(0 0 10px rgba(11, 87, 208, 0.4))' },
+                            '50%': { transform: 'scale(1.08)', opacity: '1', filter: 'drop-shadow(0 0 25px rgba(11, 87, 208, 0.8))' }
+                        },
+                        bounceSlow: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-6px)' }
+                        },
+                        shimmer: {
+                            '0%': { backgroundPosition: '-200% 0' },
+                            '100%': { backgroundPosition: '200% 0' }
+                        }
                     }
                 }
             }
         }
     </script>
+    <style>
+        .progress-striped {
+            background-image: linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.2) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(255, 255, 255, 0.2) 50%,
+                rgba(255, 255, 255, 0.2) 75%,
+                transparent 75%,
+                transparent
+            );
+            background-size: 1.5rem 1.5rem;
+            animation: moveStripes 1s linear infinite;
+        }
+        @keyframes moveStripes {
+            from { background-position: 0 0; }
+            to { background-position: 1.5rem 0; }
+        }
+        .radar-wave {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid rgba(11, 87, 208, 0.4);
+            animation: radarPulse 2.5s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+        }
+        .radar-wave:nth-child(2) {
+            animation-delay: 0.8s;
+        }
+        .radar-wave:nth-child(3) {
+            animation-delay: 1.6s;
+        }
+        @keyframes radarPulse {
+            0% { width: 40px; height: 40px; opacity: 1; transform: scale(0.6); }
+            100% { width: 220px; height: 220px; opacity: 0; transform: scale(1.6); }
+        }
+    </style>
 </head>
 <body class="bg-[#f0f4f9] text-[#1f1f1f] font-sans min-h-screen pb-16 antialiased">
     <!-- Header Navigation -->
@@ -224,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
 
         <!-- Progress Tracker & Live Execution Console -->
-        <div id="progressSection" class="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm hidden space-y-6">
+        <div id="progressSection" class="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm hidden space-y-6 animate-fade-in">
             <div class="flex items-center justify-between border-b border-[#f1f3f4] pb-4">
                 <div class="flex items-center space-x-3">
                     <div id="spinnerGlobal" class="w-6 h-6 border-2 border-[#0052cc] border-t-transparent rounded-full animate-spin"></div>
@@ -233,9 +290,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="text-xs text-[#5f6368]" id="progressSub">Please keep this window open while the installation completes.</span>
                     </div>
                 </div>
-                <span id="currentStepBadge" class="px-3 py-1 text-xs font-bold rounded-full bg-[#e8f0fe] text-[#0052cc]">
-                    Step 1 / 10
-                </span>
+                <div class="flex items-center gap-2">
+                    <span id="progressPercentBadge" class="px-2.5 py-1 text-xs font-mono font-extrabold rounded-lg bg-[#0052cc] text-white shadow-xs">
+                        0%
+                    </span>
+                    <span id="currentStepBadge" class="px-3 py-1 text-xs font-bold rounded-full bg-[#e8f0fe] text-[#0052cc] border border-[#c2e7ff]">
+                        Step 1 / 10
+                    </span>
+                </div>
+            </div>
+
+            <!-- Animated Progress Bar Strip -->
+            <div class="space-y-1.5">
+                <div class="flex justify-between text-xs font-bold text-[#5f6368]">
+                    <span id="progressStepName">Initializing update pipeline...</span>
+                    <span id="progressPercentText" class="font-mono text-[#0052cc]">0%</span>
+                </div>
+                <div class="w-full h-3 bg-[#e8f0fe] rounded-full overflow-hidden p-0.5 border border-[#c2e7ff]">
+                    <div id="progressBarFill" class="h-full bg-gradient-to-r from-[#0052cc] via-[#0066ff] to-[#00c6ff] rounded-full progress-striped transition-all duration-500 ease-out" style="width: 0%;"></div>
+                </div>
             </div>
 
             <!-- Step Progress List -->
@@ -384,12 +457,111 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     </main>
 
+    <!-- Interactive Animated Remote Update Modal Overlay -->
+    <div id="updateModalOverlay" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
+        <div class="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden transform scale-95 transition-transform duration-300" id="updateModalCard">
+            <!-- Header Glow Background -->
+            <div class="h-32 bg-gradient-to-br from-[#0052cc] via-[#0066ff] to-[#00c6ff] relative flex items-center justify-center overflow-hidden">
+                <!-- Radar Waves -->
+                <div class="radar-wave"></div>
+                <div class="radar-wave"></div>
+                <div class="radar-wave"></div>
+
+                <div class="relative z-10 w-20 h-20 rounded-2xl bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-xl animate-pulse-glow">
+                    <svg id="modalIconSpin" class="w-10 h-10 animate-bounce-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                </div>
+
+                <div class="absolute top-3 right-3">
+                    <span id="modalVersionBadge" class="px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-white/20 text-white backdrop-blur-sm border border-white/30">
+                        v<?php echo htmlspecialchars($update_check['remote_version'] ?? $current_version); ?>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Body Content -->
+            <div class="p-6 sm:p-8 space-y-6">
+                <div class="text-center space-y-1.5">
+                    <h3 id="modalStatusTitle" class="text-xl font-black text-slate-900 tracking-tight">
+                        Installing Remote Update...
+                    </h3>
+                    <p id="modalStatusSub" class="text-xs sm:text-sm text-slate-500 font-medium">
+                        Downloading package, verifying integrity &amp; applying migrations.
+                    </p>
+                </div>
+
+                <!-- Animated Progress & Percentage -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold">
+                        <span id="modalCurrentStepLabel" class="text-[#0052cc] flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-[#0052cc] animate-ping"></span>
+                            <span>Step 1: Checking manifest...</span>
+                        </span>
+                        <span id="modalPercentDisplay" class="font-mono text-sm font-black text-[#0052cc]">
+                            0%
+                        </span>
+                    </div>
+
+                    <div class="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                        <div id="modalProgressBar" class="h-full bg-gradient-to-r from-[#0052cc] via-[#0066ff] to-[#00c6ff] rounded-full progress-striped transition-all duration-400 ease-out" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- Live Mini Step Indicators -->
+                <div class="grid grid-cols-5 gap-1.5 pt-1" id="miniStepDots">
+                    <div class="h-1.5 rounded-full bg-[#0052cc] transition-all" id="dot-1"></div>
+                    <div class="h-1.5 rounded-full bg-slate-200 transition-all" id="dot-2"></div>
+                    <div class="h-1.5 rounded-full bg-slate-200 transition-all" id="dot-3"></div>
+                    <div class="h-1.5 rounded-full bg-slate-200 transition-all" id="dot-4"></div>
+                    <div class="h-1.5 rounded-full bg-slate-200 transition-all" id="dot-5"></div>
+                </div>
+
+                <!-- Terminal Mini Line -->
+                <div class="bg-slate-900 rounded-xl p-3 text-slate-200 font-mono text-[11px] flex items-center gap-2 overflow-hidden border border-slate-800 shadow-inner">
+                    <span class="text-emerald-400 font-bold shrink-0">$</span>
+                    <span id="modalLiveLog" class="truncate text-slate-300">Initializing zero-downtime update engine...</span>
+                </div>
+
+                <!-- Caution text -->
+                <p class="text-[11px] text-center text-slate-400 font-medium">
+                    ⚡ Please do not close or refresh this tab until completion.
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- Top Right Notification Toast Container -->
     <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-full"></div>
 
     <script>
         function escapeToastHtml(str) {
             return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function triggerConfettiBlast() {
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 120,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ['#0052cc', '#00c6ff', '#137333', '#fbbc04', '#ea4335']
+                });
+                setTimeout(() => {
+                    confetti({
+                        particleCount: 80,
+                        angle: 60,
+                        spread: 55,
+                        origin: { x: 0 }
+                    });
+                    confetti({
+                        particleCount: 80,
+                        angle: 120,
+                        spread: 55,
+                        origin: { x: 1 }
+                    });
+                }, 300);
+            }
         }
 
         function showToast(msg, type = 'success') {
@@ -504,11 +676,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const progSec = document.getElementById('progressSection');
             const term = document.getElementById('terminalLog');
             const btnUpdate = document.getElementById('btnStartUpdate');
+            const modalOverlay = document.getElementById('updateModalOverlay');
+            const modalCard = document.getElementById('updateModalCard');
             
+            // Show page progress section
             progSec.classList.remove('hidden');
             if (btnUpdate) btnUpdate.disabled = true;
 
-            term.innerHTML = '<div class="text-[#00ffff]">[START] Launching One-Click Application Update...</div>';
+            // Show Animated Modal Overlay
+            if (modalOverlay) {
+                modalOverlay.classList.remove('hidden');
+                requestAnimationFrame(() => {
+                    modalOverlay.classList.remove('opacity-0');
+                    modalCard.classList.remove('scale-95');
+                    modalCard.classList.add('scale-100');
+                });
+            }
+
+            term.innerHTML = '<div class="text-[#0052cc] font-bold">[START] Launching One-Click Application Update...</div>';
 
             const steps = [
                 'Checking update manifest...',
@@ -527,21 +712,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             const interval = setInterval(() => {
                 if (stepIdx <= 10) {
+                    const pct = Math.round((stepIdx / 10) * 100);
+                    
+                    // Update Page Progress Bar
+                    document.getElementById('progressBarFill').style.width = pct + '%';
+                    document.getElementById('progressPercentBadge').innerText = pct + '%';
+                    document.getElementById('progressPercentText').innerText = pct + '%';
+                    document.getElementById('progressStepName').innerText = steps[stepIdx - 1];
+
+                    // Update Modal Overlay Elements
+                    const modalProgressBar = document.getElementById('modalProgressBar');
+                    if (modalProgressBar) modalProgressBar.style.width = pct + '%';
+
+                    const modalPercentDisplay = document.getElementById('modalPercentDisplay');
+                    if (modalPercentDisplay) modalPercentDisplay.innerText = pct + '%';
+
+                    const modalCurrentStepLabel = document.getElementById('modalCurrentStepLabel');
+                    if (modalCurrentStepLabel) {
+                        modalCurrentStepLabel.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#0052cc] animate-ping"></span><span>Step ${stepIdx}: ${steps[stepIdx - 1]}</span>`;
+                    }
+
+                    const modalLiveLog = document.getElementById('modalLiveLog');
+                    if (modalLiveLog) modalLiveLog.innerText = `[Step ${stepIdx}/10] ${steps[stepIdx - 1]}`;
+
+                    // Update mini dots
+                    const dotIndex = Math.ceil(stepIdx / 2);
+                    for (let d = 1; d <= 5; d++) {
+                        const dot = document.getElementById('dot-' + d);
+                        if (dot) {
+                            if (d <= dotIndex) {
+                                dot.className = 'h-1.5 rounded-full bg-[#0052cc] shadow-xs';
+                            } else {
+                                dot.className = 'h-1.5 rounded-full bg-slate-200';
+                            }
+                        }
+                    }
+
+                    // Update Step Cards in Grid
                     const el = document.getElementById('step-' + stepIdx);
                     if (el) {
-                        el.className = 'p-3 rounded-xl border border-[#0052cc] bg-[#e8f0fe] flex items-center justify-between font-bold text-[#0052cc]';
-                        el.querySelector('.status-icon').innerText = 'In Progress...';
+                        el.className = 'p-3 rounded-xl border-2 border-[#0052cc] bg-[#e8f0fe] flex items-center justify-between font-bold text-[#0052cc] shadow-md shadow-blue-500/10 scale-[1.01] transition-all';
+                        el.querySelector('.status-icon').innerHTML = '<span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#0052cc] animate-ping"></span>Running</span>';
                     }
                     if (stepIdx > 1) {
                         const prevEl = document.getElementById('step-' + (stepIdx - 1));
                         if (prevEl) {
-                            prevEl.className = 'p-3 rounded-xl border border-[#ceedd5] bg-[#e6f4ea] flex items-center justify-between font-bold text-[#137333]';
-                            prevEl.querySelector('.status-icon').innerText = '[OK] Done';
+                            prevEl.className = 'p-3 rounded-xl border border-[#ceedd5] bg-[#e6f4ea] flex items-center justify-between font-semibold text-[#137333] transition-all';
+                            prevEl.querySelector('.status-icon').innerText = '✓ Done';
                         }
                     }
 
                     document.getElementById('currentStepBadge').innerText = 'Step ' + stepIdx + ' / 10';
-                    term.innerHTML += '<div class="text-[#80d8ff]">[STEP ' + stepIdx + '] ' + steps[stepIdx - 1] + '</div>';
+                    term.innerHTML += '<div class="text-[#0052cc]">[STEP ' + stepIdx + '] ' + steps[stepIdx - 1] + '</div>';
                     term.scrollTop = term.scrollHeight;
 
                     stepIdx++;
@@ -558,27 +780,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .then(res => res.json())
             .then(data => {
                 clearInterval(interval);
+                
+                // Set 100%
+                document.getElementById('progressBarFill').style.width = '100%';
+                document.getElementById('progressPercentBadge').innerText = '100%';
+                document.getElementById('progressPercentText').innerText = '100%';
+
+                const modalProgressBar = document.getElementById('modalProgressBar');
+                if (modalProgressBar) modalProgressBar.style.width = '100%';
+                const modalPercentDisplay = document.getElementById('modalPercentDisplay');
+                if (modalPercentDisplay) modalPercentDisplay.innerText = '100%';
+
                 // Mark all steps done
                 for (let i = 1; i <= 10; i++) {
                     const el = document.getElementById('step-' + i);
                     if (el) {
-                        el.className = 'p-3 rounded-xl border border-[#ceedd5] bg-[#e6f4ea] flex items-center justify-between font-bold text-[#137333]';
-                        el.querySelector('.status-icon').innerText = '[OK] Done';
+                        el.className = 'p-3 rounded-xl border border-[#ceedd5] bg-[#e6f4ea] flex items-center justify-between font-semibold text-[#137333]';
+                        el.querySelector('.status-icon').innerText = '✓ Done';
                     }
                 }
 
                 if (data.success) {
-                    term.innerHTML += '<div class="text-[#00ff00] font-bold">[SUCCESS] ' + data.message + '</div>';
+                    term.innerHTML += '<div class="text-[#137333] font-bold">[SUCCESS] ' + data.message + '</div>';
                     showToast(data.message, 'success');
-                    setTimeout(() => window.location.reload(), 2000);
+
+                    // Trigger Confetti Blast Animation!
+                    triggerConfettiBlast();
+
+                    // Update modal UI with celebration state
+                    const modalStatusTitle = document.getElementById('modalStatusTitle');
+                    if (modalStatusTitle) {
+                        modalStatusTitle.className = 'text-xl font-black text-emerald-600 tracking-tight flex items-center justify-center gap-2';
+                        modalStatusTitle.innerHTML = '<span>Update Installed Successfully!</span> 🎉';
+                    }
+                    const modalStatusSub = document.getElementById('modalStatusSub');
+                    if (modalStatusSub) {
+                        modalStatusSub.innerText = 'System is ready. Reloading dashboard in 2 seconds...';
+                    }
+                    const modalCurrentStepLabel = document.getElementById('modalCurrentStepLabel');
+                    if (modalCurrentStepLabel) {
+                        modalCurrentStepLabel.innerHTML = '<span class="text-emerald-600 font-bold">✓ All 10 verification steps passed</span>';
+                    }
+                    const modalLiveLog = document.getElementById('modalLiveLog');
+                    if (modalLiveLog) {
+                        modalLiveLog.innerHTML = '<span class="text-emerald-400 font-bold">[READY] Version updated successfully.</span>';
+                    }
+
+                    setTimeout(() => window.location.reload(), 2400);
                 } else {
-                    term.innerHTML += '<div class="text-[#ff5252] font-bold">[FAILED] ' + data.error + '</div>';
+                    term.innerHTML += '<div class="text-[#c5221f] font-bold">[FAILED] ' + data.error + '</div>';
                     showToast(data.error, 'error');
+
+                    const modalStatusTitle = document.getElementById('modalStatusTitle');
+                    if (modalStatusTitle) {
+                        modalStatusTitle.className = 'text-xl font-black text-rose-600 tracking-tight';
+                        modalStatusTitle.innerText = 'Update Failed';
+                    }
+                    const modalStatusSub = document.getElementById('modalStatusSub');
+                    if (modalStatusSub) {
+                        modalStatusSub.innerText = data.error || 'The system was safely rolled back.';
+                    }
                 }
             })
             .catch(err => {
                 clearInterval(interval);
-                term.innerHTML += '<div class="text-[#ff5252] font-bold">[NETWORK ERROR] ' + err.message + '</div>';
+                term.innerHTML += '<div class="text-[#c5221f] font-bold">[NETWORK ERROR] ' + err.message + '</div>';
                 showToast('Update execution error: ' + err.message, 'error');
             });
         }

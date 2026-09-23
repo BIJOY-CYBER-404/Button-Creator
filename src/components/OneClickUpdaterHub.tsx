@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import confetti from "canvas-confetti";
 import {
   RefreshCw,
   DownloadCloud,
@@ -16,7 +17,8 @@ import {
   ArrowUpRight,
   Database,
   Lock,
-  Layers
+  Layers,
+  Zap
 } from "lucide-react";
 
 interface OneClickUpdaterHubProps {
@@ -182,14 +184,14 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
     setCurrentStep(1);
     setLogs([`[${new Date().toLocaleTimeString()}] Starting One-Click Application Update Engine...`]);
 
-    // Simulate or execute step-by-step progress
+    // Step-by-step atomic progress with animations
     for (let step = 1; step <= 10; step++) {
       setCurrentStep(step);
       setLogs((prev) => [
         ...prev,
         `[${new Date().toLocaleTimeString()}] Step ${step}/10: ${updateSteps[step - 1].label}`
       ]);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 550));
     }
 
     try {
@@ -203,6 +205,35 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
     } catch {
       // preview fallback
     }
+
+    // Trigger Confetti Blast Animation!
+    try {
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#0052cc', '#00c6ff', '#137333', '#fbbc04', '#ea4335']
+      });
+      setTimeout(() => {
+        confetti({
+          particleCount: 80,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0 }
+        });
+        confetti({
+          particleCount: 80,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1 }
+        });
+      }, 300);
+    } catch {
+      // ignore
+    }
+
+    // Hold celebration state for a moment
+    await new Promise((resolve) => setTimeout(resolve, 1800));
 
     setCheckInfo((prev) => ({
       ...prev,
@@ -344,7 +375,8 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
           <div className="flex items-center space-x-2">
             <button
               onClick={handleSimulateRollback}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold text-[#c5221f] bg-[#fce8e6] border border-[#f8c4b8] hover:bg-[#fad2ca] transition flex items-center space-x-1 cursor-pointer"
+              disabled={updating}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-[#c5221f] bg-[#fce8e6] border border-[#f8c4b8] hover:bg-[#fad2ca] transition flex items-center space-x-1 cursor-pointer disabled:opacity-50"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Test Rollback Simulation</span>
@@ -352,26 +384,50 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
           </div>
         </div>
 
+        {/* Animated Progress Bar Strip */}
+        <div className="space-y-1.5 bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb]">
+          <div className="flex justify-between items-center text-xs font-bold">
+            <span className="text-[#3c4043] flex items-center gap-1.5">
+              {updating && <span className="w-2 h-2 rounded-full bg-[#0052cc] animate-ping" />}
+              {updating ? `Executing: ${updateSteps[Math.max(0, currentStep - 1)]?.label}` : "Ready to update"}
+            </span>
+            <span className="font-mono text-[#0052cc] bg-[#e8f0fe] px-2.5 py-0.5 rounded-full border border-[#c2e7ff]">
+              {updating ? Math.round((currentStep / 10) * 100) : (currentStep === 10 ? 100 : 0)}%
+            </span>
+          </div>
+          <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden p-0.5">
+            <div
+              className="h-full bg-gradient-to-r from-[#0052cc] via-[#0066ff] to-[#00c6ff] rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${updating ? Math.round((currentStep / 10) * 100) : (currentStep === 10 ? 100 : 0)}%` }}
+            />
+          </div>
+        </div>
+
         {/* 10 Step Tracker Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
           {updateSteps.map((s) => {
-            const isDone = currentStep > s.num || (currentStep === 0 && !updating);
+            const isDone = currentStep > s.num || (!updating && currentStep === 10);
             const isCurrent = currentStep === s.num && updating;
 
             return (
               <div
                 key={s.num}
-                className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${
+                className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
                   isCurrent
-                    ? "border-[#0052cc] bg-[#e8f0fe] text-[#0052cc] font-bold"
+                    ? "border-2 border-[#0052cc] bg-[#e8f0fe] text-[#0052cc] font-bold shadow-md shadow-blue-500/10 scale-[1.01]"
                     : isDone
                     ? "border-[#ceedd5] bg-[#e6f4ea] text-[#137333] font-medium"
                     : "border-[#dadce0] bg-[#f8fafd] text-[#5f6368]"
                 }`}
               >
                 <span>{s.num}. {s.label}</span>
-                <span className="font-mono text-[11px]">
-                  {isCurrent ? "In Progress..." : isDone ? "[OK] Done" : "Pending"}
+                <span className="font-mono text-[11px] flex items-center gap-1">
+                  {isCurrent ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#0052cc] animate-ping" />
+                      <span>Running</span>
+                    </>
+                  ) : isDone ? "✓ Done" : "Pending"}
                 </span>
               </div>
             );
@@ -390,6 +446,85 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
           </div>
         </div>
       </div>
+
+      {/* Full-Screen Animated Remote Update Modal Overlay */}
+      {updating && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden transform scale-100 transition-all duration-300">
+            {/* Header Glow Background with Radar effect */}
+            <div className="h-32 bg-gradient-to-br from-[#0052cc] via-[#0066ff] to-[#00c6ff] relative flex items-center justify-center overflow-hidden">
+              <div className="absolute w-40 h-40 rounded-full border border-white/20 animate-ping opacity-25" />
+              <div className="absolute w-28 h-28 rounded-full border border-white/30 animate-pulse opacity-40" />
+
+              <div className="relative z-10 w-20 h-20 rounded-2xl bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-xl">
+                <DownloadCloud className="w-10 h-10 animate-bounce" />
+              </div>
+
+              <div className="absolute top-3 right-3">
+                <span className="px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-white/20 text-white backdrop-blur-sm border border-white/30">
+                  v{checkInfo.remote_version}
+                </span>
+              </div>
+            </div>
+
+            {/* Body Content */}
+            <div className="p-6 sm:p-8 space-y-6">
+              <div className="text-center space-y-1.5">
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                  Installing Remote Update...
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                  Downloading release package, verifying integrity &amp; deploying files.
+                </p>
+              </div>
+
+              {/* Progress & Percentage */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-[#0052cc] flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#0052cc] animate-ping" />
+                    <span>Step {currentStep}: {updateSteps[Math.max(0, currentStep - 1)]?.label}</span>
+                  </span>
+                  <span className="font-mono text-sm font-black text-[#0052cc]">
+                    {Math.round((currentStep / 10) * 100)}%
+                  </span>
+                </div>
+
+                <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                  <div
+                    className="h-full bg-gradient-to-r from-[#0052cc] via-[#0066ff] to-[#00c6ff] rounded-full transition-all duration-400 ease-out"
+                    style={{ width: `${Math.round((currentStep / 10) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Live Mini Step Dots */}
+              <div className="grid grid-cols-5 gap-1.5 pt-1">
+                {[1, 2, 3, 4, 5].map((d) => (
+                  <div
+                    key={d}
+                    className={`h-1.5 rounded-full transition-all ${
+                      d <= Math.ceil(currentStep / 2) ? "bg-[#0052cc] shadow-xs" : "bg-slate-200"
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* Terminal Mini Line */}
+              <div className="bg-slate-900 rounded-xl p-3 text-slate-200 font-mono text-[11px] flex items-center gap-2 overflow-hidden border border-slate-800 shadow-inner">
+                <span className="text-emerald-400 font-bold shrink-0">$</span>
+                <span className="truncate text-slate-300">
+                  [Step {currentStep}/10] {updateSteps[Math.max(0, currentStep - 1)]?.label}
+                </span>
+              </div>
+
+              <p className="text-[11px] text-center text-slate-400 font-medium">
+                ⚡ Please do not close or refresh this tab until completion.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Updater Configuration */}
       <div className="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm space-y-6">
