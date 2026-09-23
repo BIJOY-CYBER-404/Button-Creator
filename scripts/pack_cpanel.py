@@ -77,7 +77,8 @@ def main():
         shutil.copy2(primary_zip, mirror)
         print(f"[*] Mirrored bundle to: {mirror}")
 
-    print(f"[✓] Deployment bundle ready! Version: v-4.0.0 | SHA256: {checksum[:12]}...")
+    ver = manifest.get("version", "4.1.0") if "manifest" in locals() else "4.1.0"
+    print(f"[✓] Deployment bundle ready! Version: v-{ver} | SHA256: {checksum[:12]}...")
 
 if __name__ == "__main__":
     main()

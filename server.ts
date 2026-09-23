@@ -287,14 +287,20 @@ async function startServer() {
             is_button: true
           }));
 
-          // Derive slug
-          let slug = `ep-${Math.random().toString(36).substring(2, 8)}`;
-          const blogspotMatch = finalUrl.match(/\/p\/([a-zA-Z0-9_-]+)\.html/i);
-          if (blogspotMatch) {
-            slug = blogspotMatch[1];
-          }
+          // Generate unique randomized slug for every page
+          const existingPages = getStoredPages();
+          const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+          let slug = "";
+          do {
+            let rand = "";
+            for (let i = 0; i < 8; i++) {
+              rand += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            slug = `ep-${rand}`;
+          } while (existingPages.some((p) => p.slug === slug));
 
           // Derive title
+          const blogspotMatch = finalUrl.match(/\/p\/([a-zA-Z0-9_-]+)\.html/i);
           let pageTitle = title_override || (parsed as any).title || "Episode Download Links";
           if (!title_override && !(parsed as any).title && blogspotMatch) {
             const cleanSlug = blogspotMatch[1].replace(/[-_]+/g, " ");
@@ -316,13 +322,7 @@ async function startServer() {
           };
 
           const pages = getStoredPages();
-          // Replace if exists with same slug, otherwise add
-          const existingIdx = pages.findIndex((p) => p.slug === slug);
-          if (existingIdx >= 0) {
-            pages[existingIdx] = newPage;
-          } else {
-            pages.unshift(newPage);
-          }
+          pages.unshift(newPage);
           saveStoredPages(pages);
 
           const host = req.get("host") || "localhost:3000";

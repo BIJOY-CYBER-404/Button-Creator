@@ -98,27 +98,43 @@ class SLEA_Resolver {
     /**
      * Creates a temporary cookie file in a safe location respecting cPanel open_basedir
      */
-    public static function get_temp_cookie_file() {
-        $dirs = [
-            __DIR__ . '/../cache',
-            __DIR__ . '/../temp',
-            sys_get_temp_dir()
-        ];
-        foreach ($dirs as $dir) {
-            if (!is_dir($dir)) {
-                @mkdir($dir, 0755, true);
-            }
-            if (is_dir($dir) && is_writable($dir)) {
-                $file = @tempnam($dir, 'slea_ck_');
-                if ($file) return $file;
-            }
+    public static function get_temp_cookie_file($prefix = 'ck') {
+        $cookie_dir = null;
+        if (defined('DATA_DIR') && is_dir(DATA_DIR)) {
+            $cookie_dir = DATA_DIR . '/cookies';
+        } else {
+            $cookie_dir = dirname(__DIR__) . '/data/cookies';
         }
-        return @tempnam(sys_get_temp_dir(), 'slea_ck_') ?: sys_get_temp_dir() . '/slea_' . uniqid();
+
+        if (!is_dir($cookie_dir)) {
+            @mkdir($cookie_dir, 0755, true);
+        }
+
+        if (is_dir($cookie_dir) && is_writable($cookie_dir)) {
+            $f = $cookie_dir . '/slea_' . $prefix . '_' . uniqid() . '.tmp';
+            @touch($f);
+            return $f;
+        }
+
+        $fallback_dir = dirname(__DIR__) . '/cache';
+        if (!is_dir($fallback_dir)) {
+            @mkdir($fallback_dir, 0755, true);
+        }
+        if (is_dir($fallback_dir) && is_writable($fallback_dir)) {
+            $f = $fallback_dir . '/slea_' . $prefix . '_' . uniqid() . '.tmp';
+            @touch($f);
+            return $f;
+        }
+
+        return @tempnam(sys_get_temp_dir(), 'slea_') ?: (sys_get_temp_dir() . '/slea_' . uniqid());
     }
 
     /**
      * Specialized direct resolver for safe.sohojgyan.com shortlinks
-     * e.g. https://safe.sohojgyan.com/JX6N5o or ?code=JX6N5o
+     * Supports formats:
+     * - https://safe.sohojgyan.com/r03N3f
+     * - https://safe.sohojgyan.com/JX6N5o
+     * - https://sohojgyan.com/.../?code=r03N3f
      * Calls the official JSON decode endpoint: https://safe.sohojgyan.com/api/decode/{code}
      */
     public static function resolve_safe_sohojgyan($url) {
@@ -128,16 +144,59 @@ class SLEA_Resolver {
 
         $code = '';
         if (preg_match('#safe\.sohojgyan\.com/([a-zA-Z0-9_-]+)#i', $url, $m)) {
-            $code = $m[1];
-        } elseif (preg_match('#[?&]code=([a-zA-Z0-9_-]+)#i', $url, $m)) {
-            $code = $m[1];
+            $candidate = trim($m[1]);
+            if ($candidate !== 'api' && $candidate !== 'decode') {
+                $code = $candidate;
+            }
+        }
+        if (empty($code) && preg_match('#[?&]code=([a-zA-Z0-9_-]+)#i', $url, $m)) {
+            $code = trim($m[1]);
+        }
+        if (empty($code) && preg_match('#/(?:r|s|d|c)/([a-zA-Z0-9_-]+)#i', $url, $m)) {
+            $code = trim($m[1]);
         }
 
         if (!empty($code) && strlen($code) >= 3) {
             $api_url = "https://safe.sohojgyan.com/api/decode/" . urlencode($code);
-            $res = self::fetch_url_curl($api_url, 6);
-            if (!empty($res['body'])) {
-                $data = json_decode(trim($res['body']), true);
+            $raw_json = '';
+
+            // 1. Try cURL with explicit Accept and Referer headers
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $api_url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_USERAGENT, self::$user_agent);
+            curl_setopt($ch, CURLOPT_REFERER, 'https://sohojgyan.com/choose-the-right-web-hosting/');
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Accept: application/json, text/plain, */*',
+                'Origin: https://sohojgyan.com'
+            ]);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_ENCODING, '');
+            $raw_json = curl_exec($ch);
+            curl_close($ch);
+
+            // 2. Stream context fallback if cURL returned empty or failed
+            if (empty($raw_json)) {
+                $context = stream_context_create([
+                    'http' => [
+                        'method' => 'GET',
+                        'header' => "Accept: application/json, text/plain, */*\r\nReferer: https://sohojgyan.com/choose-the-right-web-hosting/\r\nUser-Agent: " . self::$user_agent . "\r\n",
+                        'timeout' => 12,
+                        'follow_location' => 1
+                    ],
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false
+                    ]
+                ]);
+                $raw_json = @file_get_contents($api_url, false, $context);
+            }
+
+            if (!empty($raw_json)) {
+                $data = json_decode(trim($raw_json), true);
                 if (!empty($data['success']) && !empty($data['data']['original_url'])) {
                     $orig = trim($data['data']['original_url']);
                     if (!empty($orig) && filter_var($orig, FILTER_VALIDATE_URL)) {
@@ -287,16 +346,22 @@ class SLEA_Resolver {
             ];
         }
 
-        // Fast Check 1: Safe SohojGyan direct format
-        if (stripos($initial_url, 'safe.sohojgyan') !== false) {
+        // Fast Check 1: Safe SohojGyan direct format or any code parameter (e.g. https://safe.sohojgyan.com/r03N3f)
+        if (stripos($initial_url, 'safe.sohojgyan') !== false ||
+            (stripos($initial_url, 'sohojgyan') !== false && stripos($initial_url, 'code=') !== false) ||
+            preg_match('#[?&]code=([a-zA-Z0-9_-]+)#i', $initial_url)) {
             $safe_direct = self::resolve_safe_sohojgyan($initial_url);
-            if (!empty($safe_direct) && self::is_target_destination($safe_direct)) {
+            if (!empty($safe_direct)) {
+                list($dest_url, $fetched_html) = SLEA_Extractor::fetch_page($safe_direct);
+                $final_target = !empty($dest_url) ? $dest_url : $safe_direct;
+                $is_target = self::is_target_destination($final_target) || self::is_target_destination($safe_direct);
+
                 return [
                     'original'                   => $initial_url,
-                    'final'                      => $safe_direct,
+                    'final'                      => $final_target,
                     'redirects'                  => 1,
                     'attempts'                   => 1,
-                    'target_destination_verified'=> true,
+                    'target_destination_verified'=> $is_target,
                     'chain'                      => [
                         [
                             'step'   => 1,
@@ -306,12 +371,12 @@ class SLEA_Resolver {
                         ],
                         [
                             'step'   => 2,
-                            'url'    => $safe_direct,
+                            'url'    => $final_target,
                             'status' => 200,
                             'type'   => 'Target Destination (Blogspot Episode Page)'
                         ]
                     ],
-                    'final_html'                 => ''
+                    'final_html'                 => $fetched_html ?: ''
                 ];
             }
         }
@@ -415,7 +480,7 @@ class SLEA_Resolver {
         $current = self::normalize_url($initial_url);
         $final_html = '';
 
-        $cookie_file = tempnam(sys_get_temp_dir(), 'slea_chain_');
+        $cookie_file = self::get_temp_cookie_file('chain');
 
         while (count($chain) < $max_hops) {
             if (empty($current) || in_array($current, $visited, true)) {
@@ -432,6 +497,31 @@ class SLEA_Resolver {
                     'type'   => 'Target Destination (Blogspot Episode Page)'
                 ];
                 break;
+            }
+
+            // Check if current is safe.sohojgyan or has code= parameter
+            if (stripos($current, 'safe.sohojgyan') !== false || (stripos($current, 'sohojgyan') !== false && stripos($current, 'code=') !== false)) {
+                $decoded = self::resolve_safe_sohojgyan($current);
+                if (!empty($decoded)) {
+                    $chain[] = [
+                        'step'     => count($chain) + 1,
+                        'url'      => $current,
+                        'status'   => 302,
+                        'type'     => 'Safe SohojGyan Gateway Decoded',
+                        'next_url' => $decoded
+                    ];
+                    $current = $decoded;
+                    if (self::is_target_destination($current)) {
+                        $chain[] = [
+                            'step'   => count($chain) + 1,
+                            'url'    => $current,
+                            'status' => 200,
+                            'type'   => 'Target Destination (Blogspot Episode Page)'
+                        ];
+                        break;
+                    }
+                    continue;
+                }
             }
 
             // Check if current is go.sohojgyan.com gateway: execute bypass
@@ -783,6 +873,19 @@ class SLEA_Resolver {
             $cand = self::normalize_url($ewm[1], $base_url);
             if (stripos($cand, 'mydriveverse') === false && $cand !== $base_url) {
                 return $cand;
+            }
+        }
+
+        // 4. Look for SohojGyan decode API or safelink_code embedded in JavaScript
+        if (stripos($html, 'safe.sohojgyan') !== false || stripos($html, 'safelink_code') !== false) {
+            if (preg_match('#safe\.sohojgyan\.com/api/decode/([a-zA-Z0-9_-]+)#i', $html, $scm) ||
+                preg_match('#safelink_code[\'"]?\s*,\s*[\'"]([a-zA-Z0-9_-]+)#i', $html, $scm) ||
+                preg_match('#(?:code|safelink_code)\s*=\s*[\'"]([a-zA-Z0-9_-]{4,30})[\'"]#i', $html, $scm)) {
+                $code = trim($scm[1]);
+                $decoded = self::resolve_safe_sohojgyan("https://safe.sohojgyan.com/{$code}");
+                if (!empty($decoded)) {
+                    return $decoded;
+                }
             }
         }
 

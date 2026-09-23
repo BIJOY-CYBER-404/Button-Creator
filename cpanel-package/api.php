@@ -83,13 +83,13 @@ try {
             // Sanitize title: if page title contains "DramaVerse 2", "mydverse", "mydverse 2" replace with "Movie Hub HQ"
             $page_title = SLEA_Extractor::sanitize_page_title($page_title);
 
-            // Derive Slug
-            $slug_candidate = '';
-            if (preg_match('/\/p\/([a-zA-Z0-9_-]+)\.html/i', $resolved_dest, $sm)) {
-                $slug_candidate = $sm[1];
-            } else {
-                $slug_candidate = 'ep-' . substr(md5($input_url . time()), 0, 8);
+            // Generate different randomized slug for every page
+            $chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            $rand_str = '';
+            for ($i = 0; $i < 8; $i++) {
+                $rand_str .= $chars[random_int(0, strlen($chars) - 1)];
             }
+            $slug_candidate = 'ep-' . $rand_str;
 
             // 4. Save Page to Datastore
             $saved_page = SLEA_Datastore::save_page([

@@ -75,7 +75,16 @@ class SLEA_Datastore {
         $buttons_json = json_encode($buttons, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
         // Sanitize and derive slug
-        $raw_slug = !empty($page_data['slug']) ? $page_data['slug'] : 'ep-' . substr(md5(uniqid()), 0, 8);
+        if (empty($page_data['slug'])) {
+            $chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            $rand_str = '';
+            for ($i = 0; $i < 8; $i++) {
+                $rand_str .= $chars[random_int(0, strlen($chars) - 1)];
+            }
+            $raw_slug = 'ep-' . $rand_str;
+        } else {
+            $raw_slug = $page_data['slug'];
+        }
         $slug = self::sanitize_slug($raw_slug);
 
         $id = !empty($page_data['id']) ? intval($page_data['id']) : 0;

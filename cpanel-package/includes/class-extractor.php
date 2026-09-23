@@ -16,24 +16,89 @@ class SLEA_Extractor {
         'google.com/search', 'policies.google.com', 'schema.org', 'w3.org'
     ];
 
-    public static function fetch_page($url, $timeout = 10) {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_MAXREDIRS, 8);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_ENCODING, ''); // Auto decode gzip/br/deflate for 5x faster transfer
+    public static function fetch_page($url, $timeout = 12, $max_redirects = 5) {
+        $current_url = $url;
+        $visited = [];
+        $html = '';
 
-        $html = curl_exec($ch);
-        $final_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $url;
-        curl_close($ch);
+        for ($i = 0; $i < $max_redirects; $i++) {
+            if (empty($current_url) || in_array($current_url, $visited, true)) {
+                break;
+            }
+            $visited[] = $current_url;
 
-        return [$final_url, $html ?: ''];
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $current_url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            $open_basedir = ini_get('open_basedir');
+            if (empty($open_basedir)) {
+                @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                @curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+            } else {
+                @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+            }
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_ENCODING, ''); // Auto decode gzip/deflate
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language: en-US,en;q=0.9'
+            ]);
+
+            $raw = curl_exec($ch);
+            $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $effective_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $current_url;
+            curl_close($ch);
+
+            if ($raw !== false && strlen($raw) > 0) {
+                $headers = substr($raw, 0, $header_size);
+                $body = substr($raw, $header_size);
+                $html = $body;
+
+                if (in_array($status, [301, 302, 303, 307, 308])) {
+                    if (preg_match('/^Location:\s*([^\r\n]+)/mi', $headers, $m)) {
+                        $next_url = trim($m[1]);
+                        if (strpos($next_url, '//') === 0) {
+                            $next_url = 'https:' . $next_url;
+                        } elseif (strpos($next_url, '/') === 0) {
+                            $parsed = parse_url($current_url);
+                            $next_url = ($parsed['scheme'] ?? 'https') . '://' . ($parsed['host'] ?? '') . $next_url;
+                        }
+                        $current_url = $next_url;
+                        continue;
+                    }
+                }
+                $current_url = $effective_url;
+                break;
+            } else {
+                // Stream context fallback if curl failed
+                $context = stream_context_create([
+                    'http' => [
+                        'method' => 'GET',
+                        'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n",
+                        'timeout' => $timeout,
+                        'follow_location' => 1,
+                        'max_redirects' => 5
+                    ],
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false
+                    ]
+                ]);
+                $fallback = @file_get_contents($current_url, false, $context);
+                if (!empty($fallback)) {
+                    $html = $fallback;
+                }
+                break;
+            }
+        }
+
+        return [$current_url, $html ?: ''];
     }
 
     public static function extract_page_title($html, $url = '') {
