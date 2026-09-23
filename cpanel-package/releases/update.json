@@ -1,15 +1,16 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "4.1.2",
+  "version": "4.2.0",
   "release_date": "2026-09-23",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "546714e05eaeeab8a0123bc6126b3dc7bbccd6df8eb1d24c8e1935c3c5a62aa8",
+  "checksum": "c179ba527b0f49602907001c26da9256d9cd3b328f8bbd26554097ad4550f015",
   "release_notes": [
-    "Strict button filter: excluded headers, footers, navigation menus, social icons, sidebars, and plain text hyperlinks",
-    "Preserved only genuine button components, action tags, and verified media cloud download links",
-    "Added dedicated Final/Target Destination URL display with quick copy & preview in admin panel after generation",
-    "Enhanced DOM context parser for episode numbering and provider identification",
-    "Updated both cPanel distribution bundle and React admin dashboard"
+    "Added interactive animated full-screen modal with glowing tech radar & live terminal line during remote update",
+    "Added celebratory multi-color confetti particle explosion upon 100% update installation",
+    "Real-time striped progress bar counter (0% to 100%) and pulse glow step indicators",
+    "Strict button filter: excluded headers, footers, navigation menus, social icons, sidebars, and text hyperlinks",
+    "Added dedicated Final/Target Destination URL display with copy & visit shortcuts in admin panel",
+    "Enhanced IPv4 cURL resolution and stream context fallback for cPanel shared hosting"
   ]
 }
