@@ -1,14 +1,13 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "4.4.0",
+  "version": "4.5.0",
   "release_date": "2026-09-24",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "d8a56c94e66b26a401823226e151c0b78081c319159bc0459a0322ea17e476c9",
+  "checksum": "86e9dd5e355e425d6c3e8bdf7ab5dc6de5d30ca425bfb31ed782176d5a6006bf",
   "release_notes": [
-    "Added Monthly Analytics & Statistics dashboard in admin panel (Google Analytics style metrics: top 10 most viewed pages, total visits, avg visit time, device breakdown, traffic channels)",
-    "Removed click tracker feature completely as requested",
-    "Enhanced security rules in .htaccess and strict admin authentication checks",
-    "Streamlined One-Click Updater interface with popup modal logs"
+    "Added anti-background update protection: updates automatically abort and rollback to the previous version if the page is refreshed or disconnected",
+    "Enhanced interruption handling and automatic rollback manager recovery on page load",
+    "Monthly Analytics & Statistics dashboard and secure cPanel integration enhancements"
   ]
 }

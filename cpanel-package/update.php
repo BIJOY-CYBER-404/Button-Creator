@@ -13,6 +13,9 @@ require_once __DIR__ . '/includes/class-updater.php';
 // Protect with Admin Auth
 SLEA_Auth::require_admin();
 
+// Check and abort any interrupted updates if page was refreshed / navigated away
+SLEA_Updater::check_and_abort_interrupted_updates();
+
 $current_version = defined('APP_VERSION') ? ltrim(APP_VERSION, 'v-') : '3.8.0';
 $updater_config = SLEA_Updater::get_config();
 $update_check = SLEA_Updater::check_for_updates();

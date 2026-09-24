@@ -392,6 +392,65 @@ class SLEA_Updater {
         }
     }
 
+    public static function check_and_abort_interrupted_updates() {
+        self::init();
+        try {
+            $pdo = SLEA_DB::get_connection();
+            $stmt = $pdo->query("SELECT * FROM update_history WHERE status = 'in_progress' ORDER BY id DESC");
+            $rows = $stmt->fetchAll();
+            foreach ($rows as $row) {
+                $update_id = $row['update_id'];
+                $logger = new SLEA_UpdateLogger($update_id);
+                $logger->log("Abort", "Page refresh or interruption detected during update execution. Forcibly stopping background update and restoring previous version.", "error");
+
+                $backup_dir = APP_ROOT . '/backups/' . $update_id;
+                $rollback_status = 'failed';
+                if (is_dir($backup_dir)) {
+                    $rollback_manager = new SLEA_RollbackManager($logger, $backup_dir);
+                    $rb_ok = $rollback_manager->perform_rollback("Interrupted by page refresh / navigation.");
+                    $rollback_status = $rb_ok ? 'successful' : 'failed';
+                } else {
+                    $backups_root = APP_ROOT . '/backups';
+                    if (is_dir($backups_root)) {
+                        $subdirs = array_diff(scandir($backups_root), ['.', '..']);
+                        if (!empty($subdirs)) {
+                            rsort($subdirs);
+                            $latest_backup = $backups_root . '/' . reset($subdirs);
+                            if (is_dir($latest_backup)) {
+                                $rollback_manager = new SLEA_RollbackManager($logger, basename($latest_backup));
+                                $rb_ok = $rollback_manager->perform_rollback("Interrupted by page refresh / navigation.");
+                                $rollback_status = $rb_ok ? 'successful' : 'failed';
+                            }
+                        }
+                    }
+                }
+
+                if (file_exists(APP_ROOT . '/.maintenance')) {
+                    @unlink(APP_ROOT . '/.maintenance');
+                }
+
+                $upd = $pdo->prepare("
+                    UPDATE update_history 
+                    SET status = 'aborted_and_restored', error_message = :msg, rollback_status = :rb_stat, completed_at = :now 
+                    WHERE update_id = :uid
+                ");
+                $upd->execute([
+                    ':msg'     => "Update aborted due to page refresh / navigation interruption. Previous version restored.",
+                    ':rb_stat' => $rollback_status,
+                    ':now'     => date('Y-m-d H:i:s'),
+                    ':uid'     => $update_id
+                ]);
+            }
+
+            self::release_lock();
+            if (file_exists(APP_ROOT . '/.maintenance')) {
+                @unlink(APP_ROOT . '/.maintenance');
+            }
+        } catch (Exception $e) {
+            // ignore
+        }
+    }
+
     private static function is_locked() {
         if (!file_exists(self::$lock_file)) {
             return false;

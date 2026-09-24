@@ -9,9 +9,13 @@ require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 require_once __DIR__ . '/includes/class-resolver.php';
 require_once __DIR__ . '/includes/class-extractor.php';
+require_once __DIR__ . '/includes/class-updater.php';
 
 // Protect this admin page - redirects to private login.php if not authenticated
 SLEA_Auth::require_admin();
+
+// Check and abort any interrupted updates if page was refreshed / navigated away
+SLEA_Updater::check_and_abort_interrupted_updates();
 $current_user = SLEA_Auth::get_current_user();
 $site_identity = SLEA_Datastore::get_site_identity();
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : APP_NAME;
