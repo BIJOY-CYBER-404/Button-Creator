@@ -23,12 +23,10 @@ USER_AGENT = (
 TIMEOUT = 15
 
 ACTION_WORDS = {
-    "download", "watch", "stream", "play", "open", "direct",
-    "server", "link", "links", "get", "view", "continue", "mirror",
-    "xcloud", "filemoon", "streamtape", "doodstream", "mixdrop",
-    "episode", "episodes", "ep", "wise", "gdrive", "drive", "mediafire", "mega",
-    "hubcloud", "gdtot", "fastdl", "filepress", "katdrive", "gdflix",
-    "streamwish", "vidhide", "mp4upload", "vidoza", "dropload", "hexupload", "terabox"
+    "download-btn", "dl-btn", "action-btn", "epgdrive", "epitem",
+    "eplist", "dlink", "download-button", "post-button", "server-btn", "drive-btn",
+    "btn-download", "btn-stream", "btn-watch", "btn-episode", "btn-primary",
+    "btn-success", "btn-danger", "btn-info", "btn-dark", "btn", "button"
 }
 
 KNOWN_MEDIA_HOSTS = (
@@ -38,6 +36,15 @@ KNOWN_MEDIA_HOSTS = (
     "dropload.", "hexupload.", "mp4upload.", "send.cm", "krakenfiles."
 )
 
+EXCLUDED_DOMAINS = (
+    "facebook.com", "twitter.com", "x.com", "instagram.com", "youtube.com",
+    "youtu.be", "t.me", "telegram.me", "telegram.org", "pinterest.com",
+    "reddit.com", "linkedin.com", "whatsapp.com", "tiktok.com", "disqus.com",
+    "blogger.com", "google.com/search", "policies.google.com", "schema.org",
+    "w3.org", "pagespeed.web.dev", "web.dev", "rich-results", "addthis.com",
+    "sharethis.com", "feedburner.com", "gravatar.com"
+)
+
 VOID_ELEMENTS = {
     "area", "base", "br", "col", "embed", "hr", "img", "input",
     "link", "meta", "param", "source", "track", "wbr"
@@ -45,10 +52,13 @@ VOID_ELEMENTS = {
 
 INTERNAL_NAV_WORDS = {
     "home", "about", "about-us", "contact", "contact-us", "privacy", "privacy-policy",
-    "cookie", "cookie-policy", "sitemap", "search", "login",
-    "register", "rtl", "category", "categories", "archive", "archives",
-    "next", "previous", "prev", "terms", "dmca", "disclaimer", "faq",
-    "share", "facebook", "twitter", "telegram", "whatsapp", "newer", "older", "comment", "reply"
+    "cookie", "cookie-policy", "sitemap", "search", "login", "sign-in", "register",
+    "sign-up", "rtl", "category", "categories", "archive", "archives", "next",
+    "previous", "prev", "back", "newer", "older", "load-more", "read-more",
+    "terms", "terms-of-service", "dmca", "disclaimer", "faq", "share", "facebook",
+    "twitter", "telegram", "whatsapp", "newer-posts", "older-posts", "comment", "reply",
+    "cancel-reply", "post-comment", "subscribe", "rss", "feed", "permalink",
+    "view-profile", "learn-more", "show-more"
 }
 
 EXCLUDED_EXPLICIT_TESTS = (
@@ -120,7 +130,7 @@ def normalize_url(raw_url, base_url):
 
 def looks_like_action_link(item, base_url):
     text = clean_text(item.get("text", ""))
-    css = f"{item.get('class', '')} {item.get('id', '')}".lower()
+    css = f"{item.get('class', '')} {item.get('id', '')} {item.get('inner_classes', '')}".lower()
     url = item.get("raw_url", "")
     url_lower = (url or "").lower()
 
@@ -131,24 +141,40 @@ def looks_like_action_link(item, base_url):
     if "#respond" in url_lower or "cancel reply" in text.lower() or "comment-reply" in css:
         return False
 
+    # Exclude external excluded domains (socials, etc.)
+    for ex in EXCLUDED_DOMAINS:
+        if ex in url_lower:
+            return False
+
     # Check internal nav word exact text match
-    if text.lower() in INTERNAL_NAV_WORDS:
+    clean_text_lower = re.sub(r"[^\w\s-]", "", text.lower()).strip().replace(" ", "-")
+    if clean_text_lower in INTERNAL_NAV_WORDS or text.lower() in INTERNAL_NAV_WORDS:
         return False
 
-    words = normalized_words(f"{text} {css}")
-    if words & ACTION_WORDS:
-        return True
+    # Exclude icon links if no action text or media host
+    if any(k in css for k in ("icon", "fa", "svg", "social", "share")) and not any(h in url_lower for h in KNOWN_MEDIA_HOSTS):
+        if not text or len(text) <= 2:
+            return False
 
+    # Check for button classes or episode container indicators
     if any(
         x in css
         for x in (
-            "btn", "button", "download", "watch", "stream",
-            "server", "mirror", "play", "action", "epitem", "epgdrive"
+            "btn", "button", "download-btn", "dl-btn", "action-btn", "epgdrive", "epitem",
+            "eplist", "dlink", "download-button", "post-button", "server-btn", "drive-btn",
+            "cloud-btn", "btn-download", "btn-stream", "btn-watch", "btn-episode", "btn-primary"
         )
-    ):
+    ) or any(k.startswith("ep") for k in normalized_words(css)):
+        return True
+
+    if item.get("ep_label"):
         return True
 
     if any(host in url_lower for host in KNOWN_MEDIA_HOSTS):
+        return True
+
+    words = normalized_words(f"{text} {css}")
+    if words & ACTION_WORDS:
         return True
 
     return False
@@ -161,7 +187,8 @@ class ElementCollector(HTMLParser):
         "header", "footer", "navbar", "navigation", "nav-menu", "navmenu",
         "main-menu", "mainmenu", "menu", "menus", "sidebar", "site-header",
         "site-footer", "topbar", "top-bar", "bottombar", "bottom-bar",
-        "breadcrumb", "breadcrumbs"
+        "breadcrumb", "breadcrumbs", "widget-social", "social-share", "social-icons",
+        "comments", "comment-reply", "author-box", "post-meta", "entry-meta", "tag-cloud"
     )
 
     def __init__(self, has_explicit_body=True):
@@ -173,6 +200,7 @@ class ElementCollector(HTMLParser):
         self._had_explicit_body = has_explicit_body
         self._capture = None
         self._capture_depth = 0
+        self._last_ep_label = ""
 
     @classmethod
     def excluded_container(cls, tag, attrs):
@@ -198,14 +226,23 @@ class ElementCollector(HTMLParser):
 
         if tag == "body":
             self._body = True
-            self._stack.append({"tag": tag, "item": None, "excluded": False})
+            self._stack.append({"tag": tag, "item": None, "excluded": False, "class": ""})
             return
 
         if not self._body:
-            self._stack.append({"tag": tag, "item": None, "excluded": False})
+            self._stack.append({"tag": tag, "item": None, "excluded": False, "class": ""})
             return
 
         is_excluded = self._is_excluded() or self.excluded_container(tag, attrs_dict)
+        cls = attrs_dict.get("class", "")
+
+        # Check if this tag is an EpItem / EpList container resetting or establishing context
+        if "epitem" in cls.lower() or "ep-item" in cls.lower():
+            self._last_ep_label = ""
+
+        # If inside an active capturing <a> tag, record inner classes
+        if self._capture is not None and cls:
+            self._capture["inner_classes"] = (self._capture.get("inner_classes", "") + " " + cls).strip()
 
         item = None
         if not is_excluded:
@@ -217,30 +254,75 @@ class ElementCollector(HTMLParser):
             input_type = attrs_dict.get("type", "").lower()
 
             if tag == "a" and href:
-                item = {"type":"link","tag":"a","raw_url":href,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+                item = {
+                    "type": "link",
+                    "tag": "a",
+                    "raw_url": href,
+                    "text": "",
+                    "class": cls,
+                    "id": attrs_dict.get("id", ""),
+                    "inner_classes": "",
+                    "ep_label": self._last_ep_label
+                }
             elif tag == "button":
                 raw = formaction or data_url or extract_url_from_js(onclick)
                 if raw:
-                    item = {"type":"button","tag":"button","raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+                    item = {
+                        "type": "button",
+                        "tag": "button",
+                        "raw_url": raw,
+                        "text": "",
+                        "class": cls,
+                        "id": attrs_dict.get("id", ""),
+                        "inner_classes": "",
+                        "ep_label": self._last_ep_label
+                    }
             elif tag == "input" and input_type in ("button", "submit"):
                 raw = formaction or data_url or extract_url_from_js(onclick)
                 if raw:
-                    item = {"type":input_type,"tag":"input","raw_url":raw,"text":attrs_dict.get("value",""),"class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+                    item = {
+                        "type": input_type,
+                        "tag": "input",
+                        "raw_url": raw,
+                        "text": attrs_dict.get("value", ""),
+                        "class": cls,
+                        "id": attrs_dict.get("id", ""),
+                        "inner_classes": "",
+                        "ep_label": self._last_ep_label
+                    }
             elif tag == "form":
                 raw = action or data_url
                 if raw:
-                    item = {"type":"form","tag":"form","raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+                    item = {
+                        "type": "form",
+                        "tag": "form",
+                        "raw_url": raw,
+                        "text": "",
+                        "class": cls,
+                        "id": attrs_dict.get("id", ""),
+                        "inner_classes": "",
+                        "ep_label": self._last_ep_label
+                    }
             elif onclick or data_url:
                 raw = data_url or extract_url_from_js(onclick)
                 if raw:
-                    item = {"type":"clickable","tag":tag,"raw_url":raw,"text":"","class":attrs_dict.get("class",""),"id":attrs_dict.get("id","")}
+                    item = {
+                        "type": "clickable",
+                        "tag": tag,
+                        "raw_url": raw,
+                        "text": "",
+                        "class": cls,
+                        "id": attrs_dict.get("id", ""),
+                        "inner_classes": "",
+                        "ep_label": self._last_ep_label
+                    }
 
         if tag in VOID_ELEMENTS:
             if item:
                 self.results.append(item)
             return
 
-        self._stack.append({"tag": tag, "item": item, "excluded": is_excluded})
+        self._stack.append({"tag": tag, "item": item, "excluded": is_excluded, "class": cls})
         if item is not None:
             self._capture = item
             self._capture_depth = len(self._stack)
@@ -251,10 +333,18 @@ class ElementCollector(HTMLParser):
             self.handle_endtag(tag)
 
     def handle_data(self, data):
-        if not self._body or self._is_excluded() or self._capture is None:
+        if not self._body or self._is_excluded():
             return
         text = clean_text(data)
-        if text:
+        if not text:
+            return
+
+        current_frame = self._stack[-1] if self._stack else {}
+        curr_cls = current_frame.get("class", "").lower()
+        if "epname" in curr_cls or "ep-name" in curr_cls or re.match(r"^(?:Episode|Ep\.?|E)\s*\d+", text, re.I):
+            self._last_ep_label = text
+
+        if self._capture is not None:
             self._capture["text"] = clean_text(self._capture.get("text", "") + " " + text)
 
     def handle_endtag(self, tag):
@@ -269,6 +359,7 @@ class ElementCollector(HTMLParser):
         if idx is None:
             return
         depth = idx + 1
+        popped = self._stack[idx]
         self._stack = self._stack[:idx]
 
         if self._capture is not None and depth <= self._capture_depth:
@@ -323,23 +414,13 @@ def process_results(results, base_url, button_only=True):
         if button_only and not looks_like_action_link(item_for_score, base_url):
             continue
 
-        text_words = normalized_words(item.get("text", ""))
-        css_words = normalized_words(
-            f"{item.get('class', '')} {item.get('id', '')}"
-        )
+        ep_label = item.get("ep_label", "")
+        formatted_text = text or "(no text)"
+        if ep_label:
+            if "episode" not in formatted_text.lower() and "ep" not in formatted_text.lower():
+                formatted_text = f"{ep_label} - {formatted_text}"
 
-        if (
-            button_only
-            and same_site(url, base_url)
-            and not (text_words | css_words) & ACTION_WORDS
-            and not any(
-                x in f"{item.get('class', '')} {item.get('id', '')}".lower()
-                for x in ("btn", "button", "download", "watch", "stream", "server", "mirror", "play")
-            )
-        ):
-            continue
-
-        key = (item["type"], url, item.get("text", ""))
+        key = (item["type"], url, formatted_text)
         if key in seen:
             continue
         seen.add(key)
@@ -347,7 +428,7 @@ def process_results(results, base_url, button_only=True):
         output.append({
             "type": item["type"],
             "tag": item["tag"],
-            "text": item.get("text", "") or "(no text)",
+            "text": formatted_text,
             "url": url,
             "class": item.get("class", ""),
             "id": item.get("id", ""),

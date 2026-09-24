@@ -217,32 +217,63 @@ export function isCandidate(el: Element, baseUrl: string): boolean {
     typeof el.className === "string" ? el.className : "",
     el.id || "",
     el.getAttribute("role") || "",
+    ...Array.from(el.querySelectorAll("*")).map((child) =>
+      typeof child.className === "string" ? child.className : ""
+    ),
   ]
     .join(" ")
     .toLowerCase();
-
-  const combinedWords = new Set([...words(text), ...words(css)]);
-
-  if ([...combinedWords].some((x) => ACTION_WORDS.has(x))) return true;
-
-  if (
-    /\b(btn|button|download|watch|stream|server|mirror|play|action)\b/i.test(css)
-  ) {
-    return true;
-  }
 
   const target = rawTarget(el);
   if (!target) return false;
 
   if (isBlockedTestLink(text, target)) return false;
 
+  // Exclude icons
+  if (/\b(icon|icons|fa|fab|fas|far|svg-icon|social|share)\b/i.test(css) && (!text || text.length <= 2)) {
+    return false;
+  }
+
+  // Check nav words
+  const cleanTextLower = text.toLowerCase().replace(/[\s_]+/g, "-");
+  if (INTERNAL_NAV_WORDS.has(cleanTextLower) || INTERNAL_NAV_WORDS.has(text.toLowerCase())) {
+    return false;
+  }
+
+  // Check button classes or episode container indicators
+  if (
+    /\b(btn|button|download-btn|dl-btn|action-btn|ep[a-z0-9_-]*|dlink|download-button|post-button|server-btn|drive-btn|cloud-btn|btn-download|btn-stream|btn-watch|btn-episode|btn-primary|btn-success|btn-secondary|btn-info|btn-dark)\b/i.test(
+      css
+    )
+  ) {
+    return true;
+  }
+
+  // Check parent episode container
+  if (el.closest(".EpItem, .EpList, .EpName, [class*='ep-item'], [class*='epitem'], [class*='eplist'], [class*='episode'], [class*='download-item'], [class*='download-box']")) {
+    return true;
+  }
+
   try {
     const absolute = new URL(target, baseUrl).href;
     if (isBlockedTestLink(text, absolute)) return false;
-    return !sameSite(absolute, baseUrl);
+    
+    // Known media host
+    if (
+      /drive\.google\.|mega\.nz|mega\.io|mediafire\.|xcloud\.|hubcloud\.|gdtot\.|filepress\.|katdrive\.|gdflix\.|fastdl\.|streamtape\.|filemoon\.|dood\.|vidhide\.|streamwish\.|terabox\.|mp4upload\.|vidoza\./i.test(
+        absolute
+      )
+    ) {
+      return true;
+    }
   } catch {
     return false;
   }
+
+  const combinedWords = new Set([...words(text), ...words(css)]);
+  if ([...combinedWords].some((x) => ACTION_WORDS.has(x))) return true;
+
+  return false;
 }
 
 export function parseHTMLClientSide(html: string, baseUrl: string): ExtractedItem[] {
@@ -285,7 +316,7 @@ export function parseHTMLClientSide(html: string, baseUrl: string): ExtractedIte
     if (!/^https?:\/\//i.test(absolute)) continue;
     if (!isCandidate(el, baseUrl)) continue;
 
-    const text = cleanText(
+    let text = cleanText(
       (el as HTMLElement).innerText ||
         el.textContent ||
         (el as HTMLInputElement).value ||
@@ -293,6 +324,18 @@ export function parseHTMLClientSide(html: string, baseUrl: string): ExtractedIte
     );
 
     if (isBlockedTestLink(text, absolute)) continue;
+
+    // Check surrounding EpItem or EpName
+    const epItemParent = el.closest(".EpItem, [class*='ep-item'], [class*='epitem']");
+    if (epItemParent) {
+      const epNameEl = epItemParent.querySelector(".EpName, [class*='epname'], [class*='ep-name']");
+      if (epNameEl) {
+        const epName = cleanText(epNameEl.textContent);
+        if (epName && !text.toLowerCase().includes("episode") && !text.toLowerCase().includes("ep")) {
+          text = `${epName} - ${text || "Download"}`;
+        }
+      }
+    }
 
     const tag = el.tagName.toLowerCase();
     const type =

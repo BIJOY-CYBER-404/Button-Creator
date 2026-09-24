@@ -43,6 +43,10 @@ class SLEA_DB {
                 self::$pdo->exec("SET CHARACTER SET utf8mb4");
                 self::$pdo->exec("SET character_set_client = utf8mb4, character_set_connection = utf8mb4, character_set_results = utf8mb4");
                 self::$driver = 'mysql';
+
+                // Automatically persist verified working MySQL credentials so they are never lost on updates
+                self::persist_verified_credentials();
+
                 self::ensure_schema();
                 return self::$pdo;
             } catch (PDOException $e) {
@@ -237,6 +241,46 @@ class SLEA_DB {
                 $repair_stmt = self::$pdo->prepare("UPDATE settings SET setting_value = :val, updated_at = :now WHERE setting_key = 'footer_copyright'");
                 $repair_stmt->execute([':val' => $repaired, ':now' => date('Y-m-d H:i:s')]);
             }
+        }
+    }
+
+    public static function persist_verified_credentials() {
+        try {
+            $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+            if (!is_dir($data_dir)) {
+                @mkdir($data_dir, 0755, true);
+            }
+            $creds_file = $data_dir . '/db_credentials.json';
+            $creds = [
+                'db_type'    => defined('DB_TYPE') ? DB_TYPE : 'mysql',
+                'db_host'    => defined('DB_HOST') ? DB_HOST : 'localhost',
+                'db_port'    => defined('DB_PORT') ? DB_PORT : '3306',
+                'db_name'    => defined('DB_NAME') ? DB_NAME : '',
+                'db_user'    => defined('DB_USER') ? DB_USER : '',
+                'db_pass'    => defined('DB_PASS') ? DB_PASS : '',
+                'db_charset' => defined('DB_CHARSET') ? DB_CHARSET : 'utf8mb4',
+                'saved_at'   => date('Y-m-d H:i:s')
+            ];
+            // Only write if valid database name and credentials configured
+            if (!empty($creds['db_name']) && !empty($creds['db_user']) && $creds['db_pass'] !== 'SecretDB_Pass2026!') {
+                @file_put_contents($creds_file, json_encode($creds, JSON_PRETTY_PRINT));
+                // Also write config.local.php if not exists
+                $local_cfg = defined('APP_ROOT') ? (APP_ROOT . '/config.local.php') : '';
+                if (!empty($local_cfg) && !file_exists($local_cfg)) {
+                    $php_content = "<?php\n" .
+                        "// Persistent Database Credentials (Auto-generated to prevent data loss on updates)\n" .
+                        "define('DB_TYPE', " . var_export($creds['db_type'], true) . ");\n" .
+                        "define('DB_HOST', " . var_export($creds['db_host'], true) . ");\n" .
+                        "define('DB_PORT', " . var_export($creds['db_port'], true) . ");\n" .
+                        "define('DB_NAME', " . var_export($creds['db_name'], true) . ");\n" .
+                        "define('DB_USER', " . var_export($creds['db_user'], true) . ");\n" .
+                        "define('DB_PASS', " . var_export($creds['db_pass'], true) . ");\n" .
+                        "define('DB_CHARSET', " . var_export($creds['db_charset'], true) . ");\n";
+                    @file_put_contents($local_cfg, $php_content);
+                }
+            }
+        } catch (Exception $e) {
+            // Non-blocking
         }
     }
 }

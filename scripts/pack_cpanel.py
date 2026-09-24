@@ -18,7 +18,8 @@ UPDATE_JSON_PUBLIC = os.path.join(PUBLIC_DIR, "releases", "update.json")
 UPDATE_JSON_CPANEL = os.path.join(CPANEL_DIR, "releases", "update.json")
 
 EXCLUDE_EXTS = {".pyc", ".swp", ".DS_Store", ".tmp"}
-EXCLUDE_DIRS = {"__pycache__", ".git", ".idea", ".vscode"}
+EXCLUDE_DIRS = {"__pycache__", ".git", ".idea", ".vscode", "backups", "temp", "data", "releases"}
+EXCLUDE_FILES = {"config.local.php", ".maintenance"}
 
 def create_zip(target_zip_path):
     print(f"[*] Packaging cPanel files into: {target_zip_path}")
@@ -28,7 +29,7 @@ def create_zip(target_zip_path):
             dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
             for file in sorted(files):
                 ext = os.path.splitext(file)[1]
-                if ext in EXCLUDE_EXTS or file.startswith(".DS_"):
+                if ext in EXCLUDE_EXTS or file.startswith(".DS_") or file in EXCLUDE_FILES:
                     continue
                 full_path = os.path.join(root, file)
                 rel_path = os.path.relpath(full_path, CPANEL_DIR)

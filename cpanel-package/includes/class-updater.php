@@ -258,6 +258,11 @@ class SLEA_Updater {
             }
 
             // Step 4: Creating backup
+            if (class_exists('SLEA_Datastore')) {
+                try {
+                    SLEA_Datastore::sync_pages_to_file();
+                } catch (Exception $e) { /* ignore */ }
+            }
             $backup_dir = $backup_manager->create_backup();
             $rollback_manager = new SLEA_RollbackManager($logger, $backup_dir);
 
@@ -491,12 +496,22 @@ class SLEA_Updater {
                 continue;
             }
 
+            // Absolute protection for user data, database, custom credentials, and backups
+            if ($file === 'data' || $file === 'backups' || $file === 'temp' || $file === 'config.local.php' || $file === '.maintenance') {
+                continue;
+            }
+
             $src_path = $src . '/' . $file;
             $dst_path = $dst . '/' . $file;
 
+            // Never overwrite existing config.php (keeps user's database settings intact)
+            if ($file === 'config.php' && file_exists($dst_path)) {
+                continue;
+            }
+
             $skip = false;
             foreach ($exclude as $ex) {
-                if (strpos($dst_path, $ex) === 0) {
+                if (strpos($dst_path, $ex) === 0 || strpos($src_path, $ex) === 0) {
                     $skip = true;
                     break;
                 }

@@ -5,13 +5,10 @@
 
 class SLEA_Extractor {
     private static $button_indicators = [
-        'btn', 'button', 'download', 'ep', 'episode', 'watch', 'server', 'drive',
-        'mega', 'fast', 'play', 'stream', 'link', 'dlink', 'click', 'quality',
-        '480p', '720p', '1080p', '4k', '2160p', 'hevc', 'x264', 'x265', 'batch',
-        'xcloud', 'filemoon', 'streamtape', 'doodstream', 'mixdrop', 'gdrive',
-        'mediafire', 'hubcloud', 'gdtot', 'fastdl', 'filepress', 'katdrive',
-        'gdflix', 'streamwish', 'vidhide', 'mp4upload', 'vidoza', 'dropload',
-        'hexupload', 'terabox', 'dood', 'stream', 'direct', 'mirror'
+        'btn', 'button', 'download-btn', 'dl-btn', 'action-btn', 'epgdrive', 'epitem',
+        'eplist', 'dlink', 'download-button', 'post-button', 'server-btn', 'drive-btn',
+        'btn-download', 'btn-stream', 'btn-watch', 'btn-episode', 'btn-primary',
+        'btn-success', 'btn-danger', 'btn-info', 'btn-dark'
     ];
 
     private static $excluded_domains = [
@@ -19,7 +16,8 @@ class SLEA_Extractor {
         'youtu.be', 't.me', 'telegram.me', 'telegram.org', 'pinterest.com',
         'reddit.com', 'linkedin.com', 'whatsapp.com', 'tiktok.com', 'disqus.com',
         'blogger.com', 'google.com/search', 'policies.google.com', 'schema.org',
-        'w3.org', 'pagespeed.web.dev', 'web.dev', 'rich-results'
+        'w3.org', 'pagespeed.web.dev', 'web.dev', 'rich-results', 'addthis.com',
+        'sharethis.com', 'feedburner.com', 'gravatar.com'
     ];
 
     private static $nav_words = [
@@ -30,7 +28,8 @@ class SLEA_Extractor {
         'previous', 'prev', 'back', 'newer posts', 'older posts', 'load more',
         'read more', 'share on facebook', 'share on twitter', 'share on telegram',
         'share on whatsapp', 'share', 'pin it', 'tweet', 'comment', 'cancel reply',
-        'reply', 'post a comment', 'subscribe', 'rss', 'feed'
+        'reply', 'post a comment', 'subscribe', 'rss', 'feed', 'permalink',
+        'view profile', 'show more', 'learn more', 'source', 'reference'
     ];
 
     public static function extract_buttons_from_html($html, $base_url = '', $button_only = true) {
@@ -39,8 +38,8 @@ class SLEA_Extractor {
         // 1. Strip non-content structural elements (header, footer, nav, aside, script, style, comments)
         $clean_html = preg_replace('/<(?:script|style|noscript|header|footer|nav|aside)[^>]*>[\s\S]*?<\/(?:script|style|noscript|header|footer|nav|aside)>/i', ' ', $html);
         
-        // Strip common navigation, widget, header, footer, social, sidebar, comment containers
-        $clean_html = preg_replace('/<(?:div|section|aside|ul|nav)[^>]*class=[\'"][^\'"]*(?:header|footer|navbar|nav-menu|main-menu|site-header|site-footer|topbar|bottombar|sidebar|widget|popular-posts|recent-posts|label-list|breadcrumb|breadcrumbs|comments|comment-reply|widget-social|social-share|author-box)[^\'"]*[\'"][^>]*>[\s\S]*?<\/(?:div|section|aside|ul|nav)>/i', ' ', $clean_html);
+        // Strip common navigation, widget, header, footer, social, sidebar, comment, icon containers
+        $clean_html = preg_replace('/<(?:div|section|aside|ul|nav)[^>]*class=[\'"][^\'"]*(?:header|footer|navbar|nav-menu|main-menu|site-header|site-footer|topbar|bottombar|sidebar|widget|popular-posts|recent-posts|label-list|breadcrumb|breadcrumbs|comments|comment-reply|widget-social|social-share|social-icons|author-box|post-meta|entry-meta|tag-cloud)[^\'"]*[\'"][^>]*>[\s\S]*?<\/(?:div|section|aside|ul|nav)>/i', ' ', $clean_html);
 
         $items = [];
         $seen = [];
@@ -64,12 +63,12 @@ class SLEA_Extractor {
                     continue;
                 }
 
+                // Check domain exclusions (social media, search, analytics, etc.)
                 $full_url = self::resolve_relative_url($href, $base_url);
                 if (empty($full_url) || in_array($full_url, $seen, true)) {
                     continue;
                 }
 
-                // Check domain exclusions (social media, search, analytics, etc.)
                 $host = strtolower(parse_url($full_url, PHP_URL_HOST) ?: '');
                 $is_excluded = false;
                 foreach (self::$excluded_domains as $ex) {
@@ -80,20 +79,37 @@ class SLEA_Extractor {
                 }
                 if ($is_excluded) continue;
 
+                // Exclude pure icon links (e.g. font-awesome, svg, social icons, or empty text without download link)
+                if (preg_match('/\b(?:icon|icons|fa|fab|fas|far|svg-icon|social|share)\b/i', $all_attrs) ||
+                    preg_match('/^<(?:svg|i|span|img)[^>]*class=[\'"][^\'"]*(?:fa|icon|social|svg)[^\'"]*[\'"][^>]*>[\s\S]*?<\/(?:svg|i|span|img)>$/i', trim($inner_html))) {
+                    if (empty($text) || in_array(strtolower($text), self::$nav_words, true)) {
+                        continue;
+                    }
+                }
+
                 // Check text exclusion against navigation, menu, icon, or footer labels
                 $text_lower = strtolower($text);
                 if (in_array($text_lower, self::$nav_words, true)) {
                     continue;
                 }
 
-                // Inspect surrounding DOM (180 chars before <a) for episode names or numbers
-                $start_pos = max(0, $tag_offset - 180);
+                // Inspect surrounding DOM chunk (250 chars before <a) for episode names, container classes (.EpList, .EpItem, .EpName)
+                $start_pos = max(0, $tag_offset - 250);
                 $preceding_chunk = substr($clean_html, $start_pos, $tag_offset - $start_pos);
 
+                // Check for Episode Name or Label in preceding DOM context or text
                 $episode_num = self::detect_episode($text);
                 $ep_label = '';
                 if (empty($episode_num)) {
-                    if (preg_match_all('/(?:Episode|Ep\.?|E)\s*(\d{1,3}(?:\s*-\s*\d{1,3})?)/i', $preceding_chunk, $ep_matches)) {
+                    if (preg_match('/<div[^>]*class=[\'"][^\'"]*EpName[^\'"]*[\'"][^>]*>([\s\S]*?)<\/div>/i', $preceding_chunk, $ep_div_m)) {
+                        $ep_clean = trim(strip_tags($ep_div_m[1]));
+                        if (!empty($ep_clean)) {
+                            $ep_label = $ep_clean;
+                            if (preg_match('/(?:Episode|Ep\.?|E)\s*(\d{1,3})/i', $ep_clean, $num_m)) {
+                                $episode_num = intval($num_m[1]);
+                            }
+                        }
+                    } elseif (preg_match_all('/(?:Episode|Ep\.?|E)\s*(\d{1,3}(?:\s*-\s*\d{1,3})?)/i', $preceding_chunk, $ep_matches)) {
                         $last_ep = end($ep_matches[1]);
                         $ep_label = 'Episode ' . trim($last_ep);
                         if (preg_match('/^(\d+)/', trim($last_ep), $num_m)) {
@@ -102,23 +118,26 @@ class SLEA_Extractor {
                     }
                 }
 
-                // Extract quality
-                $quality = self::detect_quality($text . ' ' . $all_attrs . ' ' . $full_url . ' ' . $preceding_chunk);
-
-                // Provider
+                // Provider detection
                 $provider = self::detect_provider($full_url);
 
-                // Strict Button / Button Component filter
-                $is_button = self::is_button_element($all_attrs, $text, $full_url, $preceding_chunk) || ($provider !== 'Download Server');
+                // Check if this element or its context is a genuine button
+                $is_button = self::is_button_element($all_attrs, $text, $full_url, $preceding_chunk, $inner_html);
 
-                if ($button_only && !$is_button && empty($quality) && empty($episode_num) && empty($ep_label)) {
+                // If button_only mode: exclude plain text hyperlinks and non-button links
+                if ($button_only && !$is_button) {
                     continue;
                 }
 
+                // Quality detection
+                $quality = self::detect_quality($text . ' ' . $all_attrs . ' ' . $full_url . ' ' . $preceding_chunk);
+
                 // Format button label nicely
                 $button_title = !empty($text) ? $text : ($provider !== 'Download Server' ? $provider : 'Download Link');
-                if (!empty($ep_label) && stripos($button_title, 'episode') === false) {
-                    $button_title = $ep_label . ' - ' . $button_title;
+                if (!empty($ep_label)) {
+                    if (stripos($button_title, 'episode') === false && stripos($button_title, 'ep') === false) {
+                        $button_title = $ep_label . ' - ' . $button_title;
+                    }
                 }
 
                 $seen[] = $full_url;
@@ -127,7 +146,7 @@ class SLEA_Extractor {
                     'url'         => $full_url,
                     'quality'     => $quality,
                     'episode'     => $episode_num,
-                    'is_button'   => $is_button,
+                    'is_button'   => true,
                     'provider'    => $provider
                 ];
             }
@@ -185,17 +204,17 @@ class SLEA_Extractor {
         return 'Download Server';
     }
 
-    private static function is_button_element($attrs, $text, $url, $preceding = '') {
-        $combined = strtolower($attrs . ' ' . $text . ' ' . $url . ' ' . $preceding);
+    private static function is_button_element($attrs, $text, $url, $preceding = '', $inner_html = '') {
+        $combined = strtolower($attrs . ' ' . $text . ' ' . $url . ' ' . $preceding . ' ' . $inner_html);
         
-        // 1. Explicit button classes / roles / components
-        if (preg_match('/\b(?:btn|button|btn-[a-z0-9_-]+|button-[a-z0-9_-]+|epgdrive|epitem|eplist|download-btn|dl-btn|action-btn|dlink|download-button|post-button)\b/i', $attrs)) {
+        // 1. Explicit button classes / components in <a> attributes or inner HTML
+        if (preg_match('/\b(?:btn|button|btn-[a-z0-9_-]+|button-[a-z0-9_-]+|ep[a-z0-9_-]*|download-btn|dl-btn|action-btn|dlink|download-button|post-button|server-btn|drive-btn|cloud-btn|btn-download|btn-stream|btn-watch|btn-episode|btn-primary|btn-success|btn-secondary|btn-info|btn-dark)\b/i', $attrs . ' ' . $inner_html)) {
             return true;
         }
 
-        // 2. Button indicators in keywords
-        foreach (self::$button_indicators as $kw) {
-            if (strpos($combined, $kw) !== false) {
+        // 2. Role or button tag / inner button wrapper
+        if (stripos($attrs, 'role="button"') !== false || stripos($inner_html, '<button') !== false || stripos($inner_html, '<div class=') !== false || stripos($inner_html, '<span class=') !== false) {
+            if (preg_match('/\b(?:btn|button|ep[a-z0-9_-]*|download|watch|stream|server|drive|fast|gdrive|mega|xcloud|hubcloud|filepress|play)\b/i', $attrs . ' ' . $inner_html)) {
                 return true;
             }
         }
@@ -206,8 +225,13 @@ class SLEA_Extractor {
             return true;
         }
 
-        // 4. Action text match
-        if (preg_match('/^(?:Episode\s*\d+|Ep\.?\s*\d+|Download|Watch|Stream|XCloud|FastDL|Mega|G-?Drive|1080p|720p|480p|4k)\b/i', trim($text))) {
+        // 4. In episode list container (.EpList, .EpItem, etc.)
+        if (preg_match('/\b(?:eplist|epitem|ep-item|epname|ep-name|ep-list|episode-list|download-list|download-box)\b/i', $preceding)) {
+            return true;
+        }
+
+        // 5. Action text match if accompanied by episode or resolution
+        if (preg_match('/^(?:Episode\s*\d+|Ep\.?\s*\d+|GDrive|Mega|FastDL|XCloud|HubCloud|FilePress|1080p|720p|480p|4k)\b/i', trim($text))) {
             return true;
         }
 

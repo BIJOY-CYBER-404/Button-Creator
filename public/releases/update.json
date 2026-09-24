@@ -1,15 +1,14 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "5.1.0",
+  "version": "v-5.4.0",
   "release_date": "2026-09-24",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "minimum_php": "8.0",
-  "checksum": "5fc841476954bbbc77a13eb53e649e954406d8c43ed8ab0bdac8c778c506efc9",
+  "sha256": "37642677b834b978329c40adc5c5485b1a197730767041ea4ccd4dbb4cefbf22",
+  "minimum_php": "7.4",
   "release_notes": [
-    "Removed progress bar feature and added configurable maintenance end-time countdown (days, hours, minutes, seconds) with quick presets, live admin preview, and auto-refresh",
-    "In-feed middle manual ad code configuration in Admin Panel with responsive injection between episode buttons",
-    "Migrated public page URLs from view.php?slug=ep-xxx to clean /p/{slug} structure globally across page generator, share sheets, and frontend",
-    "Seamless 301 redirection for legacy links and backwards-compatible bi-directional slug lookup",
-    "Packaged atomic v-5.1.0 cPanel release bundle with synchronized SHA256 checksum for remote one-click updater"
+    "Strict button extraction engine: excludes icons, hyperlinks, body text, and header/footer menus",
+    "Targeted button extraction for .EpList, .EpItem, .EpName, .EpGDrive, and custom episode buttons",
+    "Safe remote updater with complete protection of stored/generated pages, user accounts, and database settings",
+    "Updated release package v-5.4.0 ready for remote one-click updates"
   ]
 }
