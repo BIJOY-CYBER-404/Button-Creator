@@ -196,6 +196,8 @@ class SLEA_Updater {
     }
 
     public static function run_update() {
+        @set_time_limit(300);
+        @ini_set('memory_limit', '512M');
         self::init();
         $config = self::get_config();
 

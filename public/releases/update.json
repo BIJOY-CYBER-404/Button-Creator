@@ -4,7 +4,7 @@
   "release_date": "2026-09-24",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "8d6de56b94ff8efeb149062c21c29c1ad435ed2a0796a23b25d482d7dd70d647",
+  "checksum": "31bdee5c34b8b819dd20c197446e63673ba47c2448ff1bedb9f2a9c9e37f6458",
   "release_notes": [
     "Pages manager is now organized by last generated page first (newest pages displayed at the top)",
     "Anti-background update protection: updates automatically abort and rollback to the previous version if the page is refreshed or disconnected",

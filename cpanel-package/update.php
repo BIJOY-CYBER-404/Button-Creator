@@ -23,7 +23,13 @@ $update_history = SLEA_Updater::get_update_history();
 
 // Process POST requests for AJAX or Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (function_exists('ob_clean')) @ob_clean();
     header('Content-Type: application/json; charset=utf-8');
+    @set_time_limit(300);
+    @ini_set('memory_limit', '512M');
+    @ini_set('display_errors', '0');
+    error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+
     $action = $_POST['action'] ?? ($_GET['action'] ?? '');
     
     try {
@@ -45,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => true, 'config' => $saved]);
             exit;
         }
-    } catch (Exception $ex) {
+    } catch (Throwable $ex) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => $ex->getMessage()]);
         exit;
