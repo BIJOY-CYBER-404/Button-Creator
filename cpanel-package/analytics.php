@@ -22,6 +22,8 @@ $pages = SLEA_Datastore::get_all_pages();
 $total_views = 0;
 $current_month_views = 0;
 $prev_month_views = 0;
+$has_current_month = false;
+$has_prev_month = false;
 $current_month_num = intval(date('n'));
 $current_year_num = intval(date('Y'));
 
@@ -31,21 +33,17 @@ foreach ($pages as $p) {
     $p_date = strtotime($p['created_at'] ?? 'now');
     if (date('n', $p_date) == $current_month_num && date('Y', $p_date) == $current_year_num) {
         $current_month_views += $views;
+        $has_current_month = true;
     } else {
         $prev_month_views += $views;
+        $has_prev_month = true;
     }
 }
 
-if ($prev_month_views === 0 && $total_views > 0) {
-    $prev_month_views = round($total_views * 0.72);
-    $current_month_views = $total_views - $prev_month_views;
-    if ($current_month_views < 0) $current_month_views = $total_views;
-}
-
-$growth_rate = $prev_month_views > 0 ? round((($current_month_views - $prev_month_views) / $prev_month_views) * 100) : 18.4;
+// Calculate growth rate only if real historical data exists
+$has_historical_comparison = ($has_prev_month && $prev_month_views > 0);
+$growth_rate = $has_historical_comparison ? round((($current_month_views - $prev_month_views) / $prev_month_views) * 100) : null;
 $active_pages_count = count($pages);
-$estimated_sessions = round($total_views * 1.25 + 48);
-$estimated_visitors = round($total_views * 0.9 + 32);
 
 // Sort pages by views descending for top 10
 usort($pages, function($a, $b) {
@@ -140,24 +138,30 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 <div class="bg-white rounded-3xl p-5 border border-[#e0e4eb] shadow-xs space-y-3">
                     <span class="text-xs font-bold text-[#5f6368] uppercase tracking-wider block">Total Website Visits</span>
                     <div class="text-3xl font-extrabold text-[#111827] font-mono"><?= number_format($total_views) ?></div>
-                    <span class="text-xs font-bold <?= $growth_rate >= 0 ? 'text-[#137333] bg-[#e6f4ea]' : 'text-red-600 bg-red-50' ?> px-1.5 py-0.5 rounded">
-                        <?= $growth_rate >= 0 ? '+' : '' ?><?= $growth_rate ?>% vs last month
-                    </span>
+                    <?php if ($growth_rate !== null): ?>
+                        <span class="text-xs font-bold <?= $growth_rate >= 0 ? 'text-[#137333] bg-[#e6f4ea]' : 'text-red-600 bg-red-50' ?> px-1.5 py-0.5 rounded">
+                            <?= $growth_rate >= 0 ? '+' : '' ?><?= $growth_rate ?>% vs last month
+                        </span>
+                    <?php else: ?>
+                        <span class="text-xs font-bold text-[#5f6368] bg-[#f1f3f4] px-1.5 py-0.5 rounded">
+                            Growth: N/A
+                        </span>
+                    <?php endif; ?>
                 </div>
                 <div class="bg-white rounded-3xl p-5 border border-[#e0e4eb] shadow-xs space-y-3">
                     <span class="text-xs font-bold text-[#5f6368] uppercase tracking-wider block">Active Sessions</span>
-                    <div class="text-3xl font-extrabold text-[#111827] font-mono"><?= number_format($estimated_sessions) ?></div>
-                    <span class="text-xs font-bold text-[#0b57d0] bg-[#e8f0fe] px-1.5 py-0.5 rounded"><?= number_format($estimated_visitors) ?> unique IPs</span>
+                    <div class="text-3xl font-extrabold text-[#111827] font-mono">—</div>
+                    <span class="text-xs font-bold text-[#5f6368] bg-[#f1f3f4] px-1.5 py-0.5 rounded">Telemetry: N/A</span>
                 </div>
                 <div class="bg-white rounded-3xl p-5 border border-[#e0e4eb] shadow-xs space-y-3">
                     <span class="text-xs font-bold text-[#5f6368] uppercase tracking-wider block">Avg Visit Duration</span>
-                    <div class="text-3xl font-extrabold text-[#111827] font-mono">2m 25s</div>
-                    <span class="text-xs font-bold text-[#b06000] bg-[#fef7e0] px-1.5 py-0.5 rounded">Bounce Rate: 34.8%</span>
+                    <div class="text-3xl font-extrabold text-[#111827] font-mono">—</div>
+                    <span class="text-xs font-bold text-[#5f6368] bg-[#f1f3f4] px-1.5 py-0.5 rounded">Telemetry: N/A</span>
                 </div>
                 <div class="bg-white rounded-3xl p-5 border border-[#e0e4eb] shadow-xs space-y-3">
                     <span class="text-xs font-bold text-[#5f6368] uppercase tracking-wider block">Published Pages</span>
                     <div class="text-3xl font-extrabold text-[#111827] font-mono"><?= $active_pages_count ?></div>
-                    <span class="text-xs font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">100% Online</span>
+                    <span class="text-xs font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded"><?= $active_pages_count > 0 ? '100% Online' : '0 Published' ?></span>
                 </div>
             </div>
 
@@ -172,27 +176,33 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                         <div class="space-y-2">
                             <div class="flex justify-between text-xs font-bold">
                                 <span class="text-[#5f6368]">Last Month Views</span>
-                                <span class="font-mono text-[#5f6368]"><?= number_format($prev_month_views) ?> views</span>
+                                <span class="font-mono text-[#5f6368]"><?= $has_prev_month ? number_format($prev_month_views) . ' views' : '— (N/A)' ?></span>
                             </div>
                             <div class="w-full bg-[#f1f3f4] h-3.5 rounded-full overflow-hidden">
-                                <div class="bg-slate-400 h-full rounded-full" style="width: <?= min(100, max(15, ($prev_month_views / max(1, $current_month_views + $prev_month_views)) * 200)) ?>%"></div>
+                                <div class="bg-slate-400 h-full rounded-full" style="width: <?= $has_historical_comparison ? min(100, max(15, ($prev_month_views / max(1, $current_month_views + $prev_month_views)) * 200)) : 0 ?>%"></div>
                             </div>
                         </div>
                         <div class="space-y-2">
                             <div class="flex justify-between text-xs font-bold">
                                 <span class="text-[#0b57d0]">Current Month Views</span>
-                                <span class="font-mono text-[#0b57d0]"><?= number_format($current_month_views) ?> views</span>
+                                <span class="font-mono text-[#0b57d0]"><?= $has_current_month ? number_format($current_month_views) . ' views' : ($total_views > 0 ? number_format($total_views) . ' views' : '0 views') ?></span>
                             </div>
                             <div class="w-full bg-[#f1f3f4] h-3.5 rounded-full overflow-hidden">
-                                <div class="bg-blue-600 h-full rounded-full" style="width: <?= min(100, max(20, ($current_month_views / max(1, $current_month_views + $prev_month_views)) * 200)) ?>%"></div>
+                                <div class="bg-blue-600 h-full rounded-full" style="width: <?= $total_views > 0 ? ($has_historical_comparison ? min(100, max(20, ($current_month_views / max(1, $current_month_views + $prev_month_views)) * 200)) : 100) : 0 ?>%"></div>
                             </div>
                         </div>
                     </div>
                     <div class="bg-[#f8f9fa] rounded-2xl p-5 border border-[#e0e4eb] space-y-3">
                         <h4 class="font-bold text-sm text-[#111827]">Traffic Growth Insight</h4>
-                        <p class="text-xs text-[#5f6368] leading-relaxed">
-                            Your active button pages generated <span class="font-bold text-[#137333]"><?= number_format($current_month_views) ?></span> views this month, representing a <span class="font-bold text-[#0b57d0]"><?= $growth_rate >= 0 ? '+' : '' ?><?= $growth_rate ?>%</span> change compared to last month.
-                        </p>
+                        <?php if ($growth_rate !== null): ?>
+                            <p class="text-xs text-[#5f6368] leading-relaxed">
+                                Your active button pages generated <span class="font-bold text-[#137333]"><?= number_format($current_month_views) ?></span> views this month, representing a <span class="font-bold text-[#0b57d0]"><?= $growth_rate >= 0 ? '+' : '' ?><?= $growth_rate ?>%</span> change compared to last month.
+                            </p>
+                        <?php else: ?>
+                            <p class="text-xs text-[#5f6368] leading-relaxed">
+                                No previous month history recorded. Growth rate calculation: <span class="font-bold text-[#444746]">N/A</span>.
+                            </p>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -241,119 +251,122 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- Device Breakdown -->
                 <div class="bg-white rounded-3xl p-6 border border-[#e0e4eb] shadow-xs space-y-4">
-                    <h4 class="font-bold text-sm text-[#111827] flex items-center gap-2">
-                        <span>📱 Device Breakdown</span>
-                    </h4>
+                    <div class="flex items-center justify-between">
+                        <h4 class="font-bold text-sm text-[#111827] flex items-center gap-2">
+                            <span>📱 Device Breakdown</span>
+                        </h4>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">N/A</span>
+                    </div>
                     <div class="space-y-3 text-xs">
                         <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">Mobile Smartphone</span>
-                                <span class="font-mono text-[#0b57d0]">78.4%</span>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Mobile Smartphone</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
                             </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-[#0b57d0] h-full rounded-full" style="width: 78.4%"></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">Desktop PC / Mac</span>
-                                <span class="font-mono text-[#137333]">16.2%</span>
-                            </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-[#137333] h-full rounded-full" style="width: 16.2%"></div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
                             </div>
                         </div>
                         <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">Tablet iPad</span>
-                                <span class="font-mono text-[#b06000]">5.4%</span>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Desktop PC / Mac</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
                             </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-amber-500 h-full rounded-full" style="width: 5.4%"></div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Tablet iPad</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
+                            </div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
                             </div>
                         </div>
                     </div>
+                    <p class="text-[10px] text-[#747775]">User-agent device telemetry not logged. Only real data displayed: N/A.</p>
                 </div>
 
                 <!-- Top Traffic Channels -->
                 <div class="bg-white rounded-3xl p-6 border border-[#e0e4eb] shadow-xs space-y-4">
-                    <h4 class="font-bold text-sm text-[#111827] flex items-center gap-2">
-                        <span>🌐 Top Traffic Channels</span>
-                    </h4>
+                    <div class="flex items-center justify-between">
+                        <h4 class="font-bold text-sm text-[#111827] flex items-center gap-2">
+                            <span>🌐 Top Traffic Channels</span>
+                        </h4>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">N/A</span>
+                    </div>
                     <div class="space-y-3 text-xs">
                         <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">Direct &amp; Bookmarks</span>
-                                <span class="font-mono text-[#0b57d0]">46.8%</span>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Direct &amp; Bookmarks</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
                             </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-blue-500 h-full rounded-full" style="width: 46.8%"></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">Social Media (Telegram/WhatsApp)</span>
-                                <span class="font-mono text-[#137333]">38.2%</span>
-                            </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-emerald-600 h-full rounded-full" style="width: 38.2%"></div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
                             </div>
                         </div>
                         <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">Organic Search &amp; Referrals</span>
-                                <span class="font-mono text-[#b06000]">15.0%</span>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Social Media (Telegram/WhatsApp)</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
                             </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-amber-500 h-full rounded-full" style="width: 15.0%"></div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Organic Search &amp; Referrals</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
+                            </div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
                             </div>
                         </div>
                     </div>
+                    <p class="text-[10px] text-[#747775]">HTTP Referrer channels not logged. Only real data displayed: N/A.</p>
                 </div>
 
                 <!-- Top Traffic Country -->
                 <div class="bg-white rounded-3xl p-6 border border-[#e0e4eb] shadow-xs space-y-4">
-                    <h4 class="font-bold text-sm text-[#111827] flex items-center gap-2">
-                        <span>📍 Top Traffic Country</span>
-                    </h4>
+                    <div class="flex items-center justify-between">
+                        <h4 class="font-bold text-sm text-[#111827] flex items-center gap-2">
+                            <span>📍 Top Traffic Country</span>
+                        </h4>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">N/A</span>
+                    </div>
                     <div class="space-y-3 text-xs">
                         <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">🇮🇳 India</span>
-                                <span class="font-mono text-[#0b57d0]">38.5%</span>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Primary Region</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
                             </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-blue-600 h-full rounded-full" style="width: 38.5%"></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">🇺🇸 United States</span>
-                                <span class="font-mono text-[#137333]">22.1%</span>
-                            </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-emerald-600 h-full rounded-full" style="width: 22.1%"></div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
                             </div>
                         </div>
                         <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">🇧🇩 Bangladesh</span>
-                                <span class="font-mono text-[#b06000]">14.6%</span>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Secondary Region</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
                             </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-amber-500 h-full rounded-full" style="width: 14.6%"></div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
                             </div>
                         </div>
                         <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span class="text-[#3c4043]">🇮🇩 Indonesia / Others</span>
-                                <span class="font-mono text-purple-600">24.8%</span>
+                            <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                <span>Other Regions</span>
+                                <span class="font-mono font-bold text-slate-400">—</span>
                             </div>
-                            <div class="w-full bg-[#f1f3f4] h-2.5 rounded-full overflow-hidden">
-                                <div class="bg-purple-600 h-full rounded-full" style="width: 24.8%"></div>
+                            <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
                             </div>
                         </div>
                     </div>
+                    <p class="text-[10px] text-[#747775]">GeoIP visitor country tracking not enabled. Only real data displayed: N/A.</p>
                 </div>
             </div>
         </main>

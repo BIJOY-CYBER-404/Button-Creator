@@ -60,17 +60,17 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "3.9.9",
-    remote_version: "3.9.9",
+    current_version: "4.9.0",
+    remote_version: "4.9.0",
     update_available: false,
-    release_date: "2026-09-23",
+    release_date: "2026-09-24",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "High-performance pure-PHP native cURL resolver engine eliminating shared hosting Python execution timeouts",
-      "Bypasses AdLinkFly, Sohojgyan, and shortlink gateway intermediaries directly in pure PHP",
-      "Optimized Blogger and streaming host button extractor with fast connection pooling and gzip/deflate decoding",
-      "Popup style toast notifications with top-right corner positioning, animated slide-in, and dismiss actions across all pages",
-      "Increased client-side generation timeout to 45s with multi-step status feedback"
+      "Analytics data strictly shows 100% verified real database metrics, displaying 'N/A' or '—' for untracked metrics with zero mock data",
+      "Enlarged mobile floating share action button (FAB) icon for enhanced touch ergonomics",
+      "Uniform high-contrast button styling for WhatsApp, Telegram, Facebook, X/Twitter, and QR Code",
+      "Removed mobile share button from share card",
+      "In-feed responsive banner ad slots placed automatically after every 4 episode buttons (supports Google AdSense auto ads and manual admin banners)"
     ],
     minimum_php: "8.0",
     checksum: "a81f9b30c4e123456789abcdef0123456789abcdef0123456789abcdef012345"

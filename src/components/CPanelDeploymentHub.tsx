@@ -23,7 +23,7 @@ export const CPanelDeploymentHub: React.FC<CPanelDeploymentHubProps> = ({ onNoti
                 cPanel Shared Hosting Deployment Package
               </h2>
               <span className="px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
-                v-3.9.9
+                v-4.9.0
               </span>
             </div>
             <p className="text-xs text-[#5f6368]">

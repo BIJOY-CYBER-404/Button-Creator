@@ -45,11 +45,43 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     );
   });
 
+  const [adSettings] = useState<any>(() => {
+    const saved = localStorage.getItem("slea_ad_settings");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // fallback
+      }
+    }
+    return {
+      adsense_publisher_id: "",
+      adsense_auto_ads: false,
+      banner_top: "",
+      banner_middle: "",
+      banner_bottom: "",
+    };
+  });
+
   const defaultMenuItems = [
     { title: "Home", url: "https://moviehubhq.com/" },
     { title: "Korean Drama", url: "https://moviehubhq.com/catagory/korean/" },
     { title: "Chinese Drama", url: "https://moviehubhq.com/catagory/chinese/" },
   ];
+
+  useEffect(() => {
+    if (adSettings?.adsense_auto_ads && adSettings?.adsense_publisher_id) {
+      const pubId = adSettings.adsense_publisher_id.trim();
+      const existingScript = document.querySelector(`script[src*="googlesyndication.com"]`);
+      if (!existingScript) {
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(pubId)}`;
+        script.crossOrigin = "anonymous";
+        document.head.appendChild(script);
+      }
+    }
+  }, [adSettings]);
 
   useEffect(() => {
     // Dynamically ensure noindex meta tag is placed in the head
@@ -360,7 +392,15 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         )}
       </div>
 
-      {/* Social Media & Mobile Display Share Card (Google Material M3 Light Theme) */}
+      {/* Top Banner Ad Placement if configured in admin */}
+      {adSettings?.banner_top && (
+        <div
+          className="w-full overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center"
+          dangerouslySetInnerHTML={{ __html: adSettings.banner_top }}
+        />
+      )}
+
+      {/* Social Media & Instant Share Card (Google Material M3 Light Theme) */}
       <div className="bg-white border border-[#e0e4eb] rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap pb-0.5">
           <div className="flex items-center gap-2">
@@ -372,105 +412,94 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
           <span className="text-[11px] text-[#747775]">Copy link or share to social apps</span>
         </div>
 
-        {/* Primary Action Chips */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {/* Uniform Action Chips for Copy Link, WhatsApp, Telegram, Facebook, X, and QR Code */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {/* 1. Copy Link Button */}
           <button
             type="button"
             onClick={copyPageShareUrl}
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#0b57d0] border border-[#d3e3fd] hover:border-[#0b57d0] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#0b57d0] border border-[#d3e3fd] hover:border-[#0b57d0] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
           >
             {copiedLink ? (
               <>
                 <Check className="w-4 h-4 text-emerald-600" />
-                <span className="text-emerald-700">Copied!</span>
+                <span className="text-emerald-700 truncate">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="w-4 h-4 transition-transform group-hover:scale-110" />
+                <Copy className="w-4 h-4 transition-transform group-hover:scale-110 shrink-0" />
                 <span className="truncate">Copy Link</span>
               </>
             )}
           </button>
 
-          {/* 2. Mobile Native Share Sheet */}
-          <button
-            type="button"
-            onClick={triggerNativeShare}
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#e8f0fe] hover:bg-[#d3e3fd] text-[#041e49] border border-[#c2e7ff] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
-          >
-            <Smartphone className="w-4 h-4 text-[#0b57d0]" />
-            <span className="truncate">Share on Mobile</span>
-          </button>
-
-          {/* 3. WhatsApp Share */}
+          {/* 2. WhatsApp Share */}
           <a
             href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
               `${page.title} - Fast Episode Links: ${getCanonicalUrl()}`
             )}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#e6f4ea] hover:bg-[#ceead6] text-[#137333] border border-[#a8dab5] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-[#e6f4ea] hover:bg-[#ceead6] text-[#137333] border border-[#a8dab5] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
           >
             <span className="text-sm">💬</span>
             <span className="truncate">WhatsApp</span>
           </a>
 
-          {/* 4. Telegram Share */}
+          {/* 3. Telegram Share */}
           <a
             href={`https://t.me/share/url?url=${encodeURIComponent(getCanonicalUrl())}&text=${encodeURIComponent(
               page.title
             )}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#e8f4fd] hover:bg-[#d0ebfc] text-[#0088cc] border border-[#b8e1fa] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-[#e8f4fd] hover:bg-[#d0ebfc] text-[#0088cc] border border-[#b8e1fa] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
           >
             <span className="text-sm">✈️</span>
             <span className="truncate">Telegram</span>
           </a>
-        </div>
 
-        {/* Secondary Socials (Facebook, X/Twitter, QR Code) */}
-        <div className="flex items-center justify-between pt-1 gap-1.5 flex-wrap">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Facebook */}
-            <a
-              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getCanonicalUrl())}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f0f4f9] hover:bg-[#e4eaf2] text-[#1877f2] border border-[#e1e7f0] text-[11px] font-bold transition-all"
-              title="Share on Facebook"
-            >
-              <span>Facebook</span>
-            </a>
+          {/* 4. Facebook Share */}
+          <a
+            href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getCanonicalUrl())}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-[#ebf3ff] hover:bg-[#dbeafe] text-[#1877f2] border border-[#bfdbfe] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
+          >
+            <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            <span className="truncate">Facebook</span>
+          </a>
 
-            {/* X / Twitter */}
-            <a
-              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
-                page.title
-              )}&url=${encodeURIComponent(getCanonicalUrl())}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f0f4f9] hover:bg-[#e4eaf2] text-[#111827] border border-[#e1e7f0] text-[11px] font-bold transition-all"
-              title="Share on X (Twitter)"
-            >
-              <span>X / Tweet</span>
-            </a>
-          </div>
+          {/* 5. X / Twitter Share */}
+          <a
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+              page.title
+            )}&url=${encodeURIComponent(getCanonicalUrl())}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-[#f3f4f6] hover:bg-[#e5e7eb] text-[#111827] border border-[#d1d5db] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
+          >
+            <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            <span className="truncate">X / Tweet</span>
+          </a>
 
-          {/* QR Code Display Modal Trigger */}
+          {/* 6. QR Code Button */}
           <button
             type="button"
             onClick={() => setQrModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f8fafd] hover:bg-[#e8f0fe] text-[#5f6368] hover:text-[#0b57d0] border border-[#e1e7f0] text-[11px] font-medium transition-all cursor-pointer"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-[#fdf4ff] hover:bg-[#fae8ff] text-[#9333ea] border border-[#f0abfc] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group"
           >
-            <QrCode className="w-3.5 h-3.5" />
-            <span>Scan QR Code</span>
+            <QrCode className="w-4 h-4 shrink-0" />
+            <span className="truncate">QR Code</span>
           </button>
         </div>
       </div>
 
-      {/* Buttons List */}
+      {/* Buttons List with In-Feed Banner Ads every 4 buttons */}
       <div className="space-y-2.5">
         {page.buttons && page.buttons.length > 0 ? (
           page.buttons.map((btn, idx) => {
@@ -480,56 +509,88 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
             const provider = btn.provider || "GDrive Server";
 
             return (
-              <div
-                key={`btn-${idx}`}
-                className="bg-white hover:bg-[#fafcff] rounded-2xl p-3.5 sm:p-4 border border-[#e3e7ee] hover:border-[#0b57d0] transition-all flex items-center justify-between gap-3 shadow-2xs group"
-              >
-                {/* Left Column: Server Icon, Episode 01/02.., Provider, Quality */}
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-10 h-10 rounded-xl bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center font-extrabold text-xs shrink-0 group-hover:bg-[#0b57d0] group-hover:text-white transition-colors shadow-2xs">
-                    E{epNum}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-[#111827] truncate group-hover:text-[#0b57d0] transition-colors flex items-center gap-1.5 flex-wrap">
-                      <span>Episode {epNum}</span>
-                      {btn.text && !btn.text.toLowerCase().includes("episode") && (
-                        <span className="text-xs text-[#747775] font-normal truncate hidden sm:inline">({btn.text})</span>
-                      )}
+              <React.Fragment key={`btn-wrap-${idx}`}>
+                <div
+                  key={`btn-${idx}`}
+                  className="bg-white hover:bg-[#fafcff] rounded-2xl p-3.5 sm:p-4 border border-[#e3e7ee] hover:border-[#0b57d0] transition-all flex items-center justify-between gap-3 shadow-2xs group"
+                >
+                  {/* Left Column: Server Icon, Episode 01/02.., Provider, Quality */}
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="w-10 h-10 rounded-xl bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center font-extrabold text-xs shrink-0 group-hover:bg-[#0b57d0] group-hover:text-white transition-colors shadow-2xs">
+                      E{epNum}
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-[#5f6368] mt-0.5">
-                      <div className="inline-flex items-center gap-1 font-medium">
-                        {renderServerIcon(provider, btn.url, btn.text)}
-                        <span>{provider}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-[#111827] truncate group-hover:text-[#0b57d0] transition-colors flex items-center gap-1.5 flex-wrap">
+                        <span>Episode {epNum}</span>
+                        {btn.text && !btn.text.toLowerCase().includes("episode") && (
+                          <span className="text-xs text-[#747775] font-normal truncate hidden sm:inline">({btn.text})</span>
+                        )}
                       </div>
-                      <span className="px-1.5 py-0.2 rounded bg-[#f1f3f4] text-[#3c4043] font-mono text-[10px] font-bold border border-[#e0e4eb]">
-                        {quality}
-                      </span>
+                      <div className="flex items-center gap-2 text-[11px] text-[#5f6368] mt-0.5">
+                        <div className="inline-flex items-center gap-1 font-medium">
+                          {renderServerIcon(provider, btn.url, btn.text)}
+                          <span>{provider}</span>
+                        </div>
+                        <span className="px-1.5 py-0.2 rounded bg-[#f1f3f4] text-[#3c4043] font-mono text-[10px] font-bold border border-[#e0e4eb]">
+                          {quality}
+                        </span>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Right Column: "Watch Now" Button (Google Material M3 Pill) */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => copyLink(btn.url, `Episode ${epNum}`)}
+                      className="p-2 rounded-lg text-[#5f6368] hover:text-[#0b57d0] hover:bg-[#f0f4f9] border border-transparent hover:border-[#d3e3fd] cursor-pointer transition-colors"
+                      title="Copy Direct Link"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+
+                    <a
+                      href={btn.url}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      className="px-4 py-2 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs hover:shadow-md transition-all"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Watch Now</span>
+                    </a>
                   </div>
                 </div>
 
-                {/* Right Column: "Watch Now" Button (Google Material M3 Pill) */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => copyLink(btn.url, `Episode ${epNum}`)}
-                    className="p-2 rounded-lg text-[#5f6368] hover:text-[#0b57d0] hover:bg-[#f0f4f9] border border-transparent hover:border-[#d3e3fd] cursor-pointer transition-colors"
-                    title="Copy Direct Link"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-
-                  <a
-                    href={btn.url}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className="px-4 py-2 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs hover:shadow-md transition-all"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Watch Now</span>
-                  </a>
-                </div>
-              </div>
+                {/* Banner Ads Space after every 4 buttons */}
+                {(idx + 1) % 4 === 0 && idx < page.buttons.length - 1 && (
+                  <div className="my-3 overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center">
+                    {adSettings?.banner_middle ? (
+                      <div dangerouslySetInnerHTML={{ __html: adSettings.banner_middle }} />
+                    ) : adSettings?.adsense_auto_ads && adSettings?.adsense_publisher_id ? (
+                      <div className="py-3 text-center space-y-1">
+                        <ins
+                          className="adsbygoogle block w-full"
+                          data-ad-client={adSettings.adsense_publisher_id}
+                          data-ad-format="auto"
+                          data-full-width-responsive="true"
+                        />
+                        <span className="text-[10px] font-bold tracking-wider text-[#0b57d0] uppercase bg-[#e8f0fe] px-2 py-0.5 rounded">
+                          AdSense Auto Ad
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="py-3 px-4 rounded-xl bg-gradient-to-r from-blue-50/50 via-slate-50 to-blue-50/50 border border-dashed border-[#c2daf8] text-center text-xs text-[#5f6368] flex flex-col items-center justify-center gap-1">
+                        <span className="text-[10px] font-bold tracking-wider text-[#0b57d0] uppercase bg-[#e8f0fe] px-2 py-0.5 rounded">
+                          Advertisement Space
+                        </span>
+                        <span className="text-[11px] text-[#747775]">
+                          Banner ad placed after every 4 episode buttons (Configured in Admin &gt; Settings)
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </React.Fragment>
             );
           })
         ) : (
@@ -538,6 +599,14 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Bottom Banner Ad Placement if configured */}
+      {adSettings?.banner_bottom && (
+        <div
+          className="w-full overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center"
+          dangerouslySetInnerHTML={{ __html: adSettings.banner_bottom }}
+        />
+      )}
 
       {/* Footer with Configured Copyright */}
       <footer className="text-center py-6 text-xs text-[#5f6368] border-t border-[#e0e4eb] mt-6">
@@ -550,9 +619,9 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
           type="button"
           onClick={handleMobileFabShare}
           aria-label="Share page"
-          className="w-13 h-13 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white flex items-center justify-center shadow-xl transition-transform active:scale-90 border-2 border-white ring-4 ring-[#0b57d0]/20 cursor-pointer"
+          className="w-16 h-16 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white flex items-center justify-center shadow-2xl transition-all active:scale-95 border-2 border-white ring-4 ring-[#0b57d0]/25 cursor-pointer"
         >
-          <Share2 className="w-6 h-6" />
+          <Share2 className="w-8 h-8" />
         </button>
       </div>
 
