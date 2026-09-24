@@ -479,14 +479,19 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                             <?= $emoji ?>
                         </button>
                     <?php endforeach; ?>
+                    <button type="button" onclick="repairFooterEmojis()"
+                        class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition-all cursor-pointer sm:ml-auto"
+                        title="Auto-repair and fix ?? symbols into emojis">
+                        🔧 Auto-Repair ?? Emojis
+                    </button>
                     <button type="button" onclick="resetFooterToDefault()"
-                        class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold transition-all cursor-pointer sm:ml-auto"
+                        class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold transition-all cursor-pointer"
                         title="Reset to default clean template with emojis">
                         🔄 Restore Default with Emojis
                     </button>
                 </div>
                 <textarea id="footerCopyrightInput" rows="4" oninput="updateFooterPreview()"
-                    class="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($footer_copyright, ENT_QUOTES, 'UTF-8') ?></textarea>
+                    class="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars(html_entity_decode($footer_copyright, ENT_QUOTES | ENT_HTML5, 'UTF-8'), ENT_QUOTES, 'UTF-8') ?></textarea>
             </div>
 
             <!-- Live HTML Preview -->
@@ -590,6 +595,26 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
             input.setSelectionRange(newPos, newPos);
             updateFooterPreview();
             showToast(`Inserted emoji ${emoji}`, 'info');
+        }
+
+        function repairFooterEmojis() {
+            const input = document.getElementById('footerCopyrightInput');
+            let val = input.value;
+            
+            // Auto repair corrupted question marks from legacy charset
+            val = val.replace(/(<span[^>]*class=["'][^"']*heart[^"']*["'][^>]*>)\s*\?+\s*(<\/span>)/gi, '$1❤️$2');
+            val = val.replace(/(<span[^>]*aria-label=["']love["'][^>]*>)\s*\?+\s*(<\/span>)/gi, '$1❤️$2');
+            val = val.replace(/(Designed\s+with)\s+\?+\s+(by)/gi, '$1 ❤️ $2');
+            val = val.replace(/(\bwith)\s+\?+\s+(\bby|\bfor)/gi, '$1 ❤️ $2');
+            val = val.replace(/\?\+\s*•\s*Made\s+with\s*\?\+/gi, '🍿 • Made with ❤️');
+            val = val.replace(/Gateway\s*\?\+\s*•\s*All\s+rights\s+reserved\s*\?\+/gi, 'Gateway 🎬 • All rights reserved 🚀');
+            val = val.replace(/MovieHubHQ\s*\?\+/gi, 'MovieHubHQ 🍿');
+            val = val.replace(/All\s+rights\s+reserved\s*\?\+/gi, 'All rights reserved 🚀');
+            val = val.replace(/\?\?/g, '❤️'); // Any other ?? replaced with heart
+
+            input.value = val;
+            updateFooterPreview();
+            showToast('Repaired corrupted ?? to emojis! Click "Save Footer Text" to save.', 'success');
         }
 
         function resetFooterToDefault() {

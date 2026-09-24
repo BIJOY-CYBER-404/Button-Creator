@@ -393,6 +393,120 @@ class SLEA_Datastore {
         return $clean;
     }
 
+    public static function get_share_settings() {
+        $defaults = [
+            'enabled' => true,
+            'show_in_page' => true,
+            'show_mobile_fab' => true,
+            'platforms' => [
+                'copy' => true,
+                'whatsapp' => true,
+                'telegram' => true,
+                'facebook' => true,
+                'twitter' => true,
+                'native_share' => true,
+                'qr_code' => true
+            ]
+        ];
+
+        try {
+            $pdo = SLEA_DB::get_connection();
+            $stmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = 'share_settings' LIMIT 1");
+            $stmt->execute();
+            $row = $stmt->fetch();
+            if ($row && !empty($row['setting_value'])) {
+                $decoded = json_decode($row['setting_value'], true);
+                if (is_array($decoded)) {
+                    return array_merge($defaults, $decoded);
+                }
+            }
+        } catch (Exception $e) {
+            error_log('Error loading share settings: ' . $e->getMessage());
+        }
+        return $defaults;
+    }
+
+    public static function save_share_settings($data) {
+        $pdo = SLEA_DB::get_connection();
+        $now = date('Y-m-d H:i:s');
+
+        $clean = [
+            'enabled' => isset($data['enabled']) ? !empty($data['enabled']) : true,
+            'show_in_page' => isset($data['show_in_page']) ? !empty($data['show_in_page']) : true,
+            'show_mobile_fab' => isset($data['show_mobile_fab']) ? !empty($data['show_mobile_fab']) : true,
+            'platforms' => is_array($data['platforms'] ?? null) ? $data['platforms'] : [
+                'copy' => true,
+                'whatsapp' => true,
+                'telegram' => true,
+                'facebook' => true,
+                'twitter' => true,
+                'native_share' => true,
+                'qr_code' => true
+            ]
+        ];
+
+        $json = json_encode($clean, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+
+        $stmt = $pdo->prepare("
+            INSERT INTO settings (setting_key, setting_value, updated_at)
+            VALUES ('share_settings', :val, :now)
+            ON DUPLICATE KEY UPDATE setting_value = :val2, updated_at = :now2
+        ");
+        try {
+            $stmt->execute([':val' => $json, ':now' => $now, ':val2' => $json, ':now2' => $now]);
+        } catch (Exception $e) {
+            $stmt2 = $pdo->prepare("INSERT OR REPLACE INTO settings (setting_key, setting_value, updated_at) VALUES ('share_settings', :val, :now)");
+            $stmt2->execute([':val' => $json, ':now' => $now]);
+        }
+        return $clean;
+    }
+
+    public static function repair_corrupted_emojis($val) {
+        if (empty($val) || !is_string($val)) return $val;
+        
+        // 1. Repair emojis inside heart tag or span: <span class="heart"...>??</span> or <span ... aria-label="love">??</span>
+        $val = preg_replace('/(<span[^>]*class=["\'][^"\']*heart[^"\']*["\'][^>]*>)\s*\?+\s*(<\/span>)/i', '$1&#10084;&#65039;$2', $val);
+        $val = preg_replace('/(<span[^>]*aria-label=["\']love["\'][^>]*>)\s*\?+\s*(<\/span>)/i', '$1&#10084;&#65039;$2', $val);
+        
+        // 2. "Designed with ?? by" or "with ?? by" or "with ?? for"
+        $val = preg_replace('/(Designed\s+with)\s+\?+\s+(by)/i', '$1 &#10084;&#65039; $2', $val);
+        $val = preg_replace('/(\bwith)\s+\?+\s+(\bby|\bfor)/i', '$1 &#10084;&#65039; $2', $val);
+        
+        // 3. Known MovieHub templates with ??
+        $val = str_replace(
+            ['?? • Made with ??', 'Gateway ?? • All rights reserved ??', 'MovieHubHQ ??', 'All rights reserved ??', 'for Direct Episode Link Gateway ??'],
+            ['🍿 • Made with &#10084;&#65039;', 'Gateway 🎬 • All rights reserved 🚀', 'MovieHubHQ 🍿', 'All rights reserved 🚀', 'for Direct Episode Link Gateway 🎬'],
+            $val
+        );
+
+        return $val;
+    }
+
+    public static function encode_emojis_to_entities($string) {
+        if (empty($string) || !is_string($string)) {
+            return $string;
+        }
+
+        // Convert high Unicode characters / emojis (codepoint > 255) to numeric HTML entities
+        // This makes the string 100% immune to MySQL 3-byte charset (utf8/latin1) conversion to ??
+        if (function_exists('mb_ord') && function_exists('mb_strlen') && function_exists('mb_substr')) {
+            $result = '';
+            $len = mb_strlen($string, 'UTF-8');
+            for ($i = 0; $i < $len; $i++) {
+                $char = mb_substr($string, $i, 1, 'UTF-8');
+                $code = mb_ord($char, 'UTF-8');
+                if ($code > 255) {
+                    $result .= '&#' . $code . ';';
+                } else {
+                    $result .= $char;
+                }
+            }
+            return $result;
+        }
+
+        return $string;
+    }
+
     public static function get_footer_copyright() {
         try {
             $pdo = SLEA_DB::get_connection();
@@ -401,31 +515,36 @@ class SLEA_Datastore {
             $row = $stmt->fetch();
             if ($row && isset($row['setting_value']) && trim($row['setting_value']) !== '') {
                 $val = $row['setting_value'];
-                // If legacy MySQL corruption converted emojis to '??', auto-repair to clean UTF-8 emojis
+                // Auto-repair any legacy MySQL corruption converting emojis to '??'
                 if (strpos($val, '??') !== false) {
-                    $repaired = str_replace(
-                        ['?? • Made with ??', 'Gateway ?? • All rights reserved ??', 'MovieHubHQ ??'],
-                        ['🍿 • Made with ❤️', 'Gateway 🎬 • All rights reserved 🚀', 'MovieHubHQ 🍿'],
-                        $val
-                    );
-                    return $repaired;
+                    $repaired = self::repair_corrupted_emojis($val);
+                    if ($repaired !== $val) {
+                        self::save_footer_copyright($repaired);
+                        return $repaired;
+                    }
                 }
                 return $val;
             }
         } catch (Exception $e) {
             error_log('Error loading footer copyright: ' . $e->getMessage());
         }
-        return '&copy; ' . date('Y') . ' MovieHubHQ 🍿 • Made with ❤️ for Direct Episode Link Gateway 🎬 • All rights reserved 🚀';
+        return '&copy; ' . date('Y') . ' MovieHubHQ 🍿 • Made with &#10084;&#65039; for Direct Episode Link Gateway 🎬 • All rights reserved 🚀';
     }
 
     public static function save_footer_copyright($html) {
         $pdo = SLEA_DB::get_connection();
         $now = date('Y-m-d H:i:s');
 
-        // Ensure proper UTF-8 4-byte encoding for emojis
+        // 1. First repair any corrupted '??' question marks
+        $html = self::repair_corrupted_emojis($html);
+
+        // 2. Ensure proper UTF-8 encoding
         if (function_exists('mb_check_encoding') && !mb_check_encoding($html, 'UTF-8')) {
             $html = mb_convert_encoding($html, 'UTF-8', mb_detect_encoding($html) ?: 'UTF-8');
         }
+
+        // 3. Convert multi-byte emojis to safe numeric HTML entities so no MySQL charset issue can corrupt them into ??
+        $safe_html = self::encode_emojis_to_entities($html);
 
         $stmt = $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, updated_at)
@@ -433,11 +552,11 @@ class SLEA_Datastore {
             ON DUPLICATE KEY UPDATE setting_value = :val2, updated_at = :now2
         ");
         try {
-            $stmt->execute([':val' => $html, ':now' => $now, ':val2' => $html, ':now2' => $now]);
+            $stmt->execute([':val' => $safe_html, ':now' => $now, ':val2' => $safe_html, ':now2' => $now]);
         } catch (Exception $e) {
             // For SQLite fallback
             $stmt2 = $pdo->prepare("INSERT OR REPLACE INTO settings (setting_key, setting_value, updated_at) VALUES ('footer_copyright', :val, :now)");
-            $stmt2->execute([':val' => $html, ':now' => $now]);
+            $stmt2->execute([':val' => $safe_html, ':now' => $now]);
         }
         return true;
     }

@@ -226,6 +226,18 @@ try {
             echo json_encode(['success' => true, 'maintenance_settings' => $m_settings]);
             break;
 
+        case 'save_share_settings':
+            $s_data = $data['share_settings'] ?? [];
+            if (!is_array($s_data)) throw new Exception('Invalid share settings format.');
+            $saved = SLEA_Datastore::save_share_settings($s_data);
+            echo json_encode(['success' => true, 'share_settings' => $saved]);
+            break;
+
+        case 'get_share_settings':
+            $s_settings = SLEA_Datastore::get_share_settings();
+            echo json_encode(['success' => true, 'share_settings' => $s_settings]);
+            break;
+
         case 'resolve':
             $input_url = trim($data['url'] ?? '');
             if (empty($input_url)) throw new Exception('URL is required.');

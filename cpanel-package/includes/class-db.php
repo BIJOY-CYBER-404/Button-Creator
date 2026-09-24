@@ -41,6 +41,7 @@ class SLEA_DB {
                 // Enforce 4-byte UTF-8 collation on connection to prevent emoji conversion to ??
                 self::$pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
                 self::$pdo->exec("SET CHARACTER SET utf8mb4");
+                self::$pdo->exec("SET character_set_client = utf8mb4, character_set_connection = utf8mb4, character_set_results = utf8mb4");
                 self::$driver = 'mysql';
                 self::ensure_schema();
                 return self::$pdo;

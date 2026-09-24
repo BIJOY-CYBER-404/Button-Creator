@@ -159,6 +159,14 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
 $menu_items = SLEA_Datastore::get_menu_items();
 $footer_copyright = SLEA_Datastore::get_footer_copyright();
 $ad_settings = SLEA_Datastore::get_ad_settings();
+$share_settings = SLEA_Datastore::get_share_settings();
+
+// Dynamic canonical share URL & encoded payloads
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+$canonical_share_url = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+$share_encoded_url = urlencode($canonical_share_url);
+$share_encoded_title = urlencode($page['title'] ?? 'Watch & Download Episodes');
+$share_encoded_msg = urlencode(($page['title'] ?? 'Watch & Download') . ' - Fast Episode Links: ' . $canonical_share_url);
 
 // Google Material M3 Light Themes
 $themes = [
@@ -385,6 +393,88 @@ function resolve_server_info($provider, $url, $btn_text) {
                 </p>
             </div>
 
+            <?php if (!empty($share_settings['enabled']) && !empty($share_settings['show_in_page'])): ?>
+            <!-- Social Media & Mobile Display Share Card (Google Material M3 Light Theme) -->
+            <div class="bg-white border border-[#e0e4eb] rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
+                <div class="flex items-center justify-between gap-2 flex-wrap pb-0.5">
+                    <div class="flex items-center gap-2">
+                        <span class="w-7 h-7 rounded-xl bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                            </svg>
+                        </span>
+                        <span class="text-xs font-bold text-[#111827]">Share Episode Page</span>
+                    </div>
+                    <span class="text-[11px] text-[#747775]">Copy link or share to social apps</span>
+                </div>
+
+                <!-- Primary Action Chips -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <!-- 1. Copy Link Button (Instant Feedback) -->
+                    <button type="button" onclick="copyPageShareUrl(this)" id="copyShareBtn"
+                        class="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#0b57d0] border border-[#d3e3fd] hover:border-[#0b57d0] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group">
+                        <svg class="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        <span class="share-btn-text truncate">Copy Link</span>
+                    </button>
+
+                    <!-- 2. Mobile Native Share Sheet (Direct OS Share on Android/iOS) -->
+                    <button type="button" onclick="triggerNativeShare()"
+                        class="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#e8f0fe] hover:bg-[#d3e3fd] text-[#041e49] border border-[#c2e7ff] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group">
+                        <svg class="w-4 h-4 shrink-0 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                        <span class="truncate">Share on Mobile</span>
+                    </button>
+
+                    <!-- 3. WhatsApp Share -->
+                    <a href="https://api.whatsapp.com/send?text=<?= $share_encoded_msg ?>" target="_blank" rel="noopener noreferrer"
+                        class="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#e6f4ea] hover:bg-[#ceead6] text-[#137333] border border-[#a8dab5] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group">
+                        <svg class="w-4 h-4 shrink-0 fill-current" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                        </svg>
+                        <span class="truncate">WhatsApp</span>
+                    </a>
+
+                    <!-- 4. Telegram Share -->
+                    <a href="https://t.me/share/url?url=<?= $share_encoded_url ?>&text=<?= $share_encoded_title ?>" target="_blank" rel="noopener noreferrer"
+                        class="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#e8f4fd] hover:bg-[#d0ebfc] text-[#0088cc] border border-[#b8e1fa] text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 group">
+                        <svg class="w-4 h-4 shrink-0 fill-current" viewBox="0 0 24 24">
+                            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                        </svg>
+                        <span class="truncate">Telegram</span>
+                    </a>
+                </div>
+
+                <!-- Secondary Socials (Facebook, X/Twitter, QR Code) -->
+                <div class="flex items-center justify-between pt-1 gap-1.5 flex-wrap">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <!-- Facebook -->
+                        <a href="https://www.facebook.com/sharer/sharer.php?u=<?= $share_encoded_url ?>" target="_blank" rel="noopener noreferrer"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f0f4f9] hover:bg-[#e4eaf2] text-[#1877f2] border border-[#e1e7f0] text-[11px] font-bold transition-all" title="Share on Facebook">
+                            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                            <span>Facebook</span>
+                        </a>
+
+                        <!-- X / Twitter -->
+                        <a href="https://twitter.com/intent/tweet?text=<?= $share_encoded_title ?>&url=<?= $share_encoded_url ?>" target="_blank" rel="noopener noreferrer"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f0f4f9] hover:bg-[#e4eaf2] text-[#111827] border border-[#e1e7f0] text-[11px] font-bold transition-all" title="Share on X (Twitter)">
+                            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                            <span>X / Tweet</span>
+                        </a>
+                    </div>
+
+                    <!-- QR Code Display Modal Trigger -->
+                    <button type="button" onclick="openQrModal()"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f8fafd] hover:bg-[#e8f0fe] text-[#5f6368] hover:text-[#0b57d0] border border-[#e1e7f0] text-[11px] font-medium transition-all cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+                        <span>Scan QR Code</span>
+                    </button>
+                </div>
+            </div>
+            <?php endif; ?>
+
         <?php if (!empty($ad_settings['banner_ads_enabled']) && !empty($ad_settings['ad_middle_enabled']) && !empty($ad_settings['ad_middle_code'])): ?>
             <!-- Middle Banner Ad Placement -->
             <div class="ad-banner-middle w-full flex justify-center items-center overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2">
@@ -480,6 +570,222 @@ function resolve_server_info($provider, $url, $btn_text) {
 
     <!-- Top Right Notification Toast Container -->
     <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-full"></div>
+
+    <?php if (!empty($share_settings['enabled']) && !empty($share_settings['show_mobile_fab'])): ?>
+    <!-- Floating Mobile Share Button (Visible on Mobile Devices for Quick 1-Tap Sharing & Link Copy) -->
+    <div class="fixed bottom-5 right-4 z-40 sm:hidden">
+        <button type="button" onclick="handleMobileFabShare()" aria-label="Share page"
+            class="w-13 h-13 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white flex items-center justify-center shadow-xl transition-transform active:scale-90 border-2 border-white ring-4 ring-[#0b57d0]/20 cursor-pointer">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+            </svg>
+        </button>
+    </div>
+    <?php endif; ?>
+
+    <!-- QR Code Display Modal -->
+    <div id="qrModal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 max-w-xs w-full text-center space-y-4 shadow-2xl border border-[#e0e4eb] transform transition-all scale-95 opacity-0 duration-200" id="qrModalCard">
+            <div class="flex items-center justify-between pb-2 border-b border-[#f0f4f9]">
+                <div class="flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-lg bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+                    </span>
+                    <span class="text-xs font-bold text-[#111827]">Scan to Open</span>
+                </div>
+                <button type="button" onclick="closeQrModal()" class="p-1 rounded-lg text-[#5f6368] hover:text-[#111827] hover:bg-[#f0f4f9] transition-colors cursor-pointer" aria-label="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Dynamic QR Code Container -->
+            <div class="flex justify-center p-3 bg-[#f8fafd] rounded-2xl border border-[#e0e4eb]">
+                <img id="qrCodeImg" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=<?= $share_encoded_url ?>" alt="QR Code" class="w-48 h-48 rounded-lg">
+            </div>
+
+            <p class="text-[11px] text-[#5f6368] leading-tight">
+                Scan with any mobile camera or scanner app to open this page instantly.
+            </p>
+
+            <button type="button" onclick="copyPageShareUrl(this)" class="w-full py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer">
+                Copy Link to Clipboard
+            </button>
+        </div>
+    </div>
+
+    <!-- Mobile Share Sheet Bottom Drawer -->
+    <div id="mobileShareSheetBackdrop" onclick="closeMobileShareSheet()" class="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 hidden opacity-0 transition-opacity duration-300 md:hidden"></div>
+    <div id="mobileShareSheet" class="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl border-t border-[#e0e4eb] p-5 shadow-2xl space-y-4 transform translate-y-full transition-transform duration-300 ease-in-out md:hidden">
+        <div class="flex items-center justify-between pb-2 border-b border-[#f0f4f9]">
+            <div class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-xl bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                </span>
+                <span class="text-sm font-bold text-[#111827]">Share Episode Link</span>
+            </div>
+            <button type="button" onclick="closeMobileShareSheet()" class="p-1.5 rounded-xl text-[#5f6368] hover:bg-[#f0f4f9] transition-colors cursor-pointer" aria-label="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2 text-center text-xs">
+            <!-- Native Share / System Share -->
+            <button type="button" onclick="triggerNativeShare()" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#0b57d0] transition-colors cursor-pointer">
+                <div class="w-10 h-10 rounded-full bg-[#0b57d0] text-white flex items-center justify-center shadow-xs">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                </div>
+                <span class="text-[11px] font-semibold text-[#1f1f1f]">More Apps</span>
+            </button>
+
+            <!-- WhatsApp -->
+            <a href="https://api.whatsapp.com/send?text=<?= $share_encoded_msg ?>" target="_blank" rel="noopener noreferrer"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-[#f0f4f9] hover:bg-[#e6f4ea] text-[#137333] transition-colors cursor-pointer">
+                <div class="w-10 h-10 rounded-full bg-[#25d366] text-white flex items-center justify-center shadow-xs">
+                    <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                </div>
+                <span class="text-[11px] font-semibold text-[#1f1f1f]">WhatsApp</span>
+            </a>
+
+            <!-- Telegram -->
+            <a href="https://t.me/share/url?url=<?= $share_encoded_url ?>&text=<?= $share_encoded_title ?>" target="_blank" rel="noopener noreferrer"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-[#f0f4f9] hover:bg-[#e8f4fd] text-[#0088cc] transition-colors cursor-pointer">
+                <div class="w-10 h-10 rounded-full bg-[#0088cc] text-white flex items-center justify-center shadow-xs">
+                    <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                </div>
+                <span class="text-[11px] font-semibold text-[#1f1f1f]">Telegram</span>
+            </a>
+
+            <!-- Facebook -->
+            <a href="https://www.facebook.com/sharer/sharer.php?u=<?= $share_encoded_url ?>" target="_blank" rel="noopener noreferrer"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-[#f0f4f9] hover:bg-[#e4eaf2] text-[#1877f2] transition-colors cursor-pointer">
+                <div class="w-10 h-10 rounded-full bg-[#1877f2] text-white flex items-center justify-center shadow-xs">
+                    <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </div>
+                <span class="text-[11px] font-semibold text-[#1f1f1f]">Facebook</span>
+            </a>
+        </div>
+
+        <button type="button" onclick="copyPageShareUrl(this)" class="w-full py-3 rounded-2xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#0b57d0] font-bold text-xs flex items-center justify-center gap-2 border border-[#d3e3fd] transition-all cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <span class="share-btn-text">Copy Link</span>
+        </button>
+    </div>
+
+    <script>
+        const PAGE_SHARE_URL = <?= json_encode($canonical_share_url) ?>;
+        const PAGE_SHARE_TITLE = <?= json_encode($page['title'] ?? 'Watch & Download Episodes') ?>;
+
+        function copyPageShareUrl(btn) {
+            const url = PAGE_SHARE_URL || window.location.href;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    handleCopySuccess(btn);
+                }).catch(() => {
+                    fallbackCopy(url, btn);
+                });
+            } else {
+                fallbackCopy(url, btn);
+            }
+        }
+
+        function fallbackCopy(text, btn) {
+            const temp = document.createElement('input');
+            temp.value = text;
+            document.body.appendChild(temp);
+            temp.select();
+            try {
+                document.execCommand('copy');
+                handleCopySuccess(btn);
+            } catch (err) {
+                showToast('Please copy URL manually from browser address bar', 'info');
+            }
+            document.body.removeChild(temp);
+        }
+
+        function handleCopySuccess(btn) {
+            showToast('Episode link copied to clipboard!', 'success');
+            if (btn) {
+                const textSpan = btn.querySelector('.share-btn-text');
+                if (textSpan) {
+                    const original = textSpan.innerText;
+                    textSpan.innerText = '✓ Copied!';
+                    setTimeout(() => {
+                        textSpan.innerText = original;
+                    }, 2500);
+                }
+            }
+        }
+
+        function triggerNativeShare() {
+            const url = PAGE_SHARE_URL || window.location.href;
+            const title = PAGE_SHARE_TITLE || document.title;
+            if (navigator.share) {
+                navigator.share({
+                    title: title,
+                    text: 'Watch & Download: ' + title,
+                    url: url
+                }).catch((err) => {
+                    if (err.name !== 'AbortError') {
+                        copyPageShareUrl(null);
+                    }
+                });
+            } else {
+                openMobileShareSheet();
+            }
+        }
+
+        function handleMobileFabShare() {
+            if (navigator.share) {
+                triggerNativeShare();
+            } else {
+                openMobileShareSheet();
+            }
+        }
+
+        function openQrModal() {
+            const modal = document.getElementById('qrModal');
+            const card = document.getElementById('qrModalCard');
+            if (!modal || !card) return;
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                card.classList.remove('scale-95', 'opacity-0');
+                card.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeQrModal() {
+            const modal = document.getElementById('qrModal');
+            const card = document.getElementById('qrModalCard');
+            if (!modal || !card) return;
+            card.classList.remove('scale-100', 'opacity-100');
+            card.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        }
+
+        function openMobileShareSheet() {
+            const sheet = document.getElementById('mobileShareSheet');
+            const backdrop = document.getElementById('mobileShareSheetBackdrop');
+            if (!sheet || !backdrop) return;
+            backdrop.classList.remove('hidden');
+            void backdrop.offsetWidth;
+            backdrop.classList.remove('opacity-0');
+            backdrop.classList.add('opacity-100');
+
+            sheet.classList.remove('translate-y-full');
+            sheet.classList.add('translate-y-0');
+        }
+
+        function closeMobileShareSheet() {
+            const sheet = document.getElementById('mobileShareSheet');
+            const backdrop = document.getElementById('mobileShareSheetBackdrop');
+            if (!sheet || !backdrop) return;
+            sheet.classList.remove('translate-y-0');
+            sheet.classList.add('translate-y-full');
+
+            backdrop.classList.remove('opacity-100');
+            backdrop.classList.add('opacity-0');
+            setTimeout(() => backdrop.classList.add('hidden'), 300);
+        }
 
     <script>
         function openMobileMenu() {

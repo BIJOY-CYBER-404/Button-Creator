@@ -1,16 +1,16 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "4.2.1",
-  "release_date": "2026-09-23",
+  "version": "4.3.0",
+  "release_date": "2026-09-24",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "953fbec7fb5cfc278a93ce06ed755e59a635a1b2c073f958f2a685eb254073c2",
+  "checksum": "7a3ecc9212da7e5b09dcca9e6b85944ca21a7b4f316e39b48d98a9a7af6c1fb7",
   "release_notes": [
-    "Fixed fetch_page declaration in class-extractor.php preventing ERR_HTTP_RESPONSE_CODE_FAILURE on API calls",
-    "Added interactive animated full-screen modal with glowing tech radar & live terminal line during remote update",
-    "Added celebratory multi-color confetti particle explosion upon 100% update installation",
-    "Real-time striped progress bar counter (0% to 100%) and pulse glow step indicators",
-    "Strict button filter: excluded headers, footers, navigation menus, social icons, sidebars, and text hyperlinks",
-    "Added dedicated Final/Target Destination URL display with copy & visit shortcuts in admin panel"
+    "New Social Media & Mobile Display Share feature: 1-click Copy Link with toast feedback, native OS Mobile Share, WhatsApp, Telegram, Facebook, and X/Twitter",
+    "Interactive QR Code scanner modal for instant mobile sharing and device-to-device opening",
+    "Floating Mobile Share Action Button (FAB) and sliding mobile bottom share drawer",
+    "Fixed emoji support in footer copyright: converted emojis to entity encoding immune to MySQL charset corruption",
+    "Auto-Repair ?? Emojis button and automatic migration healing for legacy question marks",
+    "Enforced utf8mb4 full 4-byte client connection and table collation on MySQL connections"
   ]
 }
