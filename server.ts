@@ -176,7 +176,13 @@ async function startServer() {
   app.get("/api/public/pages/:slug", (req, res) => {
     const slug = req.params.slug;
     const pages = getStoredPages();
-    const page = pages.find((p) => p.slug === slug || p.id === slug);
+    const page = pages.find(
+      (p) =>
+        p.slug === slug ||
+        p.id === slug ||
+        (slug.startsWith("ep-") && p.slug === slug.substring(3)) ||
+        (!slug.startsWith("ep-") && p.slug === `ep-${slug}`)
+    );
     if (!page) {
       return res.status(404).json({ success: false, error: "Button page not found" });
     }
@@ -288,7 +294,7 @@ async function startServer() {
             is_button: true
           }));
 
-          // Generate unique randomized slug for every page
+          // Generate clean unique randomized 8-character slug (without ep- prefix)
           const existingPages = getStoredPages();
           const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
           let slug = "";
@@ -297,7 +303,7 @@ async function startServer() {
             for (let i = 0; i < 8; i++) {
               rand += chars.charAt(Math.floor(Math.random() * chars.length));
             }
-            slug = `ep-${rand}`;
+            slug = rand;
           } while (existingPages.some((p) => p.slug === slug));
 
           // Derive title

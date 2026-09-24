@@ -188,7 +188,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                         <?php else: ?>
                             <?php foreach ($pages as $p):
                                 $clean_url = $base_url . '/p/' . urlencode($p['slug']);
-                                $view_url = $base_url . '/view.php?slug=' . urlencode($p['slug']);
+                                $view_url = $clean_url;
                                 $is_public = !empty($p['is_public']);
                                 $btn_count = count($p['buttons'] ?? []);
                             ?>
@@ -202,7 +202,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                         <?= htmlspecialchars($p['title']) ?>
                                     </div>
                                     <div class="flex items-center gap-1.5 text-[11px] text-[#0b57d0] font-mono mt-0.5">
-                                        <a href="<?= htmlspecialchars($view_url) ?>" target="_blank" class="hover:underline" id="row-link-<?= $p['id'] ?>">
+                                        <a href="<?= htmlspecialchars($clean_url) ?>" target="_blank" class="hover:underline" id="row-link-<?= $p['id'] ?>">
                                             /p/<?= htmlspecialchars($p['slug']) ?>
                                         </a>
                                         <button type="button" onclick="copyText('<?= htmlspecialchars($clean_url) ?>')" title="Copy URL" class="text-slate-400 hover:text-slate-700 cursor-pointer">
@@ -715,7 +715,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     if (rowTitle) rowTitle.innerText = data.page.title;
                     if (rowLink) {
                         rowLink.innerText = '/p/' + data.page.slug;
-                        rowLink.href = baseUrl + '/view.php?slug=' + encodeURIComponent(data.page.slug);
+                        rowLink.href = baseUrl + '/p/' + encodeURIComponent(data.page.slug);
                     }
                     if (rowBtns) {
                         rowBtns.innerText = (data.page.buttons ? data.page.buttons.length : 0) + ' btns';

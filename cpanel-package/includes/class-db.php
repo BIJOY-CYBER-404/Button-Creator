@@ -172,6 +172,18 @@ class SLEA_DB {
             ) {$table_engine}
         ");
 
+        // 6. Monthly Page Views Table
+        $uq_constraint = $is_mysql ? 'UNIQUE KEY uq_page_month (page_slug, year_month)' : 'UNIQUE(page_slug, year_month)';
+        self::$pdo->exec("
+            CREATE TABLE IF NOT EXISTS page_views_monthly (
+                id {$auto_inc},
+                page_slug VARCHAR(120) NOT NULL,
+                year_month VARCHAR(7) NOT NULL,
+                views INT DEFAULT 1,
+                {$uq_constraint}
+            ) {$table_engine}
+        ");
+
         // Seed initial default menu items if not set
         $stmt = self::$pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = 'menu_items'");
         $stmt->execute();

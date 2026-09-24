@@ -1,15 +1,15 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "4.9.0",
+  "version": "5.1.0",
   "release_date": "2026-09-24",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "7978a4fb7c11bf5d99b7cc38e6aa2b61f5117dd5e28d710d1fc8c0780718f00b",
+  "checksum": "5fc841476954bbbc77a13eb53e649e954406d8c43ed8ab0bdac8c778c506efc9",
   "release_notes": [
-    "Analytics data strictly shows 100% verified real database metrics, displaying 'N/A' or '\u2014' for untracked metrics with zero mock data",
-    "Enlarged mobile floating share action button (FAB) icon for enhanced touch ergonomics",
-    "Uniform high-contrast button styling for WhatsApp, Telegram, Facebook, X/Twitter, and QR Code",
-    "Removed mobile share button from share card",
-    "In-feed responsive banner ad slots placed automatically after every 4 episode buttons (supports Google AdSense auto ads and manual admin banners)"
+    "Removed progress bar feature and added configurable maintenance end-time countdown (days, hours, minutes, seconds) with quick presets, live admin preview, and auto-refresh",
+    "In-feed middle manual ad code configuration in Admin Panel with responsive injection between episode buttons",
+    "Migrated public page URLs from view.php?slug=ep-xxx to clean /p/{slug} structure globally across page generator, share sheets, and frontend",
+    "Seamless 301 redirection for legacy links and backwards-compatible bi-directional slug lookup",
+    "Packaged atomic v-5.1.0 cPanel release bundle with synchronized SHA256 checksum for remote one-click updater"
   ]
 }

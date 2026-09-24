@@ -240,12 +240,43 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                         </label>
                     </div>
 
+                    <!-- End Time Countdown Configuration (Days & Minutes) -->
+                    <div class="space-y-2 p-4 bg-[#f8fafd] rounded-2xl border border-[#e1e7f0]">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-[#1f1f1f] flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
+                                <span>Maintenance End Time (Countdown Timer)</span>
+                            </label>
+                            <span class="text-[10px] text-[#0b57d0] font-semibold bg-[#e8f0fe] px-2 py-0.5 rounded-md">Live Countdown</span>
+                        </div>
+                        <p class="text-[11px] text-[#5f6368]">
+                            Configure target completion date and time. Visitors will see a real-time countdown (Days, Hours, Minutes, Seconds) with auto-reload upon completion.
+                        </p>
+                        <input type="datetime-local" id="maintenanceEndTimeInput" 
+                            value="<?= htmlspecialchars($maintenance_settings['end_time'] ?? '') ?>"
+                            onchange="updateMaintenanceLivePreview()"
+                            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-semibold text-slate-800 bg-white" />
+
+                        <!-- Quick Presets -->
+                        <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                            <span class="text-[10px] font-bold text-[#5f6368] uppercase mr-1">Quick Presets:</span>
+                            <button type="button" onclick="setMaintenancePreset(30)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+30 Mins</button>
+                            <button type="button" onclick="setMaintenancePreset(60)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+1 Hour</button>
+                            <button type="button" onclick="setMaintenancePreset(180)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+3 Hours</button>
+                            <button type="button" onclick="setMaintenancePreset(360)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+6 Hours</button>
+                            <button type="button" onclick="setMaintenancePreset(720)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+12 Hours</button>
+                            <button type="button" onclick="setMaintenancePreset(1440)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+1 Day</button>
+                            <button type="button" onclick="setMaintenancePreset(2880)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+2 Days</button>
+                            <button type="button" onclick="clearMaintenancePreset()" class="px-2 py-1 rounded-lg bg-white border border-[#fce8e6] hover:bg-[#fce8e6] text-[11px] font-bold text-[#c5221f] transition-all cursor-pointer">Clear</button>
+                        </div>
+                    </div>
+
                     <!-- Message Textarea -->
                     <div class="space-y-1.5">
                         <label class="text-xs font-bold text-[#1f1f1f] block">
                             Custom Maintenance Message:
                         </label>
-                        <textarea id="maintenanceMessageInput" rows="4" oninput="updateMaintenanceLivePreview()"
+                        <textarea id="maintenanceMessageInput" rows="3" oninput="updateMaintenanceLivePreview()"
                             placeholder="The website is currently undergoing scheduled maintenance. We will be back shortly!"
                             class="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-semibold text-slate-800 leading-relaxed"><?= htmlspecialchars($maintenance_settings['message'] ?? '') ?></textarea>
                         <p class="text-[10px] text-[#747775]">Provide information about the duration or reasons for the outage to your audience.</p>
@@ -261,14 +292,43 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                             <img src="assets/images/maintenance_illustration.jpg" alt="Illustration" class="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         </div>
                         <!-- Preview Message content -->
-                        <div class="text-center space-y-1">
+                        <div class="text-center space-y-2">
                             <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fef7e0] border border-[#feebc8] text-[#b06000] text-[9px] font-bold font-mono">
                                 <span>SYSTEM MAINTENANCE</span>
                             </div>
-                            <h4 class="text-xs font-black text-[#111827]">We'll Be Right Back</h4>
-                            <p id="maintenancePreviewMsg" class="text-[10px] text-[#5f6368] leading-normal line-clamp-2 px-2">
+                            <h4 class="text-xs font-black text-[#111827]">Scheduled Upgrades in Progress</h4>
+                            <p id="maintenancePreviewMsg" class="text-[10px] text-[#5f6368] leading-normal line-clamp-2 px-1">
                                 <?= htmlspecialchars($maintenance_settings['message'] ?: 'The website is currently undergoing scheduled maintenance. We will be back shortly!') ?>
                             </p>
+
+                            <!-- Live Countdown Badges Preview -->
+                            <div id="maintenancePreviewCountdownCard" class="p-2.5 rounded-xl bg-white border border-[#e0e4eb] space-y-1.5 shadow-2xs">
+                                <div class="text-[9px] font-bold uppercase tracking-wider text-[#0b57d0] flex items-center justify-center gap-1">
+                                    <svg class="w-3 h-3 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
+                                    <span>Estimated End Time Countdown</span>
+                                </div>
+                                <div class="grid grid-cols-4 gap-1 text-center font-mono">
+                                    <div class="bg-[#f0f4f9] rounded-lg p-1">
+                                        <div id="prevCountdownDays" class="text-xs font-extrabold text-[#0b57d0]">00</div>
+                                        <div class="text-[8px] text-[#5f6368] font-sans uppercase">Days</div>
+                                    </div>
+                                    <div class="bg-[#f0f4f9] rounded-lg p-1">
+                                        <div id="prevCountdownHours" class="text-xs font-extrabold text-[#0b57d0]">00</div>
+                                        <div class="text-[8px] text-[#5f6368] font-sans uppercase">Hours</div>
+                                    </div>
+                                    <div class="bg-[#f0f4f9] rounded-lg p-1">
+                                        <div id="prevCountdownMins" class="text-xs font-extrabold text-[#0b57d0]">00</div>
+                                        <div class="text-[8px] text-[#5f6368] font-sans uppercase">Mins</div>
+                                    </div>
+                                    <div class="bg-[#f0f4f9] rounded-lg p-1">
+                                        <div id="prevCountdownSecs" class="text-xs font-extrabold text-[#0b57d0]">00</div>
+                                        <div class="text-[8px] text-[#5f6368] font-sans uppercase">Secs</div>
+                                    </div>
+                                </div>
+                                <div id="prevCountdownTargetText" class="text-[9px] text-[#747775] font-sans">
+                                    No countdown configured (Back online shortly)
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -361,18 +421,21 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                         class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($ad_settings['ad_top_code'] ?? '') ?></textarea>
                 </div>
 
-                <!-- Spot 2: Middle Banner Ad -->
+                <!-- Spot 2: In-Feed Middle Banner Ad (Between Episode Buttons) -->
                 <div class="space-y-2 p-4 rounded-xl bg-white border border-slate-200 shadow-2xs">
                     <div class="flex items-center justify-between">
                         <label class="text-xs font-bold text-[#1f1f1f] flex items-center gap-2">
-                            <span>2. Middle Banner Ad (Between Title Card & Episode Buttons)</span>
+                            <span>2. In-Feed Middle Ad (Between Episode Buttons / In-Feed Manual Ad Code)</span>
                         </label>
                         <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
                             <input type="checkbox" id="adMiddleEnabled" class="rounded text-blue-600" <?= !empty($ad_settings['ad_middle_enabled']) ? 'checked' : '' ?> />
-                            <span class="font-semibold">Enable Middle Spot</span>
+                            <span class="font-semibold">Enable In-Feed Middle Spot</span>
                         </label>
                     </div>
-                    <textarea id="adMiddleCode" rows="3" placeholder="Paste HTML/JavaScript banner code (e.g. 300x250 medium rectangle or responsive banner)"
+                    <p class="text-[11px] text-[#5f6368]">
+                        Paste manual HTML/JavaScript banner code (e.g. 300x250, native in-feed unit, or Adsterra/PropellerAds). Automatically inserted in-feed between episode buttons (repeats every 4 episodes) on all public button pages.
+                    </p>
+                    <textarea id="adMiddleCode" rows="3" placeholder="Paste HTML/JavaScript banner code for in-feed middle ad space"
                         class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($ad_settings['ad_middle_code'] ?? '') ?></textarea>
                 </div>
 
@@ -771,10 +834,76 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
             }
         }
 
+        function setMaintenancePreset(minutes) {
+            const now = new Date();
+            const future = new Date(now.getTime() + minutes * 60 * 1000);
+            
+            // Format to YYYY-MM-DDTHH:mm in local time
+            const year = future.getFullYear();
+            const month = String(future.getMonth() + 1).padStart(2, '0');
+            const day = String(future.getDate()).padStart(2, '0');
+            const hours = String(future.getHours()).padStart(2, '0');
+            const mins = String(future.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('maintenanceEndTimeInput').value = `${year}-${month}-${day}T${hours}:${mins}`;
+            updateMaintenanceLivePreview();
+            showToast(`Maintenance countdown set to +${minutes >= 60 ? (minutes / 60) + ' hour(s)' : minutes + ' mins'}`, 'info');
+        }
+
+        function clearMaintenancePreset() {
+            document.getElementById('maintenanceEndTimeInput').value = '';
+            updateMaintenanceLivePreview();
+            showToast('Maintenance end time countdown cleared.', 'info');
+        }
+
         function updateMaintenanceLivePreview() {
             const msg = document.getElementById('maintenanceMessageInput').value.trim() || 'The website is currently undergoing scheduled maintenance. We will be back shortly!';
             document.getElementById('maintenancePreviewMsg').innerText = msg;
+
+            const endTimeVal = document.getElementById('maintenanceEndTimeInput').value;
+            const targetTextEl = document.getElementById('prevCountdownTargetText');
+
+            if (!endTimeVal) {
+                document.getElementById('prevCountdownDays').innerText = '00';
+                document.getElementById('prevCountdownHours').innerText = '00';
+                document.getElementById('prevCountdownMins').innerText = '00';
+                document.getElementById('prevCountdownSecs').innerText = '00';
+                if (targetTextEl) targetTextEl.innerText = 'No countdown configured (Back online shortly)';
+                return;
+            }
+
+            const targetDate = new Date(endTimeVal);
+            const now = new Date();
+            const diffMs = targetDate.getTime() - now.getTime();
+
+            if (isNaN(diffMs) || diffMs <= 0) {
+                document.getElementById('prevCountdownDays').innerText = '00';
+                document.getElementById('prevCountdownHours').innerText = '00';
+                document.getElementById('prevCountdownMins').innerText = '00';
+                document.getElementById('prevCountdownSecs').innerText = '00';
+                if (targetTextEl) targetTextEl.innerText = 'Time reached / Wrapping up maintenance';
+                return;
+            }
+
+            const totalSecs = Math.floor(diffMs / 1000);
+            const days = Math.floor(totalSecs / 86400);
+            const hours = Math.floor((totalSecs % 86400) / 3600);
+            const mins = Math.floor((totalSecs % 3600) / 60);
+            const secs = totalSecs % 60;
+
+            document.getElementById('prevCountdownDays').innerText = String(days).padStart(2, '0');
+            document.getElementById('prevCountdownHours').innerText = String(hours).padStart(2, '0');
+            document.getElementById('prevCountdownMins').innerText = String(mins).padStart(2, '0');
+            document.getElementById('prevCountdownSecs').innerText = String(secs).padStart(2, '0');
+
+            if (targetTextEl) {
+                targetTextEl.innerText = 'Expected Completion: ' + targetDate.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            }
         }
+
+        // Keep countdown preview ticking live
+        setInterval(updateMaintenanceLivePreview, 1000);
+        document.addEventListener('DOMContentLoaded', updateMaintenanceLivePreview);
 
         async function saveMaintenanceSettings() {
             const btn = document.getElementById('saveMaintenanceBtn');
@@ -783,6 +912,7 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
 
             const payload = {
                 enabled: document.getElementById('maintenanceEnabledInput').checked,
+                end_time: document.getElementById('maintenanceEndTimeInput').value.trim(),
                 message: document.getElementById('maintenanceMessageInput').value.trim()
             };
 
@@ -794,7 +924,7 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Maintenance settings saved successfully!', 'success');
+                    showToast('Maintenance settings & countdown timer saved successfully!', 'success');
                 } else {
                     showToast('Error saving maintenance settings: ' + (data.error || 'Unknown error'), 'error');
                 }

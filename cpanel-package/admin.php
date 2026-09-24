@@ -399,9 +399,9 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 statusBadge.innerText = 'Page Published Successfully';
                 progressText.innerText = 'Gateway successfully resolved and page published.';
 
-                const pageUrl = data.data.clean_url || (baseUrl + '/view.php?slug=' + data.data.slug);
+                const pageUrl = data.data.clean_url || data.data.view_url || (baseUrl + '/p/' + data.data.slug);
                 document.getElementById('pageUrlOutput').value = pageUrl;
-                document.getElementById('pageOpenLink').href = data.data.view_url || pageUrl;
+                document.getElementById('pageOpenLink').href = pageUrl;
                 document.getElementById('pageEditLink').href = 'pages.php?edit=' + data.data.id;
 
                 const targetUrl = data.data.resolved_url || data.data.original_url || '';

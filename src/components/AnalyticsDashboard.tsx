@@ -22,24 +22,57 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
   const totalViews = pages.reduce((acc, p) => acc + (p.views || 0), 0);
   const activePagesCount = pages.length;
   
-  // Real Current Month vs Last Month calculation based on actual page creation timestamps & recorded views
+  // Dynamic Month Calculations (Updates automatically every month)
   const now = new Date();
   const currentMonthNum = now.getMonth();
   const currentYearNum = now.getFullYear();
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonthNum = prevDate.getMonth();
+  const prevYearNum = prevDate.getFullYear();
+
+  const currentMonthName = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const prevMonthName = prevDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const currentMonthShort = now.toLocaleString("en-US", { month: "short" });
+  const prevMonthShort = prevDate.toLocaleString("en-US", { month: "short" });
+
+  const currentYM = `${currentYearNum}-${String(currentMonthNum + 1).padStart(2, "0")}`;
+  const prevYM = `${prevYearNum}-${String(prevMonthNum + 1).padStart(2, "0")}`;
 
   let currentMonthViews = 0;
   let prevMonthViews = 0;
   let hasCurrentMonthPages = false;
   let hasPrevMonthPages = false;
 
+  // Retrieve any stored monthly views breakdown from localStorage
+  const storedMonthly = (() => {
+    try {
+      const saved = localStorage.getItem("slea_monthly_views");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (storedMonthly && typeof storedMonthly === "object") {
+    if (typeof storedMonthly[currentYM] === "number") {
+      currentMonthViews = storedMonthly[currentYM];
+      hasCurrentMonthPages = true;
+    }
+    if (typeof storedMonthly[prevYM] === "number") {
+      prevMonthViews = storedMonthly[prevYM];
+      hasPrevMonthPages = true;
+    }
+  }
+
+  // Calculate from page creation dates if not stored
   pages.forEach((p) => {
     const pDate = new Date(p.created_at || Date.now());
     const views = p.views || 0;
     if (pDate.getMonth() === currentMonthNum && pDate.getFullYear() === currentYearNum) {
-      currentMonthViews += views;
+      if (!storedMonthly) currentMonthViews += views;
       hasCurrentMonthPages = true;
-    } else {
-      prevMonthViews += views;
+    } else if (pDate.getMonth() === prevMonthNum && pDate.getFullYear() === prevYearNum) {
+      if (!storedMonthly) prevMonthViews += views;
       hasPrevMonthPages = true;
     }
   });
@@ -49,6 +82,20 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
   const growthRate = hasHistoricalComparison
     ? Math.round(((currentMonthViews - prevMonthViews) / prevMonthViews) * 100)
     : null;
+
+  // Displayed views according to selected range
+  let displayedViews = totalViews;
+  let displayedViewsLabel = "Total Website Visits";
+  if (timeRange === "current_month") {
+    displayedViews = hasCurrentMonthPages ? currentMonthViews : (totalViews > 0 ? totalViews : 0);
+    displayedViewsLabel = `${currentMonthName} Visits`;
+  } else if (timeRange === "prev_month") {
+    displayedViews = hasPrevMonthPages ? prevMonthViews : 0;
+    displayedViewsLabel = `${prevMonthName} Visits`;
+  } else if (timeRange === "ytd") {
+    displayedViews = totalViews;
+    displayedViewsLabel = `${currentYearNum} YTD Visits`;
+  }
 
   // Real data only: telemetry metrics that are not tracked in database must show N/A or —
   const estimatedSessions = null; // Telemetry not logged in DB
@@ -115,13 +162,13 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
               onClick={() => setTimeRange("current_month")}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeRange === "current_month" ? "bg-white text-[#0b57d0] shadow-2xs" : "text-[#5f6368] hover:text-[#1f1f1f]"}`}
             >
-              This Month
+              {currentMonthShort} (Current)
             </button>
             <button
               onClick={() => setTimeRange("prev_month")}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeRange === "prev_month" ? "bg-white text-[#0b57d0] shadow-2xs" : "text-[#5f6368] hover:text-[#1f1f1f]"}`}
             >
-              Last Month
+              {prevMonthShort} (Last)
             </button>
             <button
               onClick={() => setTimeRange("ytd")}
@@ -158,19 +205,19 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
 
       {/* 4 Key Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total Website Visits */}
+        {/* Card 1: Displayed Range Visits */}
         <div className="bg-white rounded-3xl p-5 border border-[#e0e4eb] shadow-xs space-y-3 relative overflow-hidden group hover:border-[#0b57d0] transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#5f6368] uppercase tracking-wider">Total Website Visits</span>
+            <span className="text-xs font-bold text-[#5f6368] uppercase tracking-wider">{displayedViewsLabel}</span>
             <div className="w-8 h-8 rounded-xl bg-[#e6f4ea] text-[#137333] flex items-center justify-center font-bold">
               <Globe className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-[#111827] font-mono">{totalViews.toLocaleString()}</span>
+            <span className="text-2xl sm:text-3xl font-extrabold text-[#111827] font-mono">{displayedViews.toLocaleString()}</span>
             {growthRate !== null ? (
               <span className={`text-xs font-bold inline-flex items-center px-1.5 py-0.5 rounded-md ${growthRate >= 0 ? "bg-[#e6f4ea] text-[#137333]" : "bg-red-50 text-red-600"}`}>
-                <TrendingUp className="w-3 h-3 mr-0.5" /> {growthRate >= 0 ? "+" : ""}{growthRate}%
+                <TrendingUp className="w-3 h-3 mr-0.5" /> {growthRate >= 0 ? "+" : ""}{growthRate}% vs {prevMonthShort}
               </span>
             ) : (
               <span className="text-xs font-bold text-[#5f6368] bg-[#f1f3f4] px-1.5 py-0.5 rounded-md">
@@ -179,7 +226,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
             )}
           </div>
           <p className="text-[11px] text-[#747775]">
-            {growthRate !== null ? "Compared to previous month recorded pages" : "Insufficient previous month data"}
+            {growthRate !== null ? `Compared to ${prevMonthName} recorded pages` : `Insufficient ${prevMonthName} data`}
           </p>
         </div>
 
@@ -240,7 +287,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#f1f3f4] pb-4">
           <div>
             <h3 className="text-base font-bold text-[#1f1f1f]">
-              {chartMode === "daily" ? "Daily Page Views (Current Month)" : "Last Month vs Current Month Comparison"}
+              {chartMode === "daily" ? `Daily Page Views (${currentMonthName})` : `Last Month (${prevMonthName}) vs Current Month (${currentMonthName})`}
             </h3>
             <p className="text-xs text-[#5f6368]">
               {chartMode === "daily" ? "Time-series view overview." : "Real comparative view analysis between previous and current months."}
@@ -283,7 +330,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
             <div className="space-y-6">
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-[#5f6368]">Last Month Views</span>
+                  <span className="text-[#5f6368]">Last Month Views ({prevMonthName})</span>
                   <span className="font-mono text-[#5f6368]">
                     {hasPrevMonthPages ? `${prevMonthViews.toLocaleString()} views` : "— (N/A)"}
                   </span>
@@ -301,7 +348,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-[#0b57d0]">Current Month Views</span>
+                  <span className="text-[#0b57d0]">Current Month Views ({currentMonthName})</span>
                   <span className="font-mono text-[#0b57d0]">
                     {hasCurrentMonthPages ? `${currentMonthViews.toLocaleString()} views` : (totalViews > 0 ? `${totalViews.toLocaleString()} views` : "— (0 views)")}
                   </span>
@@ -324,19 +371,19 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
               <h4 className="font-bold text-sm text-[#111827]">Monthly Growth Summary</h4>
               {growthRate !== null ? (
                 <p className="text-xs text-[#5f6368] leading-relaxed">
-                  Current month traffic changed by <span className="font-bold text-[#137333]">{growthRate >= 0 ? "+" : ""}{growthRate}%</span> compared to last month based on actual database records.
+                  Traffic in <span className="font-semibold text-slate-800">{currentMonthName}</span> changed by <span className="font-bold text-[#137333]">{growthRate >= 0 ? "+" : ""}{growthRate}%</span> compared to <span className="font-semibold text-slate-800">{prevMonthName}</span> based on actual database records.
                 </p>
               ) : (
                 <p className="text-xs text-[#5f6368] leading-relaxed">
-                  No historical traffic logged for the previous month. Growth percentage calculation: <span className="font-bold text-[#444746]">N/A</span>.
+                  No historical traffic logged for {prevMonthName}. Growth percentage calculation: <span className="font-bold text-[#444746]">N/A</span>.
                 </p>
               )}
               <div className="pt-2 flex items-center justify-center sm:justify-start gap-3">
                 <span className="px-3 py-1 bg-[#e8f0fe] text-[#0b57d0] rounded-xl text-xs font-mono font-bold">
-                  Current: {currentMonthViews || totalViews}
+                  {currentMonthShort}: {currentMonthViews || totalViews}
                 </span>
                 <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-xl text-xs font-mono font-bold">
-                  Previous: {hasPrevMonthPages ? prevMonthViews : "N/A"}
+                  {prevMonthShort}: {hasPrevMonthPages ? prevMonthViews : "N/A"}
                 </span>
               </div>
             </div>

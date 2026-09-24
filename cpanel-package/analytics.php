@@ -18,26 +18,65 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
 
 $pages = SLEA_Datastore::get_all_pages();
 
-// Compute real stats from actual database records
+// Dynamic Monthly Analytics
+$current_ym = date('Y-m');
+$prev_ym = date('Y-m', strtotime('first day of last month'));
+$current_month_name = date('F Y');
+$prev_month_name = date('F Y', strtotime('first day of last month'));
+$current_month_short = date('M');
+$prev_month_short = date('M', strtotime('first day of last month'));
+
+$range = $_GET['range'] ?? 'current_month';
+if (!in_array($range, ['current_month', 'prev_month', 'all'])) {
+    $range = 'current_month';
+}
+
+$monthly_stats = SLEA_Datastore::get_monthly_views_stats();
+
 $total_views = 0;
 $current_month_views = 0;
 $prev_month_views = 0;
 $has_current_month = false;
 $has_prev_month = false;
-$current_month_num = intval(date('n'));
-$current_year_num = intval(date('Y'));
 
-foreach ($pages as $p) {
-    $views = intval($p['views'] ?? 0);
-    $total_views += $views;
-    $p_date = strtotime($p['created_at'] ?? 'now');
-    if (date('n', $p_date) == $current_month_num && date('Y', $p_date) == $current_year_num) {
-        $current_month_views += $views;
-        $has_current_month = true;
-    } else {
-        $prev_month_views += $views;
-        $has_prev_month = true;
+if (!empty($monthly_stats)) {
+    foreach ($monthly_stats as $ym => $cnt) {
+        $total_views += $cnt;
+        if ($ym === $current_ym) {
+            $current_month_views = $cnt;
+            $has_current_month = true;
+        } elseif ($ym === $prev_ym) {
+            $prev_month_views = $cnt;
+            $has_prev_month = true;
+        }
     }
+}
+
+// Derive from pages created timestamp if monthly breakdown is not yet populated
+if ($total_views === 0) {
+    foreach ($pages as $p) {
+        $views = intval($p['views'] ?? 0);
+        $total_views += $views;
+        $p_ym = date('Y-m', strtotime($p['created_at'] ?? 'now'));
+        if ($p_ym === $current_ym) {
+            $current_month_views += $views;
+            $has_current_month = true;
+        } elseif ($p_ym === $prev_ym) {
+            $prev_month_views += $views;
+            $has_prev_month = true;
+        }
+    }
+}
+
+// Determine displayed views based on range
+$displayed_views = $total_views;
+$displayed_label = 'All-Time Website Visits';
+if ($range === 'current_month') {
+    $displayed_views = $has_current_month ? $current_month_views : ($total_views > 0 ? $total_views : 0);
+    $displayed_label = $current_month_name . ' Visits';
+} elseif ($range === 'prev_month') {
+    $displayed_views = $has_prev_month ? $prev_month_views : 0;
+    $displayed_label = $prev_month_name . ' Visits';
 }
 
 // Calculate growth rate only if real historical data exists
@@ -126,8 +165,19 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                         <span class="text-[11px] text-[#5f6368]">Google Analytics style traffic overview &amp; insights</span>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]">● Admin Live</span>
+                <div class="flex items-center gap-3">
+                    <div class="inline-flex rounded-xl bg-[#f1f3f4] p-1 border border-[#e0e4eb] text-xs font-bold">
+                        <a href="?range=current_month" class="px-3 py-1 rounded-lg transition-all <?= $range === 'current_month' ? 'bg-white text-[#0b57d0] shadow-2xs' : 'text-[#5f6368] hover:text-[#1f1f1f]' ?>">
+                            <?= $current_month_short ?> (Current)
+                        </a>
+                        <a href="?range=prev_month" class="px-3 py-1 rounded-lg transition-all <?= $range === 'prev_month' ? 'bg-white text-[#0b57d0] shadow-2xs' : 'text-[#5f6368] hover:text-[#1f1f1f]' ?>">
+                            <?= $prev_month_short ?> (Last)
+                        </a>
+                        <a href="?range=all" class="px-3 py-1 rounded-lg transition-all <?= $range === 'all' ? 'bg-white text-[#0b57d0] shadow-2xs' : 'text-[#5f6368] hover:text-[#1f1f1f]' ?>">
+                            All-Time
+                        </a>
+                    </div>
+                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] border border-[#a8dab5] hidden sm:inline-block">● Admin Live</span>
                 </div>
             </div>
         </header>
@@ -136,11 +186,11 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             <!-- 4 Metric Cards -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="bg-white rounded-3xl p-5 border border-[#e0e4eb] shadow-xs space-y-3">
-                    <span class="text-xs font-bold text-[#5f6368] uppercase tracking-wider block">Total Website Visits</span>
-                    <div class="text-3xl font-extrabold text-[#111827] font-mono"><?= number_format($total_views) ?></div>
+                    <span class="text-xs font-bold text-[#5f6368] uppercase tracking-wider block"><?= htmlspecialchars($displayed_label) ?></span>
+                    <div class="text-3xl font-extrabold text-[#111827] font-mono"><?= number_format($displayed_views) ?></div>
                     <?php if ($growth_rate !== null): ?>
                         <span class="text-xs font-bold <?= $growth_rate >= 0 ? 'text-[#137333] bg-[#e6f4ea]' : 'text-red-600 bg-red-50' ?> px-1.5 py-0.5 rounded">
-                            <?= $growth_rate >= 0 ? '+' : '' ?><?= $growth_rate ?>% vs last month
+                            <?= $growth_rate >= 0 ? '+' : '' ?><?= $growth_rate ?>% vs <?= htmlspecialchars($prev_month_short) ?>
                         </span>
                     <?php else: ?>
                         <span class="text-xs font-bold text-[#5f6368] bg-[#f1f3f4] px-1.5 py-0.5 rounded">
@@ -167,15 +217,20 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
 
             <!-- Last Month vs Current Month Comparison Card -->
             <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6">
-                <div class="border-b border-[#f1f3f4] pb-4">
-                    <h3 class="text-base font-bold text-[#1f1f1f]">Last Month vs Current Month Comparison</h3>
-                    <p class="text-xs text-[#5f6368]">Comparative performance analysis based on real visitor metrics.</p>
+                <div class="border-b border-[#f1f3f4] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-base font-bold text-[#1f1f1f]">Last Month (<?= htmlspecialchars($prev_month_name) ?>) vs Current Month (<?= htmlspecialchars($current_month_name) ?>)</h3>
+                        <p class="text-xs text-[#5f6368]">Monthly dynamic comparative performance based on actual recorded views.</p>
+                    </div>
+                    <span class="text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 self-start sm:self-auto">
+                        <?= htmlspecialchars($current_ym) ?> vs <?= htmlspecialchars($prev_ym) ?>
+                    </span>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 items-center py-2">
                     <div class="space-y-5">
                         <div class="space-y-2">
                             <div class="flex justify-between text-xs font-bold">
-                                <span class="text-[#5f6368]">Last Month Views</span>
+                                <span class="text-[#5f6368]">Last Month Views (<?= htmlspecialchars($prev_month_name) ?>)</span>
                                 <span class="font-mono text-[#5f6368]"><?= $has_prev_month ? number_format($prev_month_views) . ' views' : '— (N/A)' ?></span>
                             </div>
                             <div class="w-full bg-[#f1f3f4] h-3.5 rounded-full overflow-hidden">
@@ -184,7 +239,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                         </div>
                         <div class="space-y-2">
                             <div class="flex justify-between text-xs font-bold">
-                                <span class="text-[#0b57d0]">Current Month Views</span>
+                                <span class="text-[#0b57d0]">Current Month Views (<?= htmlspecialchars($current_month_name) ?>)</span>
                                 <span class="font-mono text-[#0b57d0]"><?= $has_current_month ? number_format($current_month_views) . ' views' : ($total_views > 0 ? number_format($total_views) . ' views' : '0 views') ?></span>
                             </div>
                             <div class="w-full bg-[#f1f3f4] h-3.5 rounded-full overflow-hidden">
@@ -196,11 +251,11 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                         <h4 class="font-bold text-sm text-[#111827]">Traffic Growth Insight</h4>
                         <?php if ($growth_rate !== null): ?>
                             <p class="text-xs text-[#5f6368] leading-relaxed">
-                                Your active button pages generated <span class="font-bold text-[#137333]"><?= number_format($current_month_views) ?></span> views this month, representing a <span class="font-bold text-[#0b57d0]"><?= $growth_rate >= 0 ? '+' : '' ?><?= $growth_rate ?>%</span> change compared to last month.
+                                Your active button pages generated <span class="font-bold text-[#137333]"><?= number_format($current_month_views) ?></span> views in <span class="font-semibold text-slate-800"><?= htmlspecialchars($current_month_name) ?></span>, representing a <span class="font-bold text-[#0b57d0]"><?= $growth_rate >= 0 ? '+' : '' ?><?= $growth_rate ?>%</span> change compared to <span class="font-semibold text-slate-800"><?= htmlspecialchars($prev_month_name) ?></span>.
                             </p>
                         <?php else: ?>
                             <p class="text-xs text-[#5f6368] leading-relaxed">
-                                No previous month history recorded. Growth rate calculation: <span class="font-bold text-[#444746]">N/A</span>.
+                                No previous month history recorded for <?= htmlspecialchars($prev_month_name) ?>. Growth rate calculation: <span class="font-bold text-[#444746]">N/A</span>.
                             </p>
                         <?php endif; ?>
                     </div>

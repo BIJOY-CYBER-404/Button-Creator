@@ -184,9 +184,49 @@ class SLEA_Datastore {
             $pdo = SLEA_DB::get_connection();
             $stmt = $pdo->prepare("UPDATE pages SET views = views + 1 WHERE slug = :s");
             $stmt->execute([':s' => $slug]);
+
+            // Track monthly breakdown dynamically
+            $ym = date('Y-m');
+            try {
+                $mstmt = $pdo->prepare("
+                    INSERT INTO page_views_monthly (page_slug, year_month, views)
+                    VALUES (:slug, :ym, 1)
+                    ON DUPLICATE KEY UPDATE views = views + 1
+                ");
+                $mstmt->execute([':slug' => $slug, ':ym' => $ym]);
+            } catch (Exception $e2) {
+                try {
+                    $mstmt2 = $pdo->prepare("
+                        INSERT INTO page_views_monthly (page_slug, year_month, views)
+                        VALUES (:slug, :ym, 1)
+                        ON CONFLICT(page_slug, year_month) DO UPDATE SET views = views + 1
+                    ");
+                    $mstmt2->execute([':slug' => $slug, ':ym' => $ym]);
+                } catch (Exception $e3) {
+                    // Non-blocking
+                }
+            }
         } catch (Exception $e) {
             // Non-blocking view increment
         }
+    }
+
+    public static function get_monthly_views_stats() {
+        $monthly_data = [];
+        try {
+            $pdo = SLEA_DB::get_connection();
+            $stmt = $pdo->query("SELECT year_month, SUM(views) as total_views FROM page_views_monthly GROUP BY year_month ORDER BY year_month ASC");
+            if ($stmt) {
+                while ($row = $stmt->fetch()) {
+                    if (!empty($row['year_month'])) {
+                        $monthly_data[$row['year_month']] = (int)$row['total_views'];
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            // Table might not exist or error, fallback safely
+        }
+        return $monthly_data;
     }
 
     // -------------------------------------------------------------
@@ -347,8 +387,9 @@ class SLEA_Datastore {
 
     public static function get_maintenance_settings() {
         $defaults = [
-            'enabled' => false,
-            'message' => 'The website is currently undergoing scheduled maintenance. We will be back shortly!'
+            'enabled'  => false,
+            'message'  => 'The website is currently undergoing scheduled maintenance. We will be back shortly!',
+            'end_time' => ''
         ];
 
         try {
@@ -373,8 +414,9 @@ class SLEA_Datastore {
         $now = date('Y-m-d H:i:s');
 
         $clean = [
-            'enabled' => !empty($data['enabled']),
-            'message' => !empty($data['message']) ? trim($data['message']) : 'The website is currently undergoing scheduled maintenance. We will be back shortly!'
+            'enabled'  => !empty($data['enabled']),
+            'message'  => !empty($data['message']) ? trim($data['message']) : 'The website is currently undergoing scheduled maintenance. We will be back shortly!',
+            'end_time' => trim($data['end_time'] ?? '')
         ];
 
         $json = json_encode($clean, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);

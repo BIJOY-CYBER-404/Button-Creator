@@ -15,9 +15,30 @@ header('Cache-Control: public, max-age=60');
 
 $slug = isset($_GET['slug']) ? trim($_GET['slug']) : (isset($_GET['p']) ? trim($_GET['p']) : '');
 
+// Fallback extraction from /p/{slug} path if empty
+if (empty($slug)) {
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+    if (preg_match('#/p/([a-zA-Z0-9_-]+)#', $path, $m)) {
+        $slug = trim($m[1]);
+    }
+}
+
 if (empty($slug)) {
     http_response_code(404);
     die('<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Page Not Found</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;"><div style="max-width:440px;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><h2 style="color:#d93025;margin:0 0 8px;">404 - Page Not Found</h2><p style="font-size:13px;color:#5f6368;margin:0;">The requested episode link page could not be located.</p></div></body></html>');
+}
+
+// Seamless 301 redirect if accessed via direct view.php?slug=... to modern /p/{slug} clean structure
+$request_uri = $_SERVER['REQUEST_URI'] ?? '';
+if (strpos($request_uri, 'view.php') !== false && !empty($slug)) {
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $base_dir = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+    // Normalize slug (strip legacy ep- prefix for public clean URLs)
+    $clean_slug_redirect = (strpos($slug, 'ep-') === 0) ? substr($slug, 3) : $slug;
+    $target_clean_url = ($base_dir === '' || $base_dir === '/') ? "/p/{$clean_slug_redirect}" : "{$base_dir}/p/{$clean_slug_redirect}";
+    header("Location: {$protocol}{$host}{$target_clean_url}", true, 301);
+    exit;
 }
 
 $is_admin = SLEA_Auth::is_logged_in();
@@ -27,6 +48,7 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
     http_response_code(503);
     header('Retry-After: 3600');
     $custom_msg = htmlspecialchars($maintenance['message'] ?? 'The website is currently undergoing scheduled maintenance. We will be back shortly!');
+    $end_time = !empty($maintenance['end_time']) ? trim($maintenance['end_time']) : '';
     ?>
     <!DOCTYPE html>
     <html lang="en">
@@ -35,38 +57,29 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta name="robots" content="noindex, nofollow, noarchive">
         <title>Scheduled Maintenance - Back Soon</title>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
             body { font-family: 'Plus Jakarta Sans', sans-serif; }
-            @keyframes pulse-ring {
-                0% { transform: scale(0.95); opacity: 0.5; }
-                50% { transform: scale(1.05); opacity: 0.8; }
-                100% { transform: scale(0.95); opacity: 0.5; }
-            }
+            .font-mono { font-family: 'JetBrains Mono', monospace; }
             @keyframes spin-slow {
                 from { transform: rotate(0deg); }
                 to { transform: rotate(360deg); }
             }
-            .pulse-circle {
-                animation: pulse-ring 3s infinite ease-in-out;
-            }
             .spin-slow {
-                animation: spin-slow 12s infinite linear;
+                animation: spin-slow 16s infinite linear;
             }
         </style>
     </head>
     <body class="bg-[#f8fafd] text-[#1f1f1f] min-h-screen flex items-center justify-center p-4 sm:p-6 selection:bg-[#d3e3fd] select-none">
         <div class="max-w-lg w-full bg-white rounded-3xl border border-[#e0e4eb] p-6 sm:p-8 shadow-xs text-center space-y-6 relative overflow-hidden">
-            <!-- Top Subtle Graphic/Banner -->
+            <!-- Top Illustration Banner -->
             <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9]">
-                <!-- Interactive gears or animation -->
                 <div class="absolute inset-0 flex items-center justify-center opacity-10">
                     <svg class="w-48 h-48 text-[#0b57d0] spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     </svg>
                 </div>
-                <!-- Premium Custom Maintenance Illustration -->
                 <img src="assets/images/maintenance_illustration.jpg" alt="Under Maintenance" class="w-full h-full object-cover transition-transform hover:scale-105 duration-700" referrerPolicy="no-referrer" />
             </div>
 
@@ -86,43 +99,103 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
                 </p>
             </div>
 
-            <!-- Dynamic Interactive Component (Interactive Progress Gauge) -->
-            <div class="bg-[#f8fafd] rounded-2xl p-4 border border-[#e1e7f0] space-y-3">
-                <div class="flex items-center justify-between text-[11px] font-mono text-[#5f6368]">
-                    <span>Optimization Progress</span>
-                    <span id="progress-text" class="font-bold text-[#0b57d0]">87%</span>
+            <!-- Maintenance End Time Countdown Component (Days, Hours, Minutes, Seconds) -->
+            <?php if (!empty($end_time)): ?>
+            <div id="countdownWrapper" class="bg-[#f8fafd] rounded-2xl p-4 sm:p-5 border border-[#e1e7f0] space-y-3 shadow-2xs">
+                <div class="flex items-center justify-between text-xs font-semibold text-[#5f6368]">
+                    <span class="flex items-center gap-1.5 text-[#0b57d0] font-bold">
+                        <svg class="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
+                        <span>Estimated Time Remaining</span>
+                    </span>
+                    <span id="countdownStatusBadge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0]">COUNTDOWN</span>
                 </div>
-                <div class="w-full bg-[#e1e7f0] h-2 rounded-full overflow-hidden">
-                    <div id="progress-bar" class="bg-[#0b57d0] h-full rounded-full transition-all duration-1000" style="width: 87%;"></div>
+
+                <!-- 4 Real-Time Countdown Badges -->
+                <div class="grid grid-cols-4 gap-2 text-center font-mono">
+                    <div class="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
+                        <div id="cDays" class="text-lg sm:text-2xl font-black text-[#0b57d0]">00</div>
+                        <div class="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Days</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
+                        <div id="cHours" class="text-lg sm:text-2xl font-black text-[#0b57d0]">00</div>
+                        <div class="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Hours</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
+                        <div id="cMins" class="text-lg sm:text-2xl font-black text-[#0b57d0]">00</div>
+                        <div class="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Minutes</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
+                        <div id="cSecs" class="text-lg sm:text-2xl font-black text-[#0b57d0]">00</div>
+                        <div class="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Seconds</div>
+                    </div>
                 </div>
-                <p class="text-[10px] text-slate-400 font-mono text-center">
-                    Auto-refreshes to check status. No action required.
+
+                <div id="countdownNoticeBox" class="text-[11px] text-[#5f6368] font-medium text-center">
+                    Target End Time: <span id="countdownFormattedTime" class="font-bold text-[#1f1f1f]"></span>
+                </div>
+            </div>
+            <?php else: ?>
+            <div class="bg-[#f8fafd] rounded-2xl p-4 border border-[#e1e7f0] text-center space-y-1">
+                <div class="inline-flex items-center gap-1.5 text-xs font-bold text-[#0b57d0]">
+                    <svg class="w-3.5 h-3.5 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
+                    <span>System Upgrades Underway</span>
+                </div>
+                <p class="text-[11px] text-[#5f6368]">
+                    We expect to be back online shortly. Page will refresh automatically.
                 </p>
             </div>
+            <?php endif; ?>
 
-            <!-- Custom Script for Interactive Progress Simulation -->
             <script>
-                // Make the gauge slowly progress up to 99% and then restart or hover, keeping users engaged.
-                let progress = 87;
-                const bar = document.getElementById('progress-bar');
-                const text = document.getElementById('progress-text');
-                
-                setInterval(() => {
-                    if (progress < 98) {
-                        progress += Math.floor(Math.random() * 2) + 1;
-                    } else {
-                        progress = 85; // reset or keep fluctuating
+                const targetIsoStr = <?= json_encode($end_time) ?>;
+                if (targetIsoStr) {
+                    const targetDate = new Date(targetIsoStr);
+                    const formattedEl = document.getElementById('countdownFormattedTime');
+                    if (formattedEl && !isNaN(targetDate.getTime())) {
+                        formattedEl.innerText = targetDate.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
                     }
-                    if (bar && text) {
-                        bar.style.width = progress + '%';
-                        text.innerText = progress + '%';
-                    }
-                }, 3000);
 
-                // Auto reload page every 45 seconds to check if maintenance mode has been disabled!
+                    function tickCountdown() {
+                        const now = new Date();
+                        const diff = targetDate.getTime() - now.getTime();
+                        if (diff <= 0) {
+                            document.getElementById('cDays').innerText = '00';
+                            document.getElementById('cHours').innerText = '00';
+                            document.getElementById('cMins').innerText = '00';
+                            document.getElementById('cSecs').innerText = '00';
+                            const badge = document.getElementById('countdownStatusBadge');
+                            if (badge) {
+                                badge.innerText = 'WRAPPING UP';
+                                badge.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#e6f4ea] text-[#137333]';
+                            }
+                            const notice = document.getElementById('countdownNoticeBox');
+                            if (notice) {
+                                notice.innerHTML = '<span class="text-[#137333] font-bold">Finalizing maintenance checks... Reloading website.</span>';
+                            }
+                            setTimeout(() => window.location.reload(), 6000);
+                            return;
+                        }
+
+                        const totalSecs = Math.floor(diff / 1000);
+                        const days = Math.floor(totalSecs / 86400);
+                        const hours = Math.floor((totalSecs % 86400) / 3600);
+                        const mins = Math.floor((totalSecs % 3600) / 60);
+                        const secs = totalSecs % 60;
+
+                        document.getElementById('cDays').innerText = String(days).padStart(2, '0');
+                        document.getElementById('cHours').innerText = String(hours).padStart(2, '0');
+                        document.getElementById('cMins').innerText = String(mins).padStart(2, '0');
+                        document.getElementById('cSecs').innerText = String(secs).padStart(2, '0');
+                    }
+
+                    tickCountdown();
+                    setInterval(tickCountdown, 1000);
+                }
+
+                // Auto reload periodically to detect when maintenance is finished
                 setTimeout(() => {
                     window.location.reload();
-                }, 45000);
+                }, 30000);
             </script>
         </div>
     </body>
@@ -131,8 +204,18 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
     exit;
 }
 
-// Only public pages are viewable by public! Logged in admins can preview private pages as well
+// Lookup page by slug with bi-directional fallback (supports both clean slug and legacy ep- prefix)
 $page = SLEA_Datastore::get_page_by_slug($slug, !$is_admin);
+if (!$page) {
+    if (strpos($slug, 'ep-') === 0) {
+        $alt_slug = substr($slug, 3);
+        $page = SLEA_Datastore::get_page_by_slug($alt_slug, !$is_admin);
+    } else {
+        $alt_slug = 'ep-' . $slug;
+        $page = SLEA_Datastore::get_page_by_slug($alt_slug, !$is_admin);
+    }
+}
+
 if (!$page) {
     http_response_code(404);
     die('<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Page Not Available</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;"><div style="max-width:440px;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><h2 style="color:#d93025;margin:0 0 8px;">404 - Page Not Available</h2><p style="font-size:13px;color:#5f6368;margin:0;">This episode page is either private or does not exist.</p></div></body></html>');
@@ -161,9 +244,19 @@ $footer_copyright = SLEA_Datastore::get_footer_copyright();
 $ad_settings = SLEA_Datastore::get_ad_settings();
 $share_settings = SLEA_Datastore::get_share_settings();
 
-// Dynamic canonical share URL & encoded payloads
+// Dynamic canonical share URL strictly adhering to clean /p/{slug} structure everywhere
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-$canonical_share_url = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$base_dir = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+// Clean display slug (strip ep- prefix for public clean URLs if present)
+$clean_share_slug = !empty($page['slug']) ? $page['slug'] : $slug;
+if (strpos($clean_share_slug, 'ep-') === 0) {
+    $clean_share_slug = substr($clean_share_slug, 3);
+}
+$canonical_share_url = ($base_dir === '' || $base_dir === '/')
+    ? "{$protocol}{$host}/p/" . rawurlencode($clean_share_slug)
+    : "{$protocol}{$host}{$base_dir}/p/" . rawurlencode($clean_share_slug);
+
 $share_encoded_url = urlencode($canonical_share_url);
 $share_encoded_title = urlencode($page['title'] ?? 'Watch & Download Episodes');
 $share_encoded_msg = urlencode(($page['title'] ?? 'Watch & Download') . ' - Fast Episode Links: ' . $canonical_share_url);
@@ -376,9 +469,22 @@ function resolve_server_info($provider, $url, $btn_text) {
         <!-- Main Episode Content Area (Google Material M3 Light Theme) -->
         <main class="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
             <?php if (!empty($ad_settings['banner_ads_enabled']) && !empty($ad_settings['ad_top_enabled']) && !empty($ad_settings['ad_top_code'])): ?>
-                <!-- Top Banner Ad Placement -->
-                <div class="ad-banner-top w-full flex justify-center items-center overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2">
-                    <?= $ad_settings['ad_top_code'] ?>
+                <!-- Top Banner Ad Placement (Hidden if not configured; shows - Advertisement - header when configured) -->
+                <div class="ad-slot-container w-full text-center space-y-1 my-2">
+                    <div class="ad-label text-[10px] font-semibold tracking-wider text-[#747775] uppercase select-none">- Advertisement -</div>
+                    <div class="ad-content-box w-full flex justify-center items-center overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2">
+                        <?= $ad_settings['ad_top_code'] ?>
+                    </div>
+                    <div class="adblock-fallback hidden w-full rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-4 text-center select-none shadow-2xs">
+                        <div class="flex flex-col items-center justify-center gap-1">
+                            <span class="text-xs font-bold text-[#b78103] flex items-center gap-1.5">
+                                ⚠️ Ad Blocker / DNS Filter Detected
+                            </span>
+                            <p class="text-xs text-[#7c5e10] max-w-md">
+                                Please turn off your ad blocker or private DNS to keep our site free and support fast streaming links.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             <?php endif; ?>
 
@@ -462,9 +568,22 @@ function resolve_server_info($provider, $url, $btn_text) {
             <?php endif; ?>
 
         <?php if (!empty($ad_settings['banner_ads_enabled']) && !empty($ad_settings['ad_middle_enabled']) && !empty($ad_settings['ad_middle_code'])): ?>
-            <!-- Middle Banner Ad Placement -->
-            <div class="ad-banner-middle w-full flex justify-center items-center overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2">
-                <?= $ad_settings['ad_middle_code'] ?>
+            <!-- Middle Banner Ad Placement (Hidden if not configured; shows - Advertisement - header when configured) -->
+            <div class="ad-slot-container w-full text-center space-y-1">
+                <div class="ad-label text-[10px] font-semibold tracking-wider text-[#747775] uppercase select-none">- Advertisement -</div>
+                <div class="ad-content-box w-full flex justify-center items-center overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2">
+                    <?= $ad_settings['ad_middle_code'] ?>
+                </div>
+                <div class="adblock-fallback hidden w-full rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-4 text-center select-none shadow-2xs">
+                    <div class="flex flex-col items-center justify-center gap-1">
+                        <span class="text-xs font-bold text-[#b78103] flex items-center gap-1.5">
+                            ⚠️ Ad Blocker / DNS Filter Detected
+                        </span>
+                        <p class="text-xs text-[#7c5e10] max-w-md">
+                            Please turn off your ad blocker or private DNS to keep our site free and support fast streaming links.
+                        </p>
+                    </div>
+                </div>
             </div>
         <?php endif; ?>
 
@@ -536,31 +655,42 @@ function resolve_server_info($provider, $url, $btn_text) {
                     </div>
                 </div>
 
-                <?php if (($idx + 1) % 4 === 0 && $idx < count($buttons) - 1): ?>
-                    <!-- Banner Ad space after every 4 buttons -->
-                    <div class="ad-banner-in-feed my-3 w-full overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center">
-                        <?php if (!empty($ad_settings['banner_ads_enabled']) && !empty($ad_settings['ad_middle_enabled']) && !empty($ad_settings['ad_middle_code'])): ?>
-                            <div class="w-full flex justify-center items-center">
-                                <?= $ad_settings['ad_middle_code'] ?>
-                            </div>
-                        <?php elseif (!empty($ad_settings['adsense_auto_enabled']) && !empty($ad_settings['adsense_client_id'])): ?>
-                            <div class="py-3 text-center space-y-1">
-                                <ins class="adsbygoogle"
-                                     style="display:block; width:100%;"
-                                     data-ad-client="<?= htmlspecialchars($ad_settings['adsense_client_id']) ?>"
-                                     data-ad-format="auto"
-                                     data-full-width-responsive="true"></ins>
-                                <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-                                <span class="text-[10px] font-bold tracking-wider text-[#0b57d0] uppercase bg-[#e8f0fe] px-2 py-0.5 rounded">
-                                    AdSense Auto Ad
+                <?php 
+                $has_middle_ad = (!empty($ad_settings['banner_ads_enabled']) && !empty($ad_settings['ad_middle_enabled']) && !empty($ad_settings['ad_middle_code'])) || (!empty($ad_settings['adsense_auto_enabled']) && !empty($ad_settings['adsense_client_id']));
+                if (($idx + 1) % 4 === 0 && $idx < count($buttons) - 1 && $has_middle_ad): 
+                ?>
+                    <!-- In-Feed Responsive Banner Ad space after every 4 buttons (Hidden if not configured; shows - Advertisement - header when configured) -->
+                    <div class="ad-slot-container my-3 w-full text-center space-y-1">
+                        <div class="ad-label text-[10px] font-semibold tracking-wider text-[#747775] uppercase select-none">- Advertisement -</div>
+                        <div class="ad-content-box overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center">
+                            <?php if (!empty($ad_settings['banner_ads_enabled']) && !empty($ad_settings['ad_middle_enabled']) && !empty($ad_settings['ad_middle_code'])): ?>
+                                <div class="w-full flex justify-center items-center">
+                                    <?= $ad_settings['ad_middle_code'] ?>
+                                </div>
+                            <?php elseif (!empty($ad_settings['adsense_auto_enabled']) && !empty($ad_settings['adsense_client_id'])): ?>
+                                <div class="py-3 text-center space-y-1">
+                                    <ins class="adsbygoogle"
+                                         style="display:block; width:100%;"
+                                         data-ad-client="<?= htmlspecialchars($ad_settings['adsense_client_id']) ?>"
+                                         data-ad-format="auto"
+                                         data-full-width-responsive="true"></ins>
+                                    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+                                    <span class="text-[10px] font-bold tracking-wider text-[#0b57d0] uppercase bg-[#e8f0fe] px-2 py-0.5 rounded">
+                                        AdSense Auto Ad
+                                    </span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="adblock-fallback hidden w-full rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-4 text-center select-none shadow-2xs">
+                            <div class="flex flex-col items-center justify-center gap-1">
+                                <span class="text-xs font-bold text-[#b78103] flex items-center gap-1.5">
+                                    ⚠️ Ad Blocker / DNS Filter Detected
                                 </span>
+                                <p class="text-xs text-[#7c5e10] max-w-md">
+                                    Please turn off your ad blocker or private DNS to keep our site free and support fast streaming links.
+                                </p>
                             </div>
-                        <?php else: ?>
-                            <div class="py-3 px-4 rounded-xl bg-gradient-to-r from-blue-50/50 via-slate-50 to-blue-50/50 border border-dashed border-[#c2daf8] text-center text-xs text-[#5f6368] flex flex-col items-center justify-center gap-1">
-                                <span class="text-[10px] font-bold tracking-wider text-[#0b57d0] uppercase bg-[#e8f0fe] px-2 py-0.5 rounded">Advertisement Space</span>
-                                <span class="text-[11px] text-[#747775]">Banner ad placed after every 4 buttons (Configured in Admin &gt; Settings)</span>
-                            </div>
-                        <?php endif; ?>
+                        </div>
                     </div>
                 <?php endif; ?>
                 <?php endforeach; ?>
@@ -568,9 +698,22 @@ function resolve_server_info($provider, $url, $btn_text) {
         </div>
 
         <?php if (!empty($ad_settings['banner_ads_enabled']) && !empty($ad_settings['ad_bottom_enabled']) && !empty($ad_settings['ad_bottom_code'])): ?>
-            <!-- Bottom Banner Ad Placement -->
-            <div class="ad-banner-bottom w-full flex justify-center items-center overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2">
-                <?= $ad_settings['ad_bottom_code'] ?>
+            <!-- Bottom Banner Ad Placement (Hidden if not configured; shows - Advertisement - header when configured) -->
+            <div class="ad-slot-container w-full text-center space-y-1 my-2">
+                <div class="ad-label text-[10px] font-semibold tracking-wider text-[#747775] uppercase select-none">- Advertisement -</div>
+                <div class="ad-content-box w-full flex justify-center items-center overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2">
+                    <?= $ad_settings['ad_bottom_code'] ?>
+                </div>
+                <div class="adblock-fallback hidden w-full rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-4 text-center select-none shadow-2xs">
+                    <div class="flex flex-col items-center justify-center gap-1">
+                        <span class="text-xs font-bold text-[#b78103] flex items-center gap-1.5">
+                            ⚠️ Ad Blocker / DNS Filter Detected
+                        </span>
+                        <p class="text-xs text-[#7c5e10] max-w-md">
+                            Please turn off your ad blocker or private DNS to keep our site free and support fast streaming links.
+                        </p>
+                    </div>
+                </div>
             </div>
         <?php endif; ?>
     </main>
@@ -589,11 +732,11 @@ function resolve_server_info($provider, $url, $btn_text) {
     <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-full"></div>
 
     <?php if (!empty($share_settings['enabled']) && !empty($share_settings['show_mobile_fab'])): ?>
-    <!-- Floating Mobile Share Button (Visible on Mobile Devices for Quick 1-Tap Sharing & Link Copy) -->
+    <!-- Floating Mobile Share Button (Decreased FAB icon size for optimal ergonomics) -->
     <div class="fixed bottom-5 right-4 z-40 sm:hidden">
         <button type="button" onclick="handleMobileFabShare()" aria-label="Share page"
-            class="w-16 h-16 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white flex items-center justify-center shadow-2xl transition-all active:scale-95 border-2 border-white ring-4 ring-[#0b57d0]/25 cursor-pointer">
-            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            class="w-13 h-13 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white flex items-center justify-center shadow-xl transition-all active:scale-95 border-2 border-white ring-4 ring-[#0b57d0]/20 cursor-pointer">
+            <svg class="w-5.5 h-5.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
             </svg>
         </button>
@@ -949,6 +1092,57 @@ function resolve_server_info($provider, $url, $btn_text) {
             }
         }
         <?php endif; ?>
+
+        // -------------------------------------------------------------
+        // Universal AdBlocker & Private DNS Detection
+        // -------------------------------------------------------------
+        (function initAdBlockerDetection() {
+            function handleAdBlockDetected() {
+                const slots = document.querySelectorAll('.ad-slot-container');
+                slots.forEach(function(slot) {
+                    const contentBox = slot.querySelector('.ad-content-box');
+                    const fallback = slot.querySelector('.adblock-fallback');
+                    if (contentBox) contentBox.style.display = 'none';
+                    if (fallback) fallback.classList.remove('hidden');
+                });
+            }
+
+            // 1. Bait element test
+            const bait = document.createElement('div');
+            bait.className = 'adsbox pub_300x250 pub_728x90 text-ad textAd text_ad text-ads ad-banner adsbygoogle';
+            bait.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;pointer-events:none;';
+            document.body.appendChild(bait);
+
+            setTimeout(function() {
+                let blocked = false;
+                if (!bait || bait.offsetParent === null || bait.offsetHeight === 0 || bait.offsetLeft === 0) {
+                    blocked = true;
+                } else {
+                    const style = window.getComputedStyle(bait);
+                    if (style.display === 'none' || style.visibility === 'hidden') {
+                        blocked = true;
+                    }
+                }
+
+                if (bait && bait.parentNode) {
+                    bait.parentNode.removeChild(bait);
+                }
+
+                if (blocked) {
+                    handleAdBlockDetected();
+                    return;
+                }
+
+                // 2. Network / DNS test to standard ad script endpoint
+                fetch('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', {
+                    method: 'HEAD',
+                    mode: 'no-cors',
+                    cache: 'no-store'
+                }).catch(function() {
+                    handleAdBlockDetected();
+                });
+            }, 100);
+        })();
     </script>
 </body>
 </html>

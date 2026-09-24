@@ -20,6 +20,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [qrModalOpen, setQrModalOpen] = useState<boolean>(false);
   const [mobileShareSheetOpen, setMobileShareSheetOpen] = useState<boolean>(false);
+  const [adBlocked, setAdBlocked] = useState<boolean>(false);
 
   const [siteIdentity, setSiteIdentity] = useState<SiteIdentity>(() => {
     const saved = localStorage.getItem("slea_site_identity");
@@ -62,6 +63,55 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
       banner_bottom: "",
     };
   });
+
+  // Check for ad blocker / private DNS
+  useEffect(() => {
+    let isMounted = true;
+
+    const detectAdBlocker = async () => {
+      // 1. Bait element test
+      const bait = document.createElement("div");
+      bait.className = "adsbox pub_300x250 pub_728x90 text-ad textAd text_ad text-ads ad-banner adsbygoogle";
+      bait.style.cssText = "position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;pointer-events:none;";
+      document.body.appendChild(bait);
+
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
+      const isHidden =
+        !bait ||
+        bait.offsetParent === null ||
+        bait.offsetHeight === 0 ||
+        bait.offsetLeft === 0 ||
+        window.getComputedStyle(bait).display === "none" ||
+        window.getComputedStyle(bait).visibility === "hidden";
+
+      if (bait.parentNode) {
+        bait.parentNode.removeChild(bait);
+      }
+
+      if (isHidden) {
+        if (isMounted) setAdBlocked(true);
+        return;
+      }
+
+      // 2. Network test
+      try {
+        await fetch("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", {
+          method: "HEAD",
+          mode: "no-cors",
+          cache: "no-store",
+        });
+      } catch {
+        if (isMounted) setAdBlocked(true);
+      }
+    };
+
+    detectAdBlocker();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const defaultMenuItems = [
     { title: "Home", url: "https://moviehubhq.com/" },
@@ -392,12 +442,30 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         )}
       </div>
 
-      {/* Top Banner Ad Placement if configured in admin */}
+      {/* Top Banner Ad Placement (Hidden if not configured; shows - Advertisement - header when configured) */}
       {adSettings?.banner_top && (
-        <div
-          className="w-full overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center"
-          dangerouslySetInnerHTML={{ __html: adSettings.banner_top }}
-        />
+        <div className="w-full text-center space-y-1 my-2">
+          <div className="text-[10px] font-semibold tracking-wider text-[#747775] uppercase select-none">
+            - Advertisement -
+          </div>
+          {!adBlocked ? (
+            <div
+              className="w-full overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center"
+              dangerouslySetInnerHTML={{ __html: adSettings.banner_top }}
+            />
+          ) : (
+            <div className="w-full rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-4 text-center select-none shadow-2xs">
+              <div className="flex flex-col items-center justify-center gap-1">
+                <span className="text-xs font-bold text-[#b78103] flex items-center gap-1.5">
+                  ⚠️ Ad Blocker / DNS Filter Detected
+                </span>
+                <p className="text-xs text-[#7c5e10] max-w-md">
+                  Please turn off your ad blocker or private DNS to keep our site free and support fast streaming links.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Social Media & Instant Share Card (Google Material M3 Light Theme) */}
@@ -561,35 +629,47 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
                   </div>
                 </div>
 
-                {/* Banner Ads Space after every 4 buttons */}
-                {(idx + 1) % 4 === 0 && idx < page.buttons.length - 1 && (
-                  <div className="my-3 overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center">
-                    {adSettings?.banner_middle ? (
-                      <div dangerouslySetInnerHTML={{ __html: adSettings.banner_middle }} />
-                    ) : adSettings?.adsense_auto_ads && adSettings?.adsense_publisher_id ? (
-                      <div className="py-3 text-center space-y-1">
-                        <ins
-                          className="adsbygoogle block w-full"
-                          data-ad-client={adSettings.adsense_publisher_id}
-                          data-ad-format="auto"
-                          data-full-width-responsive="true"
-                        />
-                        <span className="text-[10px] font-bold tracking-wider text-[#0b57d0] uppercase bg-[#e8f0fe] px-2 py-0.5 rounded">
-                          AdSense Auto Ad
-                        </span>
+                {/* In-Feed Responsive Banner Ad Space after every 4 buttons (Hidden if not configured; shows - Advertisement - header when configured) */}
+                {(idx + 1) % 4 === 0 &&
+                  idx < page.buttons.length - 1 &&
+                  (Boolean(adSettings?.banner_middle) ||
+                    Boolean(adSettings?.adsense_auto_ads && adSettings?.adsense_publisher_id)) && (
+                    <div className="my-3 w-full text-center space-y-1">
+                      <div className="text-[10px] font-semibold tracking-wider text-[#747775] uppercase select-none">
+                        - Advertisement -
                       </div>
-                    ) : (
-                      <div className="py-3 px-4 rounded-xl bg-gradient-to-r from-blue-50/50 via-slate-50 to-blue-50/50 border border-dashed border-[#c2daf8] text-center text-xs text-[#5f6368] flex flex-col items-center justify-center gap-1">
-                        <span className="text-[10px] font-bold tracking-wider text-[#0b57d0] uppercase bg-[#e8f0fe] px-2 py-0.5 rounded">
-                          Advertisement Space
-                        </span>
-                        <span className="text-[11px] text-[#747775]">
-                          Banner ad placed after every 4 episode buttons (Configured in Admin &gt; Settings)
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      {!adBlocked ? (
+                        <div className="overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center">
+                          {adSettings?.banner_middle ? (
+                            <div dangerouslySetInnerHTML={{ __html: adSettings.banner_middle }} />
+                          ) : (
+                            <div className="py-3 text-center space-y-1">
+                              <ins
+                                className="adsbygoogle block w-full"
+                                data-ad-client={adSettings.adsense_publisher_id}
+                                data-ad-format="auto"
+                                data-full-width-responsive="true"
+                              />
+                              <span className="text-[10px] font-bold tracking-wider text-[#0b57d0] uppercase bg-[#e8f0fe] px-2 py-0.5 rounded">
+                                AdSense Auto Ad
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="w-full rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-4 text-center select-none shadow-2xs">
+                          <div className="flex flex-col items-center justify-center gap-1">
+                            <span className="text-xs font-bold text-[#b78103] flex items-center gap-1.5">
+                              ⚠️ Ad Blocker / DNS Filter Detected
+                            </span>
+                            <p className="text-xs text-[#7c5e10] max-w-md">
+                              Please turn off your ad blocker or private DNS to keep our site free and support fast streaming links.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
               </React.Fragment>
             );
           })
@@ -600,12 +680,30 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         )}
       </div>
 
-      {/* Bottom Banner Ad Placement if configured */}
+      {/* Bottom Banner Ad Placement (Hidden if not configured; shows - Advertisement - header when configured) */}
       {adSettings?.banner_bottom && (
-        <div
-          className="w-full overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center"
-          dangerouslySetInnerHTML={{ __html: adSettings.banner_bottom }}
-        />
+        <div className="w-full text-center space-y-1 my-2">
+          <div className="text-[10px] font-semibold tracking-wider text-[#747775] uppercase select-none">
+            - Advertisement -
+          </div>
+          {!adBlocked ? (
+            <div
+              className="w-full overflow-hidden rounded-2xl bg-white border border-[#e0e4eb] p-2 text-center"
+              dangerouslySetInnerHTML={{ __html: adSettings.banner_bottom }}
+            />
+          ) : (
+            <div className="w-full rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-4 text-center select-none shadow-2xs">
+              <div className="flex flex-col items-center justify-center gap-1">
+                <span className="text-xs font-bold text-[#b78103] flex items-center gap-1.5">
+                  ⚠️ Ad Blocker / DNS Filter Detected
+                </span>
+                <p className="text-xs text-[#7c5e10] max-w-md">
+                  Please turn off your ad blocker or private DNS to keep our site free and support fast streaming links.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Footer with Configured Copyright */}
@@ -613,15 +711,15 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         <div dangerouslySetInnerHTML={{ __html: footerText }} />
       </footer>
 
-      {/* Floating Mobile Share Button (FAB) */}
+      {/* Floating Mobile Share Button (Decreased FAB icon size for optimal ergonomics) */}
       <div className="fixed bottom-5 right-4 z-40 sm:hidden">
         <button
           type="button"
           onClick={handleMobileFabShare}
           aria-label="Share page"
-          className="w-16 h-16 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white flex items-center justify-center shadow-2xl transition-all active:scale-95 border-2 border-white ring-4 ring-[#0b57d0]/25 cursor-pointer"
+          className="w-13 h-13 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white flex items-center justify-center shadow-xl transition-all active:scale-95 border-2 border-white ring-4 ring-[#0b57d0]/20 cursor-pointer"
         >
-          <Share2 className="w-8 h-8" />
+          <Share2 className="w-5.5 h-5.5" />
         </button>
       </div>
 
