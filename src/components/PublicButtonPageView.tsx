@@ -142,6 +142,12 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     }
   };
 
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    return Boolean(localStorage.getItem("slea_admin_token"));
+  });
+
+
+
   const renderServerIcon = (provider?: string, url?: string, text?: string) => {
     const haystack = `${provider || ""} ${url || ""} ${text || ""}`.toLowerCase();
     if (haystack.includes("gdrive") || haystack.includes("drive.google") || haystack.includes("google")) {
@@ -484,7 +490,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
                     E{epNum}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-[#111827] truncate group-hover:text-[#0b57d0] transition-colors flex items-center gap-1.5">
+                    <div className="text-sm font-bold text-[#111827] truncate group-hover:text-[#0b57d0] transition-colors flex items-center gap-1.5 flex-wrap">
                       <span>Episode {epNum}</span>
                       {btn.text && !btn.text.toLowerCase().includes("episode") && (
                         <span className="text-xs text-[#747775] font-normal truncate hidden sm:inline">({btn.text})</span>

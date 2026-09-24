@@ -118,7 +118,7 @@ export interface CreatePageResponse {
 
 export type PipelineMode = "unified" | "extractor" | "resolver";
 
-export type ViewTab = "admin_flow" | "pages_list" | "settings" | "updater" | "cpanel_hub" | "wp_plugin";
+export type ViewTab = "admin_flow" | "pages_list" | "settings" | "updater" | "analytics" | "cpanel_hub" | "wp_plugin";
 
 export interface SiteIdentity {
   site_name: string;

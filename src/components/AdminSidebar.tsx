@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { PlusCircle, Layers, Settings, RefreshCw, Server, FolderArchive, LogOut, Zap, ShieldCheck, Home } from "lucide-react";
+import { PlusCircle, Layers, Settings, RefreshCw, BarChart3, Server, FolderArchive, LogOut, Zap, ShieldCheck, Home } from "lucide-react";
 import { ViewTab, SiteIdentity } from "../types";
 
 interface AdminSidebarProps {
@@ -68,6 +68,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       label: "Update",
       icon: <RefreshCw className="w-5 h-5" />,
       tooltip: "One-Click System Updater (/update.php)",
+    },
+    {
+      id: "analytics",
+      label: "Analytics",
+      icon: <BarChart3 className="w-5 h-5" />,
+      tooltip: "Monthly Analytics & Statistics (/analytics.php)",
     },
     {
       id: "cpanel_hub",

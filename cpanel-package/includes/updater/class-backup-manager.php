@@ -140,6 +140,16 @@ class SLEA_BackupManager {
         file_put_contents($target_file, $sql_dump);
     }
 
+    public function delete_backup($dir = null) {
+        $target = $dir ?: $this->backup_dir;
+        if (is_dir($target)) {
+            $this->delete_directory($target);
+            $this->logger->log("Backup Cleanup", "[OK] Pre-update backup removed: " . str_replace(APP_ROOT, '', $target));
+            return true;
+        }
+        return false;
+    }
+
     public function delete_directory($dir) {
         if (!is_dir($dir)) return;
         $files = array_diff(scandir($dir), ['.', '..']);

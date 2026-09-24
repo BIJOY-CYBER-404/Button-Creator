@@ -255,6 +255,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
                         <span className="px-2 py-0.5 rounded-full bg-[#e6f4ea] text-[#137333] text-[10px] font-bold shrink-0">
                           {p.views || 0} views
                         </span>
+
                         <span className="px-2 py-0.5 rounded-full bg-[#f0f4f9] text-[#444746] text-[10px] font-mono shrink-0">
                           {btnCount} buttons
                         </span>

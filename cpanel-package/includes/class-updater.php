@@ -315,8 +315,11 @@ class SLEA_Updater {
             @unlink($download_target);
             $backup_manager->delete_directory($staging_dir);
 
-            // Enforce backup retention count
-            $backup_manager->enforce_retention_limit($config['backup_retention']);
+            // Delete pre-update backup upon success to free hosting disk space
+            if (!empty($backup_dir) && is_dir($backup_dir)) {
+                $backup_manager->delete_backup($backup_dir);
+                $logger->log("Finalizing update", "[OK] Update verified successful: Pre-update backup removed to free hosting storage.");
+            }
 
             // Remove maintenance mode
             if (file_exists(APP_ROOT . '/.maintenance')) {

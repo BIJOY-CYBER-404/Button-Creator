@@ -51,6 +51,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     pages_list: "Manage Pages (/pages)",
     settings: "Admin Settings (/settings)",
     updater: "One-Click System Updater (/update.php)",
+    analytics: "Monthly Analytics & Statistics (/analytics.php)",
     cpanel_hub: "cPanel Deployment Hub",
     wp_plugin: "WordPress Automation Plugin",
   };

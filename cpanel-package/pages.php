@@ -641,10 +641,10 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 <div class="col-span-5">
                     <input type="text" placeholder="Button Label (e.g. Episode 1)" value="${escapeHtml(text)}" class="btn-text w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-medium outline-none focus:border-blue-600" required />
                 </div>
-                <div class="col-span-4">
+                <div class="col-span-5">
                     <input type="url" placeholder="Destination URL" value="${escapeHtml(url)}" class="btn-url w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono outline-none focus:border-blue-600" required />
                 </div>
-                <div class="col-span-2">
+                <div class="col-span-1">
                     <input type="text" placeholder="Quality (720p)" value="${escapeHtml(quality)}" class="btn-quality w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs text-center outline-none focus:border-blue-600" />
                 </div>
                 <div class="col-span-1 text-center">

@@ -280,90 +280,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
-        <!-- Progress Tracker & Live Execution Console -->
-        <div id="progressSection" class="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm hidden space-y-6 animate-fade-in">
-            <div class="flex items-center justify-between border-b border-[#f1f3f4] pb-4">
-                <div class="flex items-center space-x-3">
-                    <div id="spinnerGlobal" class="w-6 h-6 border-2 border-[#0052cc] border-t-transparent rounded-full animate-spin"></div>
-                    <div>
-                        <h3 class="text-base font-bold text-[#1f1f1f]" id="progressTitle">Executing One-Click Application Update</h3>
-                        <span class="text-xs text-[#5f6368]" id="progressSub">Please keep this window open while the installation completes.</span>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span id="progressPercentBadge" class="px-2.5 py-1 text-xs font-mono font-extrabold rounded-lg bg-[#0052cc] text-white shadow-xs">
-                        0%
-                    </span>
-                    <span id="currentStepBadge" class="px-3 py-1 text-xs font-bold rounded-full bg-[#e8f0fe] text-[#0052cc] border border-[#c2e7ff]">
-                        Step 1 / 10
-                    </span>
-                </div>
-            </div>
-
-            <!-- Animated Progress Bar Strip -->
-            <div class="space-y-1.5">
-                <div class="flex justify-between text-xs font-bold text-[#5f6368]">
-                    <span id="progressStepName">Initializing update pipeline...</span>
-                    <span id="progressPercentText" class="font-mono text-[#0052cc]">0%</span>
-                </div>
-                <div class="w-full h-3 bg-[#e8f0fe] rounded-full overflow-hidden p-0.5 border border-[#c2e7ff]">
-                    <div id="progressBarFill" class="h-full bg-gradient-to-r from-[#0052cc] via-[#0066ff] to-[#00c6ff] rounded-full progress-striped transition-all duration-500 ease-out" style="width: 0%;"></div>
-                </div>
-            </div>
-
-            <!-- Step Progress List -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs" id="stepGrid">
-                <div id="step-1" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">1. Checking update manifest...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-2" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">2. Downloading release ZIP package...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-3" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">3. Verifying package &amp; Zip Slip security...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-4" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">4. Creating file &amp; database backup...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-5" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">5. Extracting files to staging workspace...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-6" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">6. Checking environment compatibility...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-7" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">7. Running versioned database migrations...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-8" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">8. Deploying application files...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-9" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">9. Running post-deployment health checks...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-                <div id="step-10" class="p-3 rounded-xl border border-[#dadce0] bg-[#f8fafd] flex items-center justify-between">
-                    <span class="font-medium text-[#3c4043]">10. Finalizing update...</span>
-                    <span class="status-icon font-mono text-[#5f6368]">Pending</span>
-                </div>
-            </div>
-
-            <!-- Terminal Log Window (Light Theme) -->
-            <div class="space-y-2">
-                <span class="text-xs font-bold text-[#5f6368] uppercase tracking-wider block">Live Execution Output</span>
-                <div id="terminalLog" class="bg-[#f8fafd] text-[#1e293b] font-mono text-xs p-4 rounded-xl max-h-64 overflow-y-auto space-y-1 leading-relaxed border border-[#dadce0] shadow-inner">
-                    <div class="text-[#64748b]">[LOG START] Initializing One-Click Updater...</div>
-                </div>
-            </div>
-        </div>
-
         <!-- Configuration Settings Section -->
         <div class="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm space-y-6">
             <div class="flex items-center justify-between border-b border-[#f1f3f4] pb-4">
@@ -673,27 +589,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 return;
             }
 
-            const progSec = document.getElementById('progressSection');
-            const term = document.getElementById('terminalLog');
             const btnUpdate = document.getElementById('btnStartUpdate');
             const modalOverlay = document.getElementById('updateModalOverlay');
             const modalCard = document.getElementById('updateModalCard');
             
-            // Show page progress section
-            progSec.classList.remove('hidden');
             if (btnUpdate) btnUpdate.disabled = true;
 
-            // Show Animated Modal Overlay
+            // Show Animated Modal Overlay Popup with Live Logs
             if (modalOverlay) {
                 modalOverlay.classList.remove('hidden');
                 requestAnimationFrame(() => {
                     modalOverlay.classList.remove('opacity-0');
-                    modalCard.classList.remove('scale-95');
-                    modalCard.classList.add('scale-100');
+                    if (modalCard) {
+                        modalCard.classList.remove('scale-95');
+                        modalCard.classList.add('scale-100');
+                    }
                 });
             }
-
-            term.innerHTML = '<div class="text-[#0052cc] font-bold">[START] Launching One-Click Application Update...</div>';
 
             const steps = [
                 'Checking update manifest...',
@@ -713,12 +625,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const interval = setInterval(() => {
                 if (stepIdx <= 10) {
                     const pct = Math.round((stepIdx / 10) * 100);
-                    
-                    // Update Page Progress Bar
-                    document.getElementById('progressBarFill').style.width = pct + '%';
-                    document.getElementById('progressPercentBadge').innerText = pct + '%';
-                    document.getElementById('progressPercentText').innerText = pct + '%';
-                    document.getElementById('progressStepName').innerText = steps[stepIdx - 1];
 
                     // Update Modal Overlay Elements
                     const modalProgressBar = document.getElementById('modalProgressBar');
@@ -735,7 +641,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     const modalLiveLog = document.getElementById('modalLiveLog');
                     if (modalLiveLog) modalLiveLog.innerText = `[Step ${stepIdx}/10] ${steps[stepIdx - 1]}`;
 
-                    // Update mini dots
+                    // Update mini dots in modal
                     const dotIndex = Math.ceil(stepIdx / 2);
                     for (let d = 1; d <= 5; d++) {
                         const dot = document.getElementById('dot-' + d);
@@ -747,24 +653,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                     }
-
-                    // Update Step Cards in Grid
-                    const el = document.getElementById('step-' + stepIdx);
-                    if (el) {
-                        el.className = 'p-3 rounded-xl border-2 border-[#0052cc] bg-[#e8f0fe] flex items-center justify-between font-bold text-[#0052cc] shadow-md shadow-blue-500/10 scale-[1.01] transition-all';
-                        el.querySelector('.status-icon').innerHTML = '<span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#0052cc] animate-ping"></span>Running</span>';
-                    }
-                    if (stepIdx > 1) {
-                        const prevEl = document.getElementById('step-' + (stepIdx - 1));
-                        if (prevEl) {
-                            prevEl.className = 'p-3 rounded-xl border border-[#ceedd5] bg-[#e6f4ea] flex items-center justify-between font-semibold text-[#137333] transition-all';
-                            prevEl.querySelector('.status-icon').innerText = '✓ Done';
-                        }
-                    }
-
-                    document.getElementById('currentStepBadge').innerText = 'Step ' + stepIdx + ' / 10';
-                    term.innerHTML += '<div class="text-[#0052cc]">[STEP ' + stepIdx + '] ' + steps[stepIdx - 1] + '</div>';
-                    term.scrollTop = term.scrollHeight;
 
                     stepIdx++;
                 } else {
@@ -780,28 +668,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .then(res => res.json())
             .then(data => {
                 clearInterval(interval);
-                
-                // Set 100%
-                document.getElementById('progressBarFill').style.width = '100%';
-                document.getElementById('progressPercentBadge').innerText = '100%';
-                document.getElementById('progressPercentText').innerText = '100%';
 
                 const modalProgressBar = document.getElementById('modalProgressBar');
                 if (modalProgressBar) modalProgressBar.style.width = '100%';
                 const modalPercentDisplay = document.getElementById('modalPercentDisplay');
                 if (modalPercentDisplay) modalPercentDisplay.innerText = '100%';
 
-                // Mark all steps done
-                for (let i = 1; i <= 10; i++) {
-                    const el = document.getElementById('step-' + i);
-                    if (el) {
-                        el.className = 'p-3 rounded-xl border border-[#ceedd5] bg-[#e6f4ea] flex items-center justify-between font-semibold text-[#137333]';
-                        el.querySelector('.status-icon').innerText = '✓ Done';
-                    }
-                }
-
                 if (data.success) {
-                    term.innerHTML += '<div class="text-[#137333] font-bold">[SUCCESS] ' + data.message + '</div>';
                     showToast(data.message, 'success');
 
                     // Trigger Confetti Blast Animation!
@@ -828,7 +701,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     setTimeout(() => window.location.reload(), 2400);
                 } else {
-                    term.innerHTML += '<div class="text-[#c5221f] font-bold">[FAILED] ' + data.error + '</div>';
                     showToast(data.error, 'error');
 
                     const modalStatusTitle = document.getElementById('modalStatusTitle');
@@ -844,7 +716,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             })
             .catch(err => {
                 clearInterval(interval);
-                term.innerHTML += '<div class="text-[#c5221f] font-bold">[NETWORK ERROR] ' + err.message + '</div>';
                 showToast('Update execution error: ' + err.message, 'error');
             });
         }

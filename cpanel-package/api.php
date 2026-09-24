@@ -14,15 +14,15 @@ require_once __DIR__ . '/includes/class-updater.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+$action = isset($_GET['action']) ? trim($_GET['action']) : '';
+$raw_input = file_get_contents('php://input');
+$data = json_decode($raw_input, true) ?: [];
+
 // Strict Admin Authorization Check
 SLEA_Auth::require_admin();
 
 // Ensure script execution time doesn't exceed 40 seconds on shared hosting
 @set_time_limit(40);
-
-$action = isset($_GET['action']) ? trim($_GET['action']) : '';
-$raw_input = file_get_contents('php://input');
-$data = json_decode($raw_input, true) ?: [];
 
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
 $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']), '/\\');

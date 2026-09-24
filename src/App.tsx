@@ -15,6 +15,7 @@ import { PagesManager } from "./components/PagesManager";
 import { OneClickUpdaterHub } from "./components/OneClickUpdaterHub";
 import { CPanelDeploymentHub } from "./components/CPanelDeploymentHub";
 import { WordPressPluginHub } from "./components/WordPressPluginHub";
+import { AnalyticsDashboard } from "./components/AnalyticsDashboard";
 import { PublicButtonPageView } from "./components/PublicButtonPageView";
 import { ButtonPage, ViewTab } from "./types";
 
@@ -25,7 +26,31 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<ViewTab>("admin_flow");
   const [activeSlugView, setActiveSlugView] = useState<string | null>(null);
+  const [pages, setPages] = useState<ButtonPage[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const fetchPages = async () => {
+    try {
+      const res = await fetch("/api/pages", {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "x-admin-token": adminToken,
+        },
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setPages(data.data);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchPages();
+    }
+  }, [adminToken, isAdmin, currentTab]);
 
   // Detect URL slug for public viewing (e.g. /p/flp-120926 or ?p=flp-120926)
   useEffect(() => {
@@ -187,6 +212,18 @@ export default function App() {
                   transition={{ duration: 0.18 }}
                 >
                   <OneClickUpdaterHub onNotify={addToast} />
+                </motion.div>
+              )}
+
+              {currentTab === "analytics" && (
+                <motion.div
+                  key="tab-analytics"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <AnalyticsDashboard pages={pages} onRefresh={fetchPages} />
                 </motion.div>
               )}
 

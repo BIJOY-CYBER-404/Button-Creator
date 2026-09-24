@@ -17,7 +17,10 @@
     # Block direct browser access to sensitive backend directories and config files
     RewriteRule ^data/ - [F,L]
     RewriteRule ^includes/ - [F,L]
+    RewriteRule ^database/ - [F,L]
     RewriteRule ^config\.php$ - [F,L]
+    RewriteRule \.(sql|log|bak|sqlite|db|env|py|sh|jsonl)$ - [F,L]
+    RewriteRule (extractor|resolver|unified_engine|pack_cpanel)\.py$ - [F,L]
 </IfModule>
 
 # Extra Security Headers

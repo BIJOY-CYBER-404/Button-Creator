@@ -1,16 +1,14 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "4.3.0",
+  "version": "4.4.0",
   "release_date": "2026-09-24",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "7a3ecc9212da7e5b09dcca9e6b85944ca21a7b4f316e39b48d98a9a7af6c1fb7",
+  "checksum": "d8a56c94e66b26a401823226e151c0b78081c319159bc0459a0322ea17e476c9",
   "release_notes": [
-    "New Social Media & Mobile Display Share feature: 1-click Copy Link with toast feedback, native OS Mobile Share, WhatsApp, Telegram, Facebook, and X/Twitter",
-    "Interactive QR Code scanner modal for instant mobile sharing and device-to-device opening",
-    "Floating Mobile Share Action Button (FAB) and sliding mobile bottom share drawer",
-    "Fixed emoji support in footer copyright: converted emojis to entity encoding immune to MySQL charset corruption",
-    "Auto-Repair ?? Emojis button and automatic migration healing for legacy question marks",
-    "Enforced utf8mb4 full 4-byte client connection and table collation on MySQL connections"
+    "Added Monthly Analytics & Statistics dashboard in admin panel (Google Analytics style metrics: top 10 most viewed pages, total visits, avg visit time, device breakdown, traffic channels)",
+    "Removed click tracker feature completely as requested",
+    "Enhanced security rules in .htaccess and strict admin authentication checks",
+    "Streamlined One-Click Updater interface with popup modal logs"
   ]
 }

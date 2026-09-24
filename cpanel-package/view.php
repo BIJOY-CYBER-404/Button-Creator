@@ -495,6 +495,7 @@ function resolve_server_info($provider, $url, $btn_text) {
                     $btn_quality = htmlspecialchars($btn['quality'] ?? 'HD');
                     $raw_provider = $btn['provider'] ?? '';
                     $raw_ep = $btn['episode'] ?? ($idx + 1);
+                    $click_count = intval($btn['clicks'] ?? 0);
 
                     // Episode 01, Episode 02... formatting (padded to 2 digits)
                     $ep_num_padded = is_numeric($raw_ep) ? str_pad(intval($raw_ep), 2, '0', STR_PAD_LEFT) : $raw_ep;
@@ -514,11 +515,13 @@ function resolve_server_info($provider, $url, $btn_text) {
 
                         <!-- Info Column -->
                         <div class="min-w-0 flex-1">
-                            <div class="text-sm font-bold text-[#111827] truncate group-hover:text-[#0b57d0] transition-colors flex items-center gap-1.5">
+                            <div class="text-sm font-bold text-[#111827] truncate group-hover:text-[#0b57d0] transition-colors flex items-center gap-1.5 flex-wrap">
                                 <span><?= $ep_label ?></span>
                                 <?php if (!empty($btn['text']) && stripos($btn['text'], 'Episode') === false): ?>
                                     <span class="text-xs text-[#747775] font-normal truncate hidden sm:inline">(<?= $btn_text ?>)</span>
                                 <?php endif; ?>
+
+
                             </div>
 
                             <!-- Server Provider & Quality Info with Server Icon -->
@@ -535,7 +538,7 @@ function resolve_server_info($provider, $url, $btn_text) {
                     </div>
 
                     <!-- Right Column: "Watch Now" Button (Google Material M3 Rounded Pill) -->
-                    <div class="shrink-0">
+                    <div class="shrink-0 flex items-center gap-2">
                         <a href="<?= $btn_url ?>" target="_blank" rel="noopener noreferrer nofollow"
                             class="px-4 py-2 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs hover:shadow-md transition-all cursor-pointer">
                             <!-- Play Triangle Icon for Watch Now -->
@@ -787,7 +790,6 @@ function resolve_server_info($provider, $url, $btn_text) {
             setTimeout(() => backdrop.classList.add('hidden'), 300);
         }
 
-    <script>
         function openMobileMenu() {
             const sidebar = document.getElementById('mobileSidebar');
             const backdrop = document.getElementById('mobileSidebarBackdrop');
