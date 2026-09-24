@@ -61,7 +61,8 @@ function getStoredPages(): ButtonPage[] {
   initDatastore();
   try {
     const raw = fs.readFileSync(PAGES_FILE, "utf-8");
-    return JSON.parse(raw);
+    const pages: ButtonPage[] = JSON.parse(raw);
+    return pages.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   } catch {
     return [];
   }

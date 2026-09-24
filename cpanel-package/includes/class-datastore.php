@@ -9,7 +9,7 @@ class SLEA_Datastore {
     public static function get_all_pages() {
         try {
             $pdo = SLEA_DB::get_connection();
-            $stmt = $pdo->query("SELECT * FROM pages ORDER BY id DESC");
+            $stmt = $pdo->query("SELECT * FROM pages ORDER BY created_at DESC, id DESC");
             $rows = $stmt->fetchAll();
 
             $pages = [];

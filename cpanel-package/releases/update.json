@@ -1,13 +1,13 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "4.5.0",
+  "version": "4.6.0",
   "release_date": "2026-09-24",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
   "minimum_php": "8.0",
-  "checksum": "86e9dd5e355e425d6c3e8bdf7ab5dc6de5d30ca425bfb31ed782176d5a6006bf",
+  "checksum": "8d6de56b94ff8efeb149062c21c29c1ad435ed2a0796a23b25d482d7dd70d647",
   "release_notes": [
-    "Added anti-background update protection: updates automatically abort and rollback to the previous version if the page is refreshed or disconnected",
-    "Enhanced interruption handling and automatic rollback manager recovery on page load",
+    "Pages manager is now organized by last generated page first (newest pages displayed at the top)",
+    "Anti-background update protection: updates automatically abort and rollback to the previous version if the page is refreshed or disconnected",
     "Monthly Analytics & Statistics dashboard and secure cPanel integration enhancements"
   ]
 }
