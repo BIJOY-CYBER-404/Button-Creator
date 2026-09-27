@@ -290,6 +290,105 @@ try {
             echo json_encode(['success' => true, 'history' => $history]);
             break;
 
+        case 'export_backup':
+            $scope = $_GET['scope'] ?? ($data['scope'] ?? 'all');
+            $payload = SLEA_Datastore::create_backup_payload($scope);
+            if (!empty($_GET['download'])) {
+                $fname = 'moviehub-backup-' . preg_replace('/[^a-z0-9_-]/i', '', $scope) . '-' . date('Ymd-His') . '.json';
+                header('Content-Type: application/json; charset=utf-8');
+                header('Content-Disposition: attachment; filename="' . $fname . '"');
+                echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            echo json_encode(['success' => true, 'backup' => $payload]);
+            break;
+
+        case 'restore_backup':
+            $backup_payload = $data['backup'] ?? null;
+            if (is_string($backup_payload)) {
+                $backup_payload = json_decode($backup_payload, true);
+            }
+            if (!is_array($backup_payload)) {
+                throw new Exception('Please provide a valid JSON backup file.');
+            }
+            $scope = $data['scope'] ?? 'auto';
+            $mode  = $data['mode'] ?? 'merge';
+            $counts = SLEA_Datastore::restore_backup_payload($backup_payload, $scope, $mode);
+            echo json_encode([
+                'success'  => true,
+                'restored' => $counts,
+                'message'  => sprintf(
+                    'Restore complete (%s): %d setting(s), %d page(s), %d account(s), %d analytics record(s).',
+                    strtoupper($scope),
+                    $counts['settings'],
+                    $counts['pages'],
+                    $counts['users'],
+                    $counts['analytics']
+                )
+            ]);
+            break;
+
+        case 'create_snapshot':
+            $scope = $data['scope'] ?? 'all';
+            $label = $data['label'] ?? '';
+            $snap = SLEA_Datastore::create_server_snapshot($scope, $label);
+            echo json_encode([
+                'success'   => true,
+                'snapshot'  => $snap,
+                'snapshots' => SLEA_Datastore::list_server_snapshots(),
+                'message'   => 'Server backup snapshot created successfully!'
+            ]);
+            break;
+
+        case 'list_snapshots':
+            echo json_encode([
+                'success'   => true,
+                'snapshots' => SLEA_Datastore::list_server_snapshots()
+            ]);
+            break;
+
+        case 'restore_snapshot':
+            $filename = $data['filename'] ?? '';
+            if (empty($filename)) throw new Exception('Snapshot filename is required.');
+            $scope = $data['scope'] ?? 'auto';
+            $mode  = $data['mode'] ?? 'merge';
+            $payload = SLEA_Datastore::get_server_snapshot_payload($filename);
+            $counts = SLEA_Datastore::restore_backup_payload($payload, $scope, $mode);
+            echo json_encode([
+                'success'  => true,
+                'restored' => $counts,
+                'message'  => sprintf(
+                    'Snapshot restored (%s): %d setting(s), %d page(s), %d account(s), %d analytics record(s).',
+                    strtoupper($scope),
+                    $counts['settings'],
+                    $counts['pages'],
+                    $counts['users'],
+                    $counts['analytics']
+                )
+            ]);
+            break;
+
+        case 'delete_snapshot':
+            $filename = $data['filename'] ?? '';
+            if (empty($filename)) throw new Exception('Snapshot filename is required.');
+            SLEA_Datastore::delete_server_snapshot($filename);
+            echo json_encode([
+                'success'   => true,
+                'snapshots' => SLEA_Datastore::list_server_snapshots(),
+                'message'   => 'Snapshot deleted.'
+            ]);
+            break;
+
+        case 'download_snapshot':
+            $filename = $_GET['filename'] ?? ($data['filename'] ?? '');
+            if (empty($filename)) throw new Exception('Snapshot filename is required.');
+            $payload = SLEA_Datastore::get_server_snapshot_payload($filename);
+            $safe_name = basename($filename);
+            header('Content-Type: application/json; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $safe_name . '"');
+            echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            exit;
+
         case 'health':
             $logger = new SLEA_UpdateLogger('health_check');
             $checker = new SLEA_HealthChecker($logger);

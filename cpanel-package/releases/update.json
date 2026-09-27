@@ -1,14 +1,16 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "v-5.4.0",
-  "release_date": "2026-09-24",
+  "version": "v-5.6.0",
+  "release_date": "2026-09-27",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "sha256": "37642677b834b978329c40adc5c5485b1a197730767041ea4ccd4dbb4cefbf22",
+  "sha256": "8ac4e90fd8be9bd9d3bca13c60d12c9ffb8f1c6a710f8878b459af7a97c99722",
+  "checksum": "8ac4e90fd8be9bd9d3bca13c60d12c9ffb8f1c6a710f8878b459af7a97c99722",
   "minimum_php": "7.4",
   "release_notes": [
-    "Strict button extraction engine: excludes icons, hyperlinks, body text, and header/footer menus",
-    "Targeted button extraction for .EpList, .EpItem, .EpName, .EpGDrive, and custom episode buttons",
-    "Safe remote updater with complete protection of stored/generated pages, user accounts, and database settings",
-    "Updated release package v-5.4.0 ready for remote one-click updates"
+    "Added complete Backup & Restore Center: export and restore Website Settings, Generated Pages, and Others (Accounts & Analytics) all together or separately",
+    "Added One-Click Server Snapshots stored in /data/snapshots with modular restore options (Restore All, Settings Only, Pages Only, Others Only)",
+    "Zero-Data-Loss Update & Auto-Heal Engine: guarantees settings, generated pages, admin accounts, and view analytics are never lost or corrupted during updates or rollbacks",
+    "Excluded 'Cookie Policy', 'RTL Mode', and 'View all articles' from being counted or extracted as episode buttons",
+    "Updated release package v-5.6.0 ready for remote one-click updates"
   ]
 }

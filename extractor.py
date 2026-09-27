@@ -52,8 +52,10 @@ VOID_ELEMENTS = {
 
 INTERNAL_NAV_WORDS = {
     "home", "about", "about-us", "contact", "contact-us", "privacy", "privacy-policy",
-    "cookie", "cookie-policy", "sitemap", "search", "login", "sign-in", "register",
-    "sign-up", "rtl", "category", "categories", "archive", "archives", "next",
+    "cookie", "cookies", "cookie-policy", "accept-cookies", "sitemap", "search", "login",
+    "sign-in", "register", "sign-up", "rtl", "rtl-mode", "ltr-mode", "dark-mode", "light-mode",
+    "view-all-articles", "view-all-posts", "view-all", "all-articles", "all-posts",
+    "category", "categories", "archive", "archives", "next",
     "previous", "prev", "back", "newer", "older", "load-more", "read-more",
     "terms", "terms-of-service", "dmca", "disclaimer", "faq", "share", "facebook",
     "twitter", "telegram", "whatsapp", "newer-posts", "older-posts", "comment", "reply",
@@ -64,17 +66,34 @@ INTERNAL_NAV_WORDS = {
 EXCLUDED_EXPLICIT_TESTS = (
     "rich results test",
     "pagespeed insights",
+    "cookie policy",
+    "accept cookies",
+    "cookie consent",
+    "rtl mode",
+    "ltr mode",
+    "dark mode",
+    "light mode",
+    "view all articles",
+    "view all posts",
+    "all articles",
+    "privacy policy",
+    "terms of service",
 )
 
 def is_blocked_test_link(text, url):
-    text_lower = (text or "").lower()
+    text_lower = clean_text(text or "").lower()
     url_lower = (url or "").lower()
     for phrase in EXCLUDED_EXPLICIT_TESTS:
         if phrase in text_lower:
             return True
+    clean_slug = re.sub(r"[^\w\s-]", "", text_lower).strip().replace(" ", "-")
+    if clean_slug in INTERNAL_NAV_WORDS or text_lower in INTERNAL_NAV_WORDS:
+        return True
     if "test/rich-results" in url_lower or "rich-results" in url_lower:
         return True
     if "pagespeed.web.dev" in url_lower or "pagespeed" in url_lower:
+        return True
+    if any(p in url_lower for p in ("/cookie-policy", "/privacy-policy", "/terms-of-service", "cookie-policy.html")):
         return True
     return False
 
@@ -361,6 +380,10 @@ class ElementCollector(HTMLParser):
         depth = idx + 1
         popped = self._stack[idx]
         self._stack = self._stack[:idx]
+
+        popped_cls = (popped.get("class") or "").lower()
+        if any(k in popped_cls for k in ("epitem", "ep-item", "eplist", "ep-list")):
+            self._last_ep_label = ""
 
         if self._capture is not None and depth <= self._capture_depth:
             if self._capture not in self.results:

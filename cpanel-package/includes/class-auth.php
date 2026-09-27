@@ -17,9 +17,30 @@ class SLEA_Auth {
             $pdo = SLEA_DB::get_connection();
             $stmt = $pdo->query("SELECT COUNT(*) AS total FROM users");
             $row = $stmt->fetch();
-            return !empty($row) && intval($row['total']) > 0;
+            $has = !empty($row) && intval($row['total']) > 0;
+            if ($has) {
+                self::sync_users_backup();
+            }
+            return $has;
         } catch (Exception $e) {
             return false;
+        }
+    }
+
+    public static function sync_users_backup() {
+        try {
+            $pdo = SLEA_DB::get_connection();
+            $stmt = $pdo->query("SELECT id, username, email, password_hash, role, permissions, created_at, updated_at FROM users ORDER BY id ASC");
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+            if (!empty($rows)) {
+                $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+                if (!is_dir($data_dir)) {
+                    @mkdir($data_dir, 0755, true);
+                }
+                @file_put_contents($data_dir . '/users_backup.json', json_encode($rows, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            }
+        } catch (Exception $e) {
+            // non-blocking
         }
     }
 
@@ -88,6 +109,7 @@ class SLEA_Auth {
             ]);
 
             $id = $pdo->lastInsertId();
+            self::sync_users_backup();
 
             // Automatically log in
             self::start_session();

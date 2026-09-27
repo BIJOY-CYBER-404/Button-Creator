@@ -10,7 +10,6 @@ export const ACTION_WORDS = new Set([
   "server",
   "link",
   "get",
-  "view",
   "continue",
   "mirror",
   "xcloud",
@@ -23,19 +22,33 @@ export const ACTION_WORDS = new Set([
 export const INTERNAL_NAV_WORDS = new Set([
   "home",
   "about",
+  "about-us",
   "contact",
+  "contact-us",
   "privacy",
   "privacy-policy",
   "cookie",
+  "cookies",
   "cookie-policy",
+  "accept-cookies",
   "sitemap",
   "search",
   "login",
   "register",
   "rtl",
+  "rtl-mode",
+  "ltr-mode",
+  "dark-mode",
+  "light-mode",
+  "view-all-articles",
+  "view-all-posts",
+  "view-all",
+  "all-articles",
+  "all-posts",
   "category",
   "categories",
   "archive",
+  "archives",
   "next",
   "previous",
   "prev",
@@ -44,23 +57,47 @@ export const INTERNAL_NAV_WORDS = new Set([
 export const EXCLUDED_EXPLICIT_TESTS = [
   "rich results test",
   "pagespeed insights",
+  "cookie policy",
+  "accept cookies",
+  "cookie consent",
+  "rtl mode",
+  "ltr mode",
+  "dark mode",
+  "light mode",
+  "view all articles",
+  "view all posts",
+  "all articles",
+  "privacy policy",
+  "terms of service",
 ];
 
 export function isBlockedTestLink(
   text: string | null | undefined,
   url: string | null | undefined
 ): boolean {
-  const textLower = (text || "").toLowerCase();
+  const textLower = cleanText(text).toLowerCase();
   const urlLower = (url || "").toLowerCase();
   for (const phrase of EXCLUDED_EXPLICIT_TESTS) {
     if (textLower.includes(phrase)) {
       return true;
     }
   }
+  const cleanSlug = textLower.replace(/[^\w\s-]/g, "").trim().replace(/[\s_]+/g, "-");
+  if (INTERNAL_NAV_WORDS.has(cleanSlug) || INTERNAL_NAV_WORDS.has(textLower)) {
+    return true;
+  }
   if (urlLower.includes("test/rich-results") || urlLower.includes("rich-results")) {
     return true;
   }
   if (urlLower.includes("pagespeed.web.dev") || urlLower.includes("pagespeed")) {
+    return true;
+  }
+  if (
+    urlLower.includes("/cookie-policy") ||
+    urlLower.includes("cookie-policy.html") ||
+    urlLower.includes("/privacy-policy") ||
+    urlLower.includes("/terms-of-service")
+  ) {
     return true;
   }
   return false;

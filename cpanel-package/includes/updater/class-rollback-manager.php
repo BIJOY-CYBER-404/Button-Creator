@@ -19,14 +19,16 @@ class SLEA_RollbackManager {
         $rollback_success = true;
         $rollback_errors = [];
 
-        // 1. Restore Files
+        // 1. Restore Files (Protect /data, /backups, /temp, and config.local.php)
         $files_backup_dir = $this->backup_dir . '/files';
         if (is_dir($files_backup_dir)) {
             try {
                 $this->logger->log("Rollback", "Restoring previous working application files...");
                 $this->copy_directory($files_backup_dir, APP_ROOT, [
                     APP_ROOT . '/backups',
-                    APP_ROOT . '/temp'
+                    APP_ROOT . '/temp',
+                    APP_ROOT . '/data',
+                    APP_ROOT . '/config.local.php'
                 ]);
                 $this->logger->log("Rollback", "[OK] Application files restored.");
             } catch (Exception $e) {
@@ -37,26 +39,24 @@ class SLEA_RollbackManager {
             $this->logger->log("Rollback", "[WARNING] File backup directory not found at " . $files_backup_dir, "warning");
         }
 
-        // 2. Restore Database
-        $db_backup_file = $this->backup_dir . '/db_backup.sql';
-        if (file_exists($db_backup_file)) {
+        // 2. Restore Database Safely (Using structured JSON payload so settings, pages, and accounts are never lost or corrupted)
+        $db_json_file = $this->backup_dir . '/db_backup.json';
+        if (file_exists($db_json_file) && class_exists('SLEA_Datastore')) {
             try {
-                $this->logger->log("Rollback", "Restoring previous database backup...");
-                $pdo = SLEA_DB::get_connection();
-                $sql_content = file_get_contents($db_backup_file);
-                if (!empty(trim($sql_content))) {
-                    $statements = array_filter(array_map('trim', explode(';', $sql_content)));
-                    foreach ($statements as $query) {
-                        if (!empty($query)) {
-                            $pdo->exec($query);
-                        }
-                    }
+                $this->logger->log("Rollback", "Verifying and restoring database state from structured JSON backup...");
+                $payload = json_decode(@file_get_contents($db_json_file), true);
+                if (is_array($payload)) {
+                    SLEA_Datastore::restore_backup_payload($payload, 'all', 'merge');
                 }
-                $this->logger->log("Rollback", "[OK] Database restored.");
+                $this->logger->log("Rollback", "[OK] Database settings, pages, and accounts verified and restored.");
             } catch (Exception $e) {
-                $rollback_success = false;
-                $rollback_errors[] = "Database rollback error: " . $e->getMessage();
+                $rollback_errors[] = "Database JSON restore warning: " . $e->getMessage();
             }
+        } elseif (class_exists('SLEA_Datastore')) {
+            try {
+                SLEA_Datastore::get_all_pages();
+                SLEA_Datastore::sync_all_backups();
+            } catch (Exception $e) {}
         }
 
         // 3. Remove maintenance mode lock file

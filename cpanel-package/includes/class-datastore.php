@@ -760,4 +760,479 @@ class SLEA_Datastore {
         $slug = preg_replace('/-+/', '-', $slug);
         return trim($slug, '-');
     }
+
+    // -------------------------------------------------------------
+    // Comprehensive Backup & Restore Engine (Supports All or Separate Scopes: settings, pages, others)
+    // -------------------------------------------------------------
+
+    public static function sync_all_backups() {
+        try {
+            self::sync_pages_to_file();
+            $pdo = SLEA_DB::get_connection();
+
+            // Sync all settings to data/settings_backup.json
+            $stmt_s = $pdo->query("SELECT setting_key, setting_value FROM settings");
+            $rows_s = $stmt_s ? $stmt_s->fetchAll(PDO::FETCH_ASSOC) : [];
+            if (!empty($rows_s)) {
+                $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+                if (!is_dir($data_dir)) @mkdir($data_dir, 0755, true);
+                $backup_file = $data_dir . '/settings_backup.json';
+                $existing = file_exists($backup_file) ? (json_decode(@file_get_contents($backup_file), true) ?: []) : [];
+                foreach ($rows_s as $r) {
+                    $decoded = json_decode($r['setting_value'], true);
+                    $existing[$r['setting_key']] = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : $r['setting_value'];
+                }
+                @file_put_contents($backup_file, json_encode($existing, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            }
+
+            // Sync all users to data/users_backup.json
+            $stmt_u = $pdo->query("SELECT id, username, email, password_hash, role, permissions, created_at, updated_at FROM users ORDER BY id ASC");
+            $rows_u = $stmt_u ? $stmt_u->fetchAll(PDO::FETCH_ASSOC) : [];
+            if (!empty($rows_u)) {
+                $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+                if (!is_dir($data_dir)) @mkdir($data_dir, 0755, true);
+                @file_put_contents($data_dir . '/users_backup.json', json_encode($rows_u, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            }
+
+            // Sync analytics to data/analytics_backup.json
+            $stmt_a = $pdo->query("SELECT page_slug, year_month, views FROM page_views_monthly ORDER BY year_month ASC");
+            $rows_a = $stmt_a ? $stmt_a->fetchAll(PDO::FETCH_ASSOC) : [];
+            if (!empty($rows_a)) {
+                $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+                if (!is_dir($data_dir)) @mkdir($data_dir, 0755, true);
+                @file_put_contents($data_dir . '/analytics_backup.json', json_encode($rows_a, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            }
+        } catch (Exception $e) {
+            // Non-blocking
+        }
+    }
+
+    /**
+     * Create a structured backup payload.
+     * @param string $scope 'all' | 'settings' | 'pages' | 'others'
+     */
+    public static function create_backup_payload($scope = 'all') {
+        $scope = strtolower(trim($scope ?: 'all'));
+        if (!in_array($scope, ['all', 'settings', 'pages', 'others'], true)) {
+            $scope = 'all';
+        }
+
+        self::sync_all_backups();
+        $pdo = SLEA_DB::get_connection();
+
+        $include_settings = ($scope === 'all' || $scope === 'settings');
+        $include_pages    = ($scope === 'all' || $scope === 'pages');
+        $include_others   = ($scope === 'all' || $scope === 'others');
+
+        $settings_data = [];
+        if ($include_settings) {
+            $settings_data = [
+                'site_identity'        => self::get_site_identity(),
+                'menu_items'           => self::get_menu_items(),
+                'footer_copyright'     => self::get_footer_copyright(),
+                'ad_settings'          => self::get_ad_settings(),
+                'maintenance_settings' => self::get_maintenance_settings(),
+                'share_settings'       => self::get_share_settings(),
+            ];
+            // Also include any custom or raw settings in DB (e.g. update_config)
+            try {
+                $stmt = $pdo->query("SELECT setting_key, setting_value FROM settings");
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $k = $row['setting_key'];
+                    if (!isset($settings_data[$k])) {
+                        $dec = json_decode($row['setting_value'], true);
+                        $settings_data[$k] = (json_last_error() === JSON_ERROR_NONE) ? $dec : $row['setting_value'];
+                    }
+                }
+            } catch (Exception $e) {}
+        }
+
+        $pages_data = [];
+        if ($include_pages) {
+            $pages_data = self::get_all_pages();
+        }
+
+        $users_data = [];
+        $analytics_data = [];
+        $migrations_data = [];
+        if ($include_others) {
+            try {
+                $stmt_u = $pdo->query("SELECT id, username, email, password_hash, role, permissions, created_at, updated_at FROM users ORDER BY id ASC");
+                $users_data = $stmt_u ? $stmt_u->fetchAll(PDO::FETCH_ASSOC) : [];
+            } catch (Exception $e) {}
+
+            if (empty($users_data)) {
+                $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+                if (file_exists($data_dir . '/users_backup.json')) {
+                    $users_data = json_decode(@file_get_contents($data_dir . '/users_backup.json'), true) ?: [];
+                }
+            }
+
+            try {
+                $stmt_a = $pdo->query("SELECT page_slug, year_month, views FROM page_views_monthly ORDER BY year_month ASC");
+                $analytics_data = $stmt_a ? $stmt_a->fetchAll(PDO::FETCH_ASSOC) : [];
+            } catch (Exception $e) {}
+
+            try {
+                $stmt_m = $pdo->query("SELECT migration_name, batch, executed_at FROM migrations ORDER BY id ASC");
+                $migrations_data = $stmt_m ? $stmt_m->fetchAll(PDO::FETCH_ASSOC) : [];
+            } catch (Exception $e) {}
+        }
+
+        return [
+            'backup_format' => 'slea_backup_v2',
+            'app_name'      => defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive',
+            'app_version'   => defined('APP_VERSION') ? APP_VERSION : 'v-5.6.0',
+            'scope'         => $scope,
+            'created_at'    => date('Y-m-d H:i:s'),
+            'counts'        => [
+                'settings'  => count($settings_data),
+                'pages'     => count($pages_data),
+                'users'     => count($users_data),
+                'analytics' => count($analytics_data)
+            ],
+            'data'          => [
+                'settings' => $include_settings ? $settings_data : null,
+                'pages'    => $include_pages ? $pages_data : null,
+                'others'   => $include_others ? [
+                    'users'              => $users_data,
+                    'page_views_monthly' => $analytics_data,
+                    'migrations'         => $migrations_data
+                ] : null
+            ]
+        ];
+    }
+
+    /**
+     * Restore a backup payload selectively or completely.
+     * @param array  $payload The decoded JSON backup array
+     * @param string $scope   'auto' | 'all' | 'settings' | 'pages' | 'others'
+     * @param string $mode    'merge' | 'overwrite'
+     */
+    public static function restore_backup_payload($payload, $scope = 'auto', $mode = 'merge') {
+        if (!is_array($payload)) {
+            throw new Exception('Invalid backup file format.');
+        }
+
+        $pdo = SLEA_DB::get_connection();
+        $driver = SLEA_DB::get_driver();
+        $now = date('Y-m-d H:i:s');
+
+        $scope = strtolower(trim($scope ?: 'auto'));
+        $mode  = strtolower(trim($mode ?: 'merge'));
+
+        // Support both v2 structured format and raw pages array / legacy format
+        $data_block = isset($payload['data']) && is_array($payload['data']) ? $payload['data'] : $payload;
+
+        $restore_settings = ($scope === 'auto' || $scope === 'all' || $scope === 'settings');
+        $restore_pages    = ($scope === 'auto' || $scope === 'all' || $scope === 'pages');
+        $restore_others   = ($scope === 'auto' || $scope === 'all' || $scope === 'others');
+
+        $restored_counts = [
+            'settings'  => 0,
+            'pages'     => 0,
+            'users'     => 0,
+            'analytics' => 0
+        ];
+
+        // 1. Restore Website Settings
+        if ($restore_settings && !empty($data_block['settings']) && is_array($data_block['settings'])) {
+            foreach ($data_block['settings'] as $s_key => $s_val) {
+                if (empty($s_key) || !is_string($s_key)) continue;
+                if ($s_key === 'footer_copyright' && is_string($s_val)) {
+                    self::save_footer_copyright($s_val);
+                } else {
+                    self::save_raw_setting($s_key, $s_val);
+                }
+                $restored_counts['settings']++;
+            }
+        }
+
+        // 2. Restore Generated Pages
+        $pages_list = null;
+        if (isset($data_block['pages']) && is_array($data_block['pages'])) {
+            $pages_list = $data_block['pages'];
+        } elseif (isset($payload[0]['slug']) && isset($payload[0]['buttons'])) {
+            // Direct pages.json array upload
+            $pages_list = $payload;
+        }
+
+        if ($restore_pages && is_array($pages_list)) {
+            if ($mode === 'overwrite' && !empty($pages_list)) {
+                try {
+                    $pdo->exec("DELETE FROM pages");
+                } catch (Exception $e) {}
+            }
+
+            foreach ($pages_list as $p) {
+                if (empty($p['slug'])) continue;
+                $slug = self::sanitize_slug($p['slug']);
+                $btns_json = isset($p['buttons'])
+                    ? (is_string($p['buttons']) ? $p['buttons'] : json_encode($p['buttons'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))
+                    : ($p['buttons_json'] ?? '[]');
+
+                $chk = $pdo->prepare("SELECT id, views FROM pages WHERE slug = :s LIMIT 1");
+                $chk->execute([':s' => $slug]);
+                $existing_row = $chk->fetch(PDO::FETCH_ASSOC);
+
+                if ($existing_row) {
+                    $upd = $pdo->prepare("
+                        UPDATE pages SET
+                            title = :title,
+                            description = :desc,
+                            source_url = :surl,
+                            resolved_url = :rurl,
+                            theme = :theme,
+                            buttons_json = :btns,
+                            views = :views,
+                            is_public = :pub,
+                            updated_at = :updated_at
+                        WHERE id = :id
+                    ");
+                    $upd->execute([
+                        ':title'      => $p['title'] ?? 'Episode Download Links',
+                        ':desc'       => $p['description'] ?? '',
+                        ':surl'       => $p['source_url'] ?? '',
+                        ':rurl'       => $p['resolved_url'] ?? '',
+                        ':theme'      => $p['theme'] ?? 'indigo',
+                        ':btns'       => $btns_json,
+                        ':views'      => max(intval($existing_row['views'] ?? 0), intval($p['views'] ?? 0)),
+                        ':pub'        => isset($p['is_public']) ? intval($p['is_public']) : 1,
+                        ':updated_at' => $p['updated_at'] ?? $now,
+                        ':id'         => $existing_row['id']
+                    ]);
+                } else {
+                    $page_key = !empty($p['page_key']) ? $p['page_key'] : ('p_' . substr(md5($slug . uniqid()), 0, 12));
+                    // Avoid duplicate page_key
+                    $chk_k = $pdo->prepare("SELECT id FROM pages WHERE page_key = :k LIMIT 1");
+                    $chk_k->execute([':k' => $page_key]);
+                    if ($chk_k->fetch()) {
+                        $page_key = 'p_' . substr(md5($slug . uniqid('', true)), 0, 12);
+                    }
+
+                    $ins = $pdo->prepare("
+                        INSERT INTO pages (
+                            page_key, slug, title, description, source_url, resolved_url,
+                            theme, buttons_json, views, is_public, created_at, updated_at
+                        ) VALUES (
+                            :k, :slug, :title, :desc, :surl, :rurl,
+                            :theme, :btns, :views, :pub, :created_at, :updated_at
+                        )
+                    ");
+                    $ins->execute([
+                        ':k'          => $page_key,
+                        ':slug'       => $slug,
+                        ':title'      => $p['title'] ?? 'Episode Download Links',
+                        ':desc'       => $p['description'] ?? '',
+                        ':surl'       => $p['source_url'] ?? '',
+                        ':rurl'       => $p['resolved_url'] ?? '',
+                        ':theme'      => $p['theme'] ?? 'indigo',
+                        ':btns'       => $btns_json,
+                        ':views'      => intval($p['views'] ?? 0),
+                        ':pub'        => isset($p['is_public']) ? intval($p['is_public']) : 1,
+                        ':created_at' => $p['created_at'] ?? $now,
+                        ':updated_at' => $p['updated_at'] ?? $now
+                    ]);
+                }
+                $restored_counts['pages']++;
+            }
+
+            self::sync_pages_to_file();
+        }
+
+        // 3. Restore Others (Admin Accounts, Monthly Analytics, Migrations)
+        if ($restore_others && !empty($data_block['others']) && is_array($data_block['others'])) {
+            $others = $data_block['others'];
+
+            // 3a. Users / Admin Accounts
+            if (!empty($others['users']) && is_array($others['users'])) {
+                foreach ($others['users'] as $u) {
+                    if (empty($u['username']) || empty($u['password_hash'])) continue;
+                    $chk_u = $pdo->prepare("SELECT id FROM users WHERE username = :u LIMIT 1");
+                    $chk_u->execute([':u' => $u['username']]);
+                    $ex_u = $chk_u->fetch(PDO::FETCH_ASSOC);
+
+                    $perms_str = is_string($u['permissions'] ?? null)
+                        ? $u['permissions']
+                        : json_encode($u['permissions'] ?? ['all']);
+
+                    if ($ex_u) {
+                        if ($mode === 'overwrite') {
+                            $upd_u = $pdo->prepare("
+                                UPDATE users SET
+                                    email = :e,
+                                    password_hash = :p,
+                                    role = :r,
+                                    permissions = :perms,
+                                    updated_at = :up
+                                WHERE id = :id
+                            ");
+                            $upd_u->execute([
+                                ':e'     => $u['email'] ?? ($u['username'] . '@localhost'),
+                                ':p'     => $u['password_hash'],
+                                ':r'     => $u['role'] ?? 'superadmin',
+                                ':perms' => $perms_str,
+                                ':up'    => $u['updated_at'] ?? $now,
+                                ':id'    => $ex_u['id']
+                            ]);
+                        }
+                    } else {
+                        $ins_u = $pdo->prepare("
+                            INSERT INTO users (username, email, password_hash, role, permissions, created_at, updated_at)
+                            VALUES (:u, :e, :p, :r, :perms, :c, :up)
+                        ");
+                        $ins_u->execute([
+                            ':u'     => $u['username'],
+                            ':e'     => $u['email'] ?? ($u['username'] . '@localhost'),
+                            ':p'     => $u['password_hash'],
+                            ':r'     => $u['role'] ?? 'superadmin',
+                            ':perms' => $perms_str,
+                            ':c'     => $u['created_at'] ?? $now,
+                            ':up'    => $u['updated_at'] ?? $now
+                        ]);
+                    }
+                    $restored_counts['users']++;
+                }
+            }
+
+            // 3b. Monthly Page Views Analytics
+            if (!empty($others['page_views_monthly']) && is_array($others['page_views_monthly'])) {
+                foreach ($others['page_views_monthly'] as $a) {
+                    if (empty($a['page_slug']) || empty($a['year_month'])) continue;
+                    $v_count = intval($a['views'] ?? 1);
+                    try {
+                        if ($driver === 'sqlite') {
+                            $stmt_a = $pdo->prepare("
+                                INSERT INTO page_views_monthly (page_slug, year_month, views)
+                                VALUES (:s, :ym, :v)
+                                ON CONFLICT(page_slug, year_month) DO UPDATE SET views = MAX(views, :v)
+                            ");
+                        } else {
+                            $stmt_a = $pdo->prepare("
+                                INSERT INTO page_views_monthly (page_slug, year_month, views)
+                                VALUES (:s, :ym, :v)
+                                ON DUPLICATE KEY UPDATE views = GREATEST(views, VALUES(views))
+                            ");
+                        }
+                        $stmt_a->execute([
+                            ':s'  => $a['page_slug'],
+                            ':ym' => $a['year_month'],
+                            ':v'  => $v_count
+                        ]);
+                        $restored_counts['analytics']++;
+                    } catch (Exception $e) {}
+                }
+            }
+        }
+
+        // Sync everything back to persistent JSON files in /data
+        self::sync_all_backups();
+
+        return $restored_counts;
+    }
+
+    // -------------------------------------------------------------
+    // Local Server Snapshots in /data/snapshots (Protected from Updates)
+    // -------------------------------------------------------------
+
+    public static function get_snapshots_dir() {
+        $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+        $snap_dir = $data_dir . '/snapshots';
+        if (!is_dir($snap_dir)) {
+            @mkdir($snap_dir, 0755, true);
+        }
+        return $snap_dir;
+    }
+
+    public static function create_server_snapshot($scope = 'all', $label = '') {
+        $scope = strtolower(trim($scope ?: 'all'));
+        if (!in_array($scope, ['all', 'settings', 'pages', 'others'], true)) {
+            $scope = 'all';
+        }
+
+        $payload = self::create_backup_payload($scope);
+        $snap_id = 'snap_' . $scope . '_' . date('Ymd_His') . '_' . substr(md5(uniqid()), 0, 5);
+        $filename = $snap_id . '.json';
+        $payload['snapshot_id'] = $snap_id;
+        $payload['label'] = !empty($label) ? trim($label) : ucfirst($scope) . ' Backup Snapshot';
+
+        $snap_dir = self::get_snapshots_dir();
+        $filepath = $snap_dir . '/' . $filename;
+        @file_put_contents($filepath, json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        // Enforce max 15 snapshots so disk space stays clean
+        $all_files = glob($snap_dir . '/snap_*.json');
+        if (is_array($all_files) && count($all_files) > 15) {
+            usort($all_files, function($a, $b) {
+                return filemtime($a) - filemtime($b);
+            });
+            $to_delete = array_slice($all_files, 0, count($all_files) - 15);
+            foreach ($to_delete as $del_file) {
+                @unlink($del_file);
+            }
+        }
+
+        return [
+            'filename'   => $filename,
+            'scope'      => $scope,
+            'label'      => $payload['label'],
+            'created_at' => $payload['created_at'],
+            'counts'     => $payload['counts'],
+            'size_kb'    => round(filesize($filepath) / 1024, 2)
+        ];
+    }
+
+    public static function list_server_snapshots() {
+        $snap_dir = self::get_snapshots_dir();
+        $files = glob($snap_dir . '/*.json');
+        if (!is_array($files)) return [];
+
+        usort($files, function($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
+
+        $list = [];
+        foreach ($files as $file) {
+            $raw = @file_get_contents($file);
+            $dec = json_decode($raw, true);
+            if (!is_array($dec)) continue;
+            $list[] = [
+                'filename'    => basename($file),
+                'scope'       => $dec['scope'] ?? 'all',
+                'label'       => $dec['label'] ?? ('Snapshot ' . basename($file)),
+                'app_version' => $dec['app_version'] ?? '',
+                'created_at'  => $dec['created_at'] ?? date('Y-m-d H:i:s', filemtime($file)),
+                'counts'      => $dec['counts'] ?? [
+                    'settings'  => !empty($dec['data']['settings']) ? count($dec['data']['settings']) : 0,
+                    'pages'     => !empty($dec['data']['pages']) ? count($dec['data']['pages']) : 0,
+                    'users'     => !empty($dec['data']['others']['users']) ? count($dec['data']['others']['users']) : 0,
+                    'analytics' => !empty($dec['data']['others']['page_views_monthly']) ? count($dec['data']['others']['page_views_monthly']) : 0,
+                ],
+                'size_kb'     => round(filesize($file) / 1024, 2)
+            ];
+        }
+        return $list;
+    }
+
+    public static function get_server_snapshot_payload($filename) {
+        $safe_name = basename($filename);
+        $filepath = self::get_snapshots_dir() . '/' . $safe_name;
+        if (!file_exists($filepath)) {
+            throw new Exception('Snapshot file not found.');
+        }
+        $dec = json_decode(@file_get_contents($filepath), true);
+        if (!is_array($dec)) {
+            throw new Exception('Snapshot file is corrupted or unreadable.');
+        }
+        return $dec;
+    }
+
+    public static function delete_server_snapshot($filename) {
+        $safe_name = basename($filename);
+        $filepath = self::get_snapshots_dir() . '/' . $safe_name;
+        if (file_exists($filepath)) {
+            return @unlink($filepath);
+        }
+        return false;
+    }
 }

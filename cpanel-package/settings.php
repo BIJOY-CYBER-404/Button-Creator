@@ -17,6 +17,7 @@ $footer_copyright = SLEA_Datastore::get_footer_copyright();
 $ad_settings = SLEA_Datastore::get_ad_settings();
 $site_identity = SLEA_Datastore::get_site_identity();
 $maintenance_settings = SLEA_Datastore::get_maintenance_settings();
+$server_snapshots = SLEA_Datastore::list_server_snapshots();
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : APP_NAME;
 $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_logo_url'] : '';
 ?>
@@ -572,7 +573,200 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
             </div>
         </div>
 
-        <!-- 3. One-Click Application Update System Card -->
+        <!-- 3. Backup & Restore Center (Website Settings, Pages & Others - Together or Separately) -->
+        <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-6" id="backup-restore-center">
+            <div class="pb-3 border-b border-[#f0f4f9] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-base sm:text-lg font-bold text-[#111827] flex items-center gap-2">
+                        <span>💾 Backup &amp; Restore Center</span>
+                        <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Zero Data Loss</span>
+                    </h2>
+                    <p class="text-xs text-[#5f6368] mt-0.5">
+                        Backup and restore <strong>Website Settings</strong>, <strong>Generated Pages</strong>, and <strong>Others (Admin Accounts &amp; Analytics)</strong> all together or completely separately.
+                    </p>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0] text-[11px] font-bold self-start sm:self-auto shrink-0 border border-[#c2e7ff]">
+                    Modular &amp; Update-Safe
+                </span>
+            </div>
+
+            <!-- Section A: Download Portable JSON Backups (All or Separate) -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-[#444746]">1. Download Backup File (.json) — All or Separately</h3>
+                    <span class="text-[11px] text-[#5f6368]">Save directly to your device</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <!-- Full Backup -->
+                    <a href="api.php?action=export_backup&amp;scope=all&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#d3e3fd] transition-all flex flex-col justify-between gap-3 group">
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold text-[#0b57d0]">📦 Full Backup (All)</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">ALL</span>
+                            </div>
+                            <p class="text-[11px] text-[#5f6368] leading-snug">Website Settings + All Generated Pages + Admin Accounts &amp; Analytics.</p>
+                        </div>
+                        <span class="text-[11px] font-bold text-[#0b57d0] group-hover:underline flex items-center gap-1">
+                            ⬇ Download Full Backup
+                        </span>
+                    </a>
+
+                    <!-- Settings Only Backup -->
+                    <a href="api.php?action=export_backup&amp;scope=settings&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-purple-50 border border-purple-200 transition-all flex flex-col justify-between gap-3 group">
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold text-purple-700">⚙️ Settings Only</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">SETTINGS</span>
+                            </div>
+                            <p class="text-[11px] text-[#5f6368] leading-snug">Branding, Logo, Menu Links, Footer HTML, AdSense/Banners &amp; Maintenance.</p>
+                        </div>
+                        <span class="text-[11px] font-bold text-purple-700 group-hover:underline flex items-center gap-1">
+                            ⬇ Download Settings Only
+                        </span>
+                    </a>
+
+                    <!-- Pages Only Backup -->
+                    <a href="api.php?action=export_backup&amp;scope=pages&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-emerald-50 border border-emerald-200 transition-all flex flex-col justify-between gap-3 group">
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold text-emerald-700">📄 Pages Only</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PAGES</span>
+                            </div>
+                            <p class="text-[11px] text-[#5f6368] leading-snug">All generated episode button pages, slugs, episode links, views &amp; themes.</p>
+                        </div>
+                        <span class="text-[11px] font-bold text-emerald-700 group-hover:underline flex items-center gap-1">
+                            ⬇ Download Pages Only
+                        </span>
+                    </a>
+
+                    <!-- Others Only Backup -->
+                    <a href="api.php?action=export_backup&amp;scope=others&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-amber-50 border border-amber-200 transition-all flex flex-col justify-between gap-3 group">
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold text-amber-800">👤 Others Only</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">OTHERS</span>
+                            </div>
+                            <p class="text-[11px] text-[#5f6368] leading-snug">Admin user accounts, password hashes, roles &amp; monthly view analytics.</p>
+                        </div>
+                        <span class="text-[11px] font-bold text-amber-800 group-hover:underline flex items-center gap-1">
+                            ⬇ Download Others Only
+                        </span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Section B: Restore from JSON Backup File (Supports Separate or Full Restore) -->
+            <div class="p-5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] space-y-4">
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-[#111827]">2. Restore from Backup File (.json) — Together or Separately</h3>
+                        <p class="text-[11px] text-[#5f6368]">Upload any backup file and choose whether to restore everything or only a specific part (Settings, Pages, or Others).</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    <div class="sm:col-span-5 space-y-1">
+                        <label class="text-[11px] font-bold text-[#444746] block">Select Backup JSON File</label>
+                        <input type="file" id="restoreBackupFileInput" accept=".json,application/json"
+                            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-700 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+                    </div>
+
+                    <div class="sm:col-span-3 space-y-1">
+                        <label class="text-[11px] font-bold text-[#444746] block">What to Restore</label>
+                        <select id="restoreScopeSelect" class="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600">
+                            <option value="auto">Auto / Everything in File</option>
+                            <option value="settings">Website Settings Only</option>
+                            <option value="pages">Generated Pages Only</option>
+                            <option value="others">Others (Accounts &amp; Analytics) Only</option>
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-2 space-y-1">
+                        <label class="text-[11px] font-bold text-[#444746] block">Restore Mode</label>
+                        <select id="restoreModeSelect" class="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600">
+                            <option value="merge">Safe Merge (Default)</option>
+                            <option value="overwrite">Replace / Overwrite</option>
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <button type="button" onclick="handleRestoreFromFile()" id="restoreFileBtn"
+                            class="w-full px-4 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer">
+                            Restore Now
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section C: One-Click Server Snapshots (Stored in /data/snapshots - Never Lost on Updates) -->
+            <div class="p-5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-[#111827]">3. Instant Server Snapshots (Protected in <code>/data/snapshots</code>)</h3>
+                        <p class="text-[11px] text-[#5f6368]">Create one-click restore points on your hosting server before making changes or updates. Restore all or separate modules anytime.</p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <select id="snapshotScopeSelect" class="px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-800 outline-none">
+                            <option value="all">Scope: Full Everything</option>
+                            <option value="settings">Scope: Settings Only</option>
+                            <option value="pages">Scope: Pages Only</option>
+                            <option value="others">Scope: Others Only</option>
+                        </select>
+                        <input type="text" id="snapshotLabelInput" placeholder="Optional note (e.g. Before theme change)"
+                            class="px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none w-48" />
+                        <button type="button" onclick="createServerSnapshot()" id="createSnapshotBtn"
+                            class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer">
+                            + Create Snapshot
+                        </button>
+                    </div>
+                </div>
+
+                <div id="snapshotsListContainer" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    <?php if (empty($server_snapshots)): ?>
+                        <div class="text-center py-6 text-xs text-slate-500 bg-white rounded-xl border border-dashed border-slate-200">
+                            No server snapshots created yet. Click <strong>+ Create Snapshot</strong> above or run an update to generate one automatically.
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($server_snapshots as $snap): ?>
+                            <div class="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div class="space-y-0.5">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-800"><?= htmlspecialchars($snap['label']) ?></span>
+                                        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold uppercase"><?= htmlspecialchars($snap['scope']) ?></span>
+                                        <span class="text-[10px] font-mono text-slate-400"><?= htmlspecialchars($snap['created_at']) ?> (<?= htmlspecialchars($snap['size_kb']) ?> KB)</span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 font-mono">
+                                        Settings: <?= intval($snap['counts']['settings'] ?? 0) ?> • Pages: <?= intval($snap['counts']['pages'] ?? 0) ?> • Accounts: <?= intval($snap['counts']['users'] ?? 0) ?> • Analytics: <?= intval($snap['counts']['analytics'] ?? 0) ?>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+                                    <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'auto')" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer" title="Restore all data in this snapshot">
+                                        Restore All
+                                    </button>
+                                    <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'settings')" class="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-bold cursor-pointer" title="Restore only Website Settings from this snapshot">
+                                        Settings Only
+                                    </button>
+                                    <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'pages')" class="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer" title="Restore only Generated Pages from this snapshot">
+                                        Pages Only
+                                    </button>
+                                    <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'others')" class="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold cursor-pointer" title="Restore only Accounts &amp; Analytics from this snapshot">
+                                        Others Only
+                                    </button>
+                                    <a href="api.php?action=download_snapshot&amp;filename=<?= urlencode($snap['filename']) ?>" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold" title="Download Snapshot JSON">
+                                        ⬇
+                                    </a>
+                                    <button type="button" onclick="deleteSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold cursor-pointer" title="Delete Snapshot">
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. One-Click Application Update System Card -->
         <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-4">
             <div class="pb-3 border-b border-[#f0f4f9] flex items-center justify-between flex-wrap gap-2">
                 <div>
@@ -934,6 +1128,164 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 btn.disabled = false;
                 btn.innerText = 'Save Maintenance Settings';
             }
+        }
+
+        async function handleRestoreFromFile() {
+            const fileInput = document.getElementById('restoreBackupFileInput');
+            const scope = document.getElementById('restoreScopeSelect').value;
+            const mode = document.getElementById('restoreModeSelect').value;
+            const btn = document.getElementById('restoreFileBtn');
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showToast('Please select a JSON backup file to restore.', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            btn.disabled = true;
+            btn.innerText = 'Restoring...';
+
+            try {
+                const text = await file.text();
+                let parsed;
+                try {
+                    parsed = JSON.parse(text);
+                } catch (err) {
+                    throw new Error('Selected file is not a valid JSON backup.');
+                }
+
+                const res = await fetch('api.php?action=restore_backup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        backup: parsed,
+                        scope: scope,
+                        mode: mode
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || 'Backup restored successfully!', 'success');
+                    setTimeout(() => window.location.reload(), 1200);
+                } else {
+                    showToast('Restore failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('Restore error: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Restore Now';
+            }
+        }
+
+        async function createServerSnapshot() {
+            const scope = document.getElementById('snapshotScopeSelect').value;
+            const label = document.getElementById('snapshotLabelInput').value.trim();
+            const btn = document.getElementById('createSnapshotBtn');
+
+            btn.disabled = true;
+            btn.innerText = 'Creating...';
+
+            try {
+                const res = await fetch('api.php?action=create_snapshot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scope, label })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || 'Server snapshot created!', 'success');
+                    document.getElementById('snapshotLabelInput').value = '';
+                    renderSnapshotsList(data.snapshots || []);
+                } else {
+                    showToast('Error creating snapshot: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('Request failed: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '+ Create Snapshot';
+            }
+        }
+
+        async function restoreSnapshot(filename, scope = 'auto') {
+            const scopeNames = {
+                auto: 'Everything in Snapshot',
+                settings: 'Website Settings Only',
+                pages: 'Generated Pages Only',
+                others: 'Accounts & Analytics Only'
+            };
+            if (!confirm(`Restore [${scopeNames[scope] || scope}] from snapshot "${filename}"? (Existing items are safely merged and preserved)`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch('api.php?action=restore_snapshot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename, scope, mode: 'merge' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || 'Snapshot restored successfully!', 'success');
+                    setTimeout(() => window.location.reload(), 1200);
+                } else {
+                    showToast('Restore failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('Request failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteSnapshot(filename) {
+            if (!confirm(`Delete server snapshot "${filename}"?`)) return;
+            try {
+                const res = await fetch('api.php?action=delete_snapshot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Snapshot deleted.', 'info');
+                    renderSnapshotsList(data.snapshots || []);
+                } else {
+                    showToast('Delete failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('Request failed: ' + e.message, 'error');
+            }
+        }
+
+        function renderSnapshotsList(snapshots) {
+            const container = document.getElementById('snapshotsListContainer');
+            if (!container) return;
+            if (!snapshots || snapshots.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-xs text-slate-500 bg-white rounded-xl border border-dashed border-slate-200">No server snapshots created yet. Click <strong>+ Create Snapshot</strong> above or run an update to generate one automatically.</div>`;
+                return;
+            }
+            container.innerHTML = snapshots.map(snap => `
+                <div class="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="space-y-0.5">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-bold text-slate-800">${escapeToastHtml(snap.label)}</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold uppercase">${escapeToastHtml(snap.scope)}</span>
+                            <span class="text-[10px] font-mono text-slate-400">${escapeToastHtml(snap.created_at)} (${escapeToastHtml(snap.size_kb)} KB)</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 font-mono">
+                            Settings: ${Number(snap.counts?.settings || 0)} • Pages: ${Number(snap.counts?.pages || 0)} • Accounts: ${Number(snap.counts?.users || 0)} • Analytics: ${Number(snap.counts?.analytics || 0)}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'auto')" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer">Restore All</button>
+                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'settings')" class="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-bold cursor-pointer">Settings Only</button>
+                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'pages')" class="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer">Pages Only</button>
+                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'others')" class="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold cursor-pointer">Others Only</button>
+                        <a href="api.php?action=download_snapshot&filename=${encodeURIComponent(snap.filename)}" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold">⬇</a>
+                        <button type="button" onclick="deleteSnapshot('${escapeToastHtml(snap.filename)}')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold cursor-pointer">✕</button>
+                    </div>
+                </div>
+            `).join('');
         }
 
         function escapeToastHtml(str) {

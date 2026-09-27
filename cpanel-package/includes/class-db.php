@@ -188,6 +188,9 @@ class SLEA_DB {
             ) {$table_engine}
         ");
 
+        // Self-Heal Settings, Users, Pages, and Analytics from persistent JSON backups in /data before seeding defaults
+        self::auto_heal_from_data_backups();
+
         // Seed initial default menu items if not set
         $stmt = self::$pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = 'menu_items'");
         $stmt->execute();
@@ -241,6 +244,90 @@ class SLEA_DB {
                 $repair_stmt = self::$pdo->prepare("UPDATE settings SET setting_value = :val, updated_at = :now WHERE setting_key = 'footer_copyright'");
                 $repair_stmt->execute([':val' => $repaired, ':now' => date('Y-m-d H:i:s')]);
             }
+        }
+    }
+
+    private static function auto_heal_from_data_backups() {
+        if (!self::$pdo) return;
+        $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+        if (!is_dir($data_dir)) return;
+
+        $now = date('Y-m-d H:i:s');
+
+        // 1. Auto-heal settings from data/settings_backup.json
+        $settings_file = $data_dir . '/settings_backup.json';
+        if (file_exists($settings_file)) {
+            try {
+                $saved_settings = json_decode(@file_get_contents($settings_file), true);
+                if (is_array($saved_settings) && !empty($saved_settings)) {
+                    foreach ($saved_settings as $s_key => $s_val) {
+                        if (empty($s_key)) continue;
+                        $chk = self::$pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = :k LIMIT 1");
+                        $chk->execute([':k' => $s_key]);
+                        if (!$chk->fetch()) {
+                            $json_val = is_string($s_val) ? $s_val : json_encode($s_val, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                            $ins = self::$pdo->prepare("INSERT INTO settings (setting_key, setting_value, updated_at) VALUES (:k, :v, :u)");
+                            $ins->execute([':k' => $s_key, ':v' => $json_val, ':u' => $now]);
+                        }
+                    }
+                }
+            } catch (Exception $e) { /* non-blocking */ }
+        }
+
+        // 2. Auto-heal users from data/users_backup.json if users table is empty
+        $users_file = $data_dir . '/users_backup.json';
+        if (file_exists($users_file)) {
+            try {
+                $cnt_stmt = self::$pdo->query("SELECT COUNT(*) AS cnt FROM users");
+                $cnt_row = $cnt_stmt ? $cnt_stmt->fetch() : null;
+                if (empty($cnt_row) || intval($cnt_row['cnt']) === 0) {
+                    $saved_users = json_decode(@file_get_contents($users_file), true);
+                    if (is_array($saved_users) && !empty($saved_users)) {
+                        foreach ($saved_users as $u) {
+                            if (empty($u['username']) || empty($u['password_hash'])) continue;
+                            $ins = self::$pdo->prepare("
+                                INSERT INTO users (username, email, password_hash, role, permissions, created_at, updated_at)
+                                VALUES (:u, :e, :p, :r, :perms, :c, :up)
+                            ");
+                            $ins->execute([
+                                ':u'     => $u['username'],
+                                ':e'     => $u['email'] ?? ($u['username'] . '@localhost'),
+                                ':p'     => $u['password_hash'],
+                                ':r'     => $u['role'] ?? 'superadmin',
+                                ':perms' => is_string($u['permissions'] ?? null) ? $u['permissions'] : json_encode($u['permissions'] ?? ['all']),
+                                ':c'     => $u['created_at'] ?? $now,
+                                ':up'    => $u['updated_at'] ?? $now
+                            ]);
+                        }
+                    }
+                }
+            } catch (Exception $e) { /* non-blocking */ }
+        }
+
+        // 3. Auto-heal analytics from data/analytics_backup.json if page_views_monthly is empty
+        $analytics_file = $data_dir . '/analytics_backup.json';
+        if (file_exists($analytics_file)) {
+            try {
+                $cnt_stmt = self::$pdo->query("SELECT COUNT(*) AS cnt FROM page_views_monthly");
+                $cnt_row = $cnt_stmt ? $cnt_stmt->fetch() : null;
+                if (empty($cnt_row) || intval($cnt_row['cnt']) === 0) {
+                    $saved_analytics = json_decode(@file_get_contents($analytics_file), true);
+                    if (is_array($saved_analytics) && !empty($saved_analytics)) {
+                        foreach ($saved_analytics as $a) {
+                            if (empty($a['page_slug']) || empty($a['year_month'])) continue;
+                            $ins = self::$pdo->prepare("
+                                INSERT INTO page_views_monthly (page_slug, year_month, views)
+                                VALUES (:s, :ym, :v)
+                            ");
+                            $ins->execute([
+                                ':s'  => $a['page_slug'],
+                                ':ym' => $a['year_month'],
+                                ':v'  => intval($a['views'] ?? 1)
+                            ]);
+                        }
+                    }
+                }
+            } catch (Exception $e) { /* non-blocking */ }
         }
     }
 

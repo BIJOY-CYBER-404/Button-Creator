@@ -22,9 +22,12 @@ class SLEA_Extractor {
 
     private static $nav_words = [
         'home', 'about', 'about us', 'contact', 'contact us', 'privacy',
-        'privacy policy', 'terms', 'terms of service', 'dmca', 'disclaimer',
+        'privacy policy', 'cookie', 'cookies', 'cookie policy', 'accept cookies',
+        'terms', 'terms of service', 'terms & conditions', 'dmca', 'disclaimer',
         'faq', 'sitemap', 'search', 'login', 'sign in', 'register', 'sign up',
-        'rtl', 'category', 'categories', 'archive', 'archives', 'next',
+        'rtl', 'rtl mode', 'ltr mode', 'dark mode', 'light mode',
+        'view all articles', 'view all posts', 'view all', 'all articles', 'all posts',
+        'category', 'categories', 'archive', 'archives', 'next',
         'previous', 'prev', 'back', 'newer posts', 'older posts', 'load more',
         'read more', 'share on facebook', 'share on twitter', 'share on telegram',
         'share on whatsapp', 'share', 'pin it', 'tweet', 'comment', 'cancel reply',
@@ -32,14 +35,67 @@ class SLEA_Extractor {
         'view profile', 'show more', 'learn more', 'source', 'reference'
     ];
 
+    private static $excluded_phrases = [
+        'cookie policy',
+        'accept cookies',
+        'cookie consent',
+        'rtl mode',
+        'ltr mode',
+        'dark mode',
+        'light mode',
+        'view all articles',
+        'view all posts',
+        'all articles',
+        'privacy policy',
+        'terms of service',
+        'terms and conditions',
+        'rich results test',
+        'pagespeed insights',
+        'cancel reply',
+        'post a comment',
+        'newer posts',
+        'older posts'
+    ];
+
+    private static function is_excluded_item($text, $url = '', $attrs = '') {
+        $clean_text = strtolower(trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags((string)$text), ENT_QUOTES | ENT_HTML5, 'UTF-8'))));
+        $trimmed_text = trim($clean_text, " \t\n\r\0\x0B-–—|:•»«›‹/\\()[]{}");
+
+        if ($clean_text !== '' && (in_array($clean_text, self::$nav_words, true) || in_array($trimmed_text, self::$nav_words, true))) {
+            return true;
+        }
+
+        foreach (self::$excluded_phrases as $phrase) {
+            if ($clean_text !== '' && strpos($clean_text, $phrase) !== false) {
+                return true;
+            }
+        }
+
+        $url_lower = strtolower((string)$url);
+        $path = strtolower(parse_url($url_lower, PHP_URL_PATH) ?: '');
+        if (preg_match('#/(?:cookie-policy|privacy-policy|terms-of-service|dmca|disclaimer|contact-us|about-us)(?:\.html|/)?$#i', $path)) {
+            return true;
+        }
+        if (strpos($url_lower, 'cookie-policy') !== false || strpos($url_lower, 'rtl-mode') !== false) {
+            return true;
+        }
+
+        $attrs_lower = strtolower((string)$attrs);
+        if (preg_match('/\b(?:cookie-policy|cookie-consent|rtl-mode|rtl-toggle|view-all-articles|blog-pager)\b/i', $attrs_lower)) {
+            return true;
+        }
+
+        return false;
+    }
+
     public static function extract_buttons_from_html($html, $base_url = '', $button_only = true) {
         if (empty($html)) return [];
 
         // 1. Strip non-content structural elements (header, footer, nav, aside, script, style, comments)
         $clean_html = preg_replace('/<(?:script|style|noscript|header|footer|nav|aside)[^>]*>[\s\S]*?<\/(?:script|style|noscript|header|footer|nav|aside)>/i', ' ', $html);
         
-        // Strip common navigation, widget, header, footer, social, sidebar, comment, icon containers
-        $clean_html = preg_replace('/<(?:div|section|aside|ul|nav)[^>]*class=[\'"][^\'"]*(?:header|footer|navbar|nav-menu|main-menu|site-header|site-footer|topbar|bottombar|sidebar|widget|popular-posts|recent-posts|label-list|breadcrumb|breadcrumbs|comments|comment-reply|widget-social|social-share|social-icons|author-box|post-meta|entry-meta|tag-cloud)[^\'"]*[\'"][^>]*>[\s\S]*?<\/(?:div|section|aside|ul|nav)>/i', ' ', $clean_html);
+        // Strip common navigation, widget, header, footer, social, sidebar, comment, cookie, icon containers
+        $clean_html = preg_replace('/<(?:div|section|aside|ul|nav)[^>]*class=[\'"][^\'"]*(?:header|footer|navbar|nav-menu|main-menu|site-header|site-footer|topbar|bottombar|sidebar|widget|popular-posts|recent-posts|label-list|breadcrumb|breadcrumbs|comments|comment-reply|widget-social|social-share|social-icons|author-box|post-meta|entry-meta|tag-cloud|cookie-consent|cookie-banner|blog-pager)[^\'"]*[\'"][^>]*>[\s\S]*?<\/(?:div|section|aside|ul|nav)>/i', ' ', $clean_html);
 
         $items = [];
         $seen = [];
@@ -55,7 +111,7 @@ class SLEA_Extractor {
                 $inner_html   = $match[4][0];
 
                 $all_attrs = $attrs_before . ' ' . $attrs_after;
-                $text = trim(strip_tags($inner_html));
+                $text = html_entity_decode(trim(strip_tags($inner_html)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $text = preg_replace('/\s+/', ' ', $text);
 
                 // Filter invalid / protocol links
@@ -66,6 +122,11 @@ class SLEA_Extractor {
                 // Check domain exclusions (social media, search, analytics, etc.)
                 $full_url = self::resolve_relative_url($href, $base_url);
                 if (empty($full_url) || in_array($full_url, $seen, true)) {
+                    continue;
+                }
+
+                // Exclude Cookie Policy, RTL Mode, View all articles, and other non-button navigation items
+                if (self::is_excluded_item($text, $full_url, $all_attrs . ' ' . $inner_html)) {
                     continue;
                 }
 
@@ -82,7 +143,7 @@ class SLEA_Extractor {
                 // Exclude pure icon links (e.g. font-awesome, svg, social icons, or empty text without download link)
                 if (preg_match('/\b(?:icon|icons|fa|fab|fas|far|svg-icon|social|share)\b/i', $all_attrs) ||
                     preg_match('/^<(?:svg|i|span|img)[^>]*class=[\'"][^\'"]*(?:fa|icon|social|svg)[^\'"]*[\'"][^>]*>[\s\S]*?<\/(?:svg|i|span|img)>$/i', trim($inner_html))) {
-                    if (empty($text) || in_array(strtolower($text), self::$nav_words, true)) {
+                    if (empty($text) || self::is_excluded_item($text, $full_url, $all_attrs)) {
                         continue;
                     }
                 }
@@ -97,11 +158,26 @@ class SLEA_Extractor {
                 $start_pos = max(0, $tag_offset - 250);
                 $preceding_chunk = substr($clean_html, $start_pos, $tag_offset - $start_pos);
 
+                // Only use preceding EpItem chunk if an EpItem was opened and not closed before this <a> tag
+                $active_ep_chunk = $preceding_chunk;
+                $last_ep_item_pos = strripos($preceding_chunk, 'EpItem');
+                if ($last_ep_item_pos !== false) {
+                    $since_ep_item = substr($preceding_chunk, $last_ep_item_pos);
+                    // If the EpItem container already closed (e.g., after an </a></div>), don't bleed into non-episode elements
+                    if (preg_match('/<\/a>\s*<\/div>/i', $since_ep_item)) {
+                        $active_ep_chunk = '';
+                    } else {
+                        $active_ep_chunk = $since_ep_item;
+                    }
+                } else {
+                    $active_ep_chunk = '';
+                }
+
                 // Check for Episode Name or Label in preceding DOM context or text
                 $episode_num = self::detect_episode($text);
                 $ep_label = '';
-                if (empty($episode_num)) {
-                    if (preg_match('/<div[^>]*class=[\'"][^\'"]*EpName[^\'"]*[\'"][^>]*>([\s\S]*?)<\/div>/i', $preceding_chunk, $ep_div_m)) {
+                if (empty($episode_num) && !empty($active_ep_chunk)) {
+                    if (preg_match('/<div[^>]*class=[\'"][^\'"]*EpName[^\'"]*[\'"][^>]*>([\s\S]*?)<\/div>/i', $active_ep_chunk, $ep_div_m)) {
                         $ep_clean = trim(strip_tags($ep_div_m[1]));
                         if (!empty($ep_clean)) {
                             $ep_label = $ep_clean;
@@ -109,7 +185,7 @@ class SLEA_Extractor {
                                 $episode_num = intval($num_m[1]);
                             }
                         }
-                    } elseif (preg_match_all('/(?:Episode|Ep\.?|E)\s*(\d{1,3}(?:\s*-\s*\d{1,3})?)/i', $preceding_chunk, $ep_matches)) {
+                    } elseif (preg_match_all('/(?:Episode|Ep\.?|E)\s*(\d{1,3}(?:\s*-\s*\d{1,3})?)/i', $active_ep_chunk, $ep_matches)) {
                         $last_ep = end($ep_matches[1]);
                         $ep_label = 'Episode ' . trim($last_ep);
                         if (preg_match('/^(\d+)/', trim($last_ep), $num_m)) {
@@ -122,7 +198,7 @@ class SLEA_Extractor {
                 $provider = self::detect_provider($full_url);
 
                 // Check if this element or its context is a genuine button
-                $is_button = self::is_button_element($all_attrs, $text, $full_url, $preceding_chunk, $inner_html);
+                $is_button = self::is_button_element($all_attrs, $text, $full_url, $active_ep_chunk, $inner_html);
 
                 // If button_only mode: exclude plain text hyperlinks and non-button links
                 if ($button_only && !$is_button) {

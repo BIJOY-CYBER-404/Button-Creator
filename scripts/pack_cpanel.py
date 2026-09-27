@@ -59,6 +59,7 @@ def main():
         with open(UPDATE_JSON_PUBLIC, "r", encoding="utf-8") as f:
             manifest = json.load(f)
         manifest["checksum"] = checksum
+        manifest["sha256"] = checksum
         with open(UPDATE_JSON_PUBLIC, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2)
         print(f"[*] Updated public manifest with checksum: {UPDATE_JSON_PUBLIC}")

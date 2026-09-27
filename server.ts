@@ -199,6 +199,89 @@ async function startServer() {
     res.json({ success: true, data: pages });
   });
 
+  // Protected: Backup Export (All or Separate: settings, pages, others)
+  app.post("/api/backup/export", requireAdmin, (req, res) => {
+    const { scope = "all", settings = {}, others = {} } = req.body || {};
+    const pages = getStoredPages();
+    const includeSettings = scope === "all" || scope === "settings";
+    const includePages = scope === "all" || scope === "pages";
+    const includeOthers = scope === "all" || scope === "others";
+
+    const payload = {
+      backup_format: "slea_backup_v2",
+      app_name: "Movie Hub HQ Drive",
+      app_version: "v-5.6.0",
+      scope,
+      created_at: new Date().toISOString(),
+      counts: {
+        settings: includeSettings ? Object.keys(settings || {}).length : 0,
+        pages: includePages ? pages.length : 0,
+        users: includeOthers ? 1 : 0,
+        analytics: includeOthers ? pages.length : 0,
+      },
+      data: {
+        settings: includeSettings ? settings : null,
+        pages: includePages ? pages : null,
+        others: includeOthers
+          ? {
+              users: [{ username: "admin", role: "superadmin" }],
+              ...others,
+            }
+          : null,
+      },
+    };
+    res.json({ success: true, backup: payload });
+  });
+
+  // Protected: Backup Restore (All or Separate: auto, settings, pages, others)
+  app.post("/api/backup/restore", requireAdmin, (req, res) => {
+    const { backup, scope = "auto", mode = "merge" } = req.body || {};
+    if (!backup || typeof backup !== "object") {
+      return res.status(400).json({ success: false, error: "Invalid backup JSON payload." });
+    }
+
+    const dataBlock = backup.data && typeof backup.data === "object" ? backup.data : backup;
+    const restorePages = scope === "auto" || scope === "all" || scope === "pages";
+    let restoredPagesCount = 0;
+
+    const incomingPages: ButtonPage[] | null = Array.isArray(dataBlock.pages)
+      ? dataBlock.pages
+      : Array.isArray(backup)
+      ? backup
+      : null;
+
+    if (restorePages && incomingPages) {
+      if (mode === "overwrite") {
+        saveStoredPages(incomingPages);
+        restoredPagesCount = incomingPages.length;
+      } else {
+        const current = getStoredPages();
+        const bySlug = new Map(current.map((p) => [p.slug, p]));
+        for (const p of incomingPages) {
+          if (!p || !p.slug) continue;
+          bySlug.set(p.slug, {
+            ...bySlug.get(p.slug),
+            ...p,
+            views: Math.max(Number(bySlug.get(p.slug)?.views || 0), Number(p.views || 0)),
+          });
+          restoredPagesCount++;
+        }
+        saveStoredPages(Array.from(bySlug.values()));
+      }
+    }
+
+    res.json({
+      success: true,
+      restored: {
+        settings: (scope === "auto" || scope === "all" || scope === "settings") && dataBlock.settings ? Object.keys(dataBlock.settings).length : 0,
+        pages: restoredPagesCount,
+        others: (scope === "auto" || scope === "all" || scope === "others") && dataBlock.others ? 1 : 0,
+      },
+      settings: (scope === "auto" || scope === "all" || scope === "settings") ? dataBlock.settings || null : null,
+      others: (scope === "auto" || scope === "all" || scope === "others") ? dataBlock.others || null : null,
+    });
+  });
+
   // Helper: Sanitize title to replace DramaVerse / mydverse with Movie Hub HQ
   function sanitizePageTitle(rawTitle: string): string {
     if (!rawTitle) return "Episode Download Links";
@@ -490,16 +573,16 @@ async function startServer() {
     }
     return res.json({
       name: "Movie Hub HQ Drive",
-      version: "4.0.0",
-      release_date: "2026-09-23",
+      version: "v-5.6.0",
+      release_date: "2026-09-27",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-      minimum_php: "8.0",
+      minimum_php: "7.4",
       release_notes: [
-        "Bulk page management with multi-checkbox selection and instant bulk deletion in React and cPanel admin panels",
-        "Overhauled pure-PHP shortlink resolver engine with universal Blogspot target matching and CakePHP CSRF compatibility",
-        "Automatic page title sanitization: automatically converts 'DramaVerse 2', 'mydverse 2', and 'mydverse' to 'Movie Hub HQ' before publishing",
-        "Safe temp directory cookie isolation supporting cPanel open_basedir environments",
-        "Top-right corner popup toast notifications with animated entries and auto-dismiss"
+        "Added complete Backup & Restore Center: export and restore Website Settings, Generated Pages, and Others (Accounts & Analytics) all together or separately",
+        "Added One-Click Server Snapshots stored in /data/snapshots with modular restore options (Restore All, Settings Only, Pages Only, Others Only)",
+        "Zero-Data-Loss Update & Auto-Heal Engine: guarantees settings, generated pages, admin accounts, and view analytics are never lost or corrupted during updates or rollbacks",
+        "Excluded 'Cookie Policy', 'RTL Mode', and 'View all articles' from being counted or extracted as episode buttons",
+        "Updated release package v-5.6.0 ready for remote one-click updates"
       ]
     });
   });

@@ -33,7 +33,20 @@ class SLEA_BackupManager {
             APP_ROOT . '/node_modules'
         ]);
 
-        // 2. Back up Database
+        // 2. Back up Database (Structured JSON + SQL)
+        if (class_exists('SLEA_Datastore')) {
+            try {
+                $json_payload = SLEA_Datastore::create_backup_payload('all');
+                @file_put_contents(
+                    $this->backup_dir . '/db_backup.json',
+                    json_encode($json_payload, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+                );
+                SLEA_Datastore::create_server_snapshot('all', 'Auto Pre-Update (' . $this->update_id . ')');
+            } catch (Exception $e) {
+                // non-blocking
+            }
+        }
+
         $db_backup_file = $this->backup_dir . '/db_backup.sql';
         $this->dump_database($db_backup_file);
 

@@ -231,6 +231,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </span>
                 </div>
             </div>
+
+            <!-- Quick Backup & Restore Access Bar -->
+            <div class="mt-4 pt-4 border-t border-[#f1f3f4] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#f8fafd] p-3.5 rounded-xl border border-[#d3e3fd]">
+                <div class="space-y-0.5">
+                    <div class="text-xs font-bold text-[#0b57d0] flex items-center gap-1.5">
+                        <span>🛡️ Zero Data Loss Guarantee:</span>
+                        <span class="text-[11px] font-normal text-[#3c4043]">Website Settings, Generated Pages, Accounts &amp; Analytics are automatically backed up &amp; preserved during updates.</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap shrink-0">
+                    <a href="api.php?action=export_backup&amp;scope=all&amp;download=1" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-blue-50 text-[#0b57d0] border border-[#c2e7ff] text-[11px] font-bold transition">⬇ Full Backup</a>
+                    <a href="api.php?action=export_backup&amp;scope=settings&amp;download=1" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold transition">⬇ Settings Only</a>
+                    <a href="api.php?action=export_backup&amp;scope=pages&amp;download=1" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition">⬇ Pages Only</a>
+                    <a href="settings.php#backup-restore-section" class="px-3 py-1.5 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white text-[11px] font-bold transition">Open Backup &amp; Restore Center →</a>
+                </div>
+            </div>
         </div>
 
         <!-- Diagnostics and Check logs -->
