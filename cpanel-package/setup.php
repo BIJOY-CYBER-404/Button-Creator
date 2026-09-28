@@ -20,76 +20,9 @@ header('Expires: 0');
 $has_users = SLEA_Auth::has_users();
 $error = '';
 
-// If admin already exists, PERMANENTLY LOCK this page!
+// If admin already exists, return 404 Not Found (no links to login or admin pages)
 if ($has_users) {
-    http_response_code(403);
-    ?>
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Setup Locked - <?= htmlspecialchars($site_name) ?></title>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-        <script src="https://cdn.tailwindcss.com"></script>
-        <style>
-            body { font-family: 'Plus Jakarta Sans', sans-serif; }
-            .font-mono { font-family: 'JetBrains Mono', monospace; }
-            .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
-            .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
-        </style>
-    </head>
-    <body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
-        <div class="min-h-screen flex flex-col flex-1">
-            <header id="app-header" class="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors">
-                <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
-                    <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                                <h1 class="font-bold text-sm sm:text-base leading-snug text-[#1f1f1f] tracking-tight truncate">
-                                    <?= htmlspecialchars($site_name) ?>
-                                </h1>
-                            </div>
-                            <p class="text-[11px] text-[#5f6368] truncate hidden sm:block">
-                                Shortlink Bypass • Episode Button Pages
-                            </p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 shrink-0">
-                        <div class="flex items-center gap-2 text-xs text-[#444746]">
-                            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span class="hidden sm:inline font-medium">System Online</span>
-                        </div>
-                    </div>
-                </div>
-            </header>
-
-            <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7 flex items-center justify-center">
-                <div class="w-full max-w-md mx-auto py-8 px-4">
-                    <div class="bg-white rounded-2xl p-7 border border-[#d3e3fd] shadow-md space-y-6 text-center">
-                        <div class="w-12 h-12 rounded-2xl bg-[#fce8e6] text-[#c5221f] flex items-center justify-center mx-auto shadow-2xs border border-[#fad2cf]">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        </div>
-                        <div class="space-y-2">
-                            <h2 class="text-lg font-bold text-[#1f1f1f]">Setup Permanently Closed</h2>
-                            <p class="text-xs text-[#5f6368] leading-relaxed">
-                                The administrator account has already been provisioned in the MySQL database. Account creation is permanently locked for security.
-                            </p>
-                        </div>
-                        <div class="pt-1">
-                            <a href="login.php" class="w-full py-3 px-4 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all">
-                                <span>Proceed to Admin Login</span>
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </main>
-        </div>
-    </body>
-    </html>
-    <?php
-    exit;
+    SLEA_Auth::render_404();
 }
 
 // Handle Form Submission for first admin

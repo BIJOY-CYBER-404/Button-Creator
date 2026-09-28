@@ -169,6 +169,39 @@ class SLEA_Auth {
         session_destroy();
     }
 
+    public static function render_404($title = '404 Not Found', $message = 'The requested page does not exist or has been removed.') {
+        header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('X-LiteSpeed-Cache-Control: no-cache');
+        http_response_code(404);
+        ?>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="robots" content="noindex, nofollow">
+            <title><?= htmlspecialchars($title) ?></title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafd; color: #1f1f1f; text-align: center; padding: 60px 20px; margin: 0; }
+                .box { max-width: 440px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 24px; border: 1px solid #e0e4eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+                h1 { color: #d93025; font-size: 20px; margin-top: 0; margin-bottom: 8px; }
+                p { font-size: 13px; color: #5f6368; margin: 0; }
+            </style>
+        </head>
+        <body>
+            <div class="box">
+                <h1><?= htmlspecialchars($title) ?></h1>
+                <p><?= htmlspecialchars($message) ?></p>
+            </div>
+        </body>
+        </html>
+        <?php
+        exit;
+    }
+
     public static function require_admin() {
         self::start_session();
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -180,16 +213,15 @@ class SLEA_Auth {
                 || (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'application/json') !== false)
                 || (isset($_SERVER['REQUEST_URI']) && stripos($_SERVER['REQUEST_URI'], 'api.php') !== false)) {
                 header('Content-Type: application/json; charset=utf-8');
-                http_response_code(401);
+                http_response_code(404);
                 echo json_encode([
                     'success' => false,
-                    'error'   => 'Unauthorized: Admin session expired or missing. Please log in again.'
+                    'error'   => '404 Not Found'
                 ]);
                 exit;
             }
-            // Redirect to private login page
-            header('Location: login.php');
-            exit;
+            // Show 404 instead of redirecting to login page when not logged in as admin
+            self::render_404();
         }
     }
 }

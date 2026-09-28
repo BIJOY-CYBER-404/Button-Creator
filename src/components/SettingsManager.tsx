@@ -250,6 +250,59 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
   const [newMenuTitle, setNewMenuTitle] = useState("");
   const [newMenuUrl, setNewMenuUrl] = useState("");
   const [newMenuBlank, setNewMenuBlank] = useState(false);
+  const [editingMenuIndex, setEditingMenuIndex] = useState<number | null>(null);
+  const [editMenuTitle, setEditMenuTitle] = useState("");
+  const [editMenuUrl, setEditMenuUrl] = useState("");
+  const [editMenuBlank, setEditMenuBlank] = useState(false);
+
+  const [loginSlug, setLoginSlug] = useState<string>(() => {
+    return localStorage.getItem("slea_login_slug") || "login";
+  });
+
+  const sanitizeLoginSlugClient = (val: string) => {
+    return String(val || "")
+      .trim()
+      .replace(/^[/\\]+|[/\\]+$/g, "")
+      .replace(/\.php$/i, "")
+      .replace(/[^a-zA-Z0-9_-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase();
+  };
+
+  const syncSettingsToServer = async (partial: Record<string, any>) => {
+    try {
+      const token = localStorage.getItem("slea_admin_token") || "";
+      await fetch("/api/settings/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "x-admin-token": token,
+        },
+        body: JSON.stringify(partial),
+      });
+    } catch {
+      // non-blocking
+    }
+  };
+
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.settings) {
+          if (data.settings.login_slug) {
+            setLoginSlug(data.settings.login_slug);
+            localStorage.setItem("slea_login_slug", data.settings.login_slug);
+          }
+          if (Array.isArray(data.settings.menu_items) && !localStorage.getItem("slea_menu_items")) {
+            setMenuItems(data.settings.menu_items);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Backup & Restore State
   const [downloadBackupScope, setDownloadBackupScope] = useState<"all" | "settings" | "pages" | "others">("all");
@@ -268,6 +321,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
 
   const buildLocalSettingsBundle = () => ({
     site_identity: siteIdentity,
+    login_slug: loginSlug,
     ad_settings: adSettings,
     menu_items: menuItems,
     footer_copyright: footerText,
@@ -280,6 +334,12 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
       setSiteIdentity(s.site_identity);
       localStorage.setItem("slea_site_identity", JSON.stringify(s.site_identity));
       window.dispatchEvent(new Event("site_identity_updated"));
+    }
+    if (s.login_slug) {
+      const cleanLogin = sanitizeLoginSlugClient(s.login_slug) || "login";
+      setLoginSlug(cleanLogin);
+      localStorage.setItem("slea_login_slug", cleanLogin);
+      window.dispatchEvent(new Event("login_slug_updated"));
     }
     if (s.ad_settings) {
       setAdSettings((prev) => ({ ...prev, ...s.ad_settings }));
@@ -453,13 +513,37 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
   const handleSaveIdentity = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem("slea_site_identity", JSON.stringify(siteIdentity));
+    syncSettingsToServer({ site_identity: siteIdentity });
     window.dispatchEvent(new Event("site_identity_updated"));
     onNotify("Site branding & logo updated successfully!", "success");
+  };
+
+  const handleSaveLoginSlug = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = sanitizeLoginSlugClient(loginSlug) || "login";
+    const reserved = ["admin", "pages", "settings", "analytics", "update", "updater", "api", "logout", "setup", "view", "index", "p", "page", "404"];
+    if (reserved.includes(clean)) {
+      onNotify(`The path '/${clean}' is reserved by the system. Please choose a different login path.`, "error");
+      return;
+    }
+    setLoginSlug(clean);
+    localStorage.setItem("slea_login_slug", clean);
+    await syncSettingsToServer({ login_slug: clean });
+    window.dispatchEvent(new Event("login_slug_updated"));
+    onNotify(`Admin Login Page Path updated to "/${clean}"!`, "success");
+  };
+
+  const handleCopyLoginUrl = () => {
+    const clean = sanitizeLoginSlugClient(loginSlug) || "login";
+    const fullUrl = `${window.location.origin}/${clean}`;
+    navigator.clipboard.writeText(fullUrl);
+    onNotify("Custom Admin Login URL copied to clipboard!", "success");
   };
 
   const handleSaveAds = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem("slea_ad_settings", JSON.stringify(adSettings));
+    syncSettingsToServer({ ad_settings: adSettings });
     onNotify("AdSense & Banner Ad settings saved successfully!", "success");
   };
 
@@ -472,6 +556,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
     };
     setMaintenanceSettings(nextSettings);
     localStorage.setItem("slea_maintenance_settings", JSON.stringify(nextSettings));
+    syncSettingsToServer({ maintenance_settings: nextSettings });
     onNotify("Maintenance settings & countdown timer saved successfully!", "success");
   };
 
@@ -481,25 +566,85 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
       onNotify("Please provide both menu item title and destination URL.", "error");
       return;
     }
-    const updated = [...menuItems, { title: newMenuTitle.trim(), url: newMenuUrl.trim(), target_blank: newMenuBlank }];
+    const updated = [
+      ...menuItems,
+      { title: newMenuTitle.trim(), url: newMenuUrl.trim(), target_blank: newMenuBlank, new_tab: newMenuBlank } as any,
+    ];
     setMenuItems(updated);
     localStorage.setItem("slea_menu_items", JSON.stringify(updated));
+    syncSettingsToServer({ menu_items: updated });
     setNewMenuTitle("");
     setNewMenuUrl("");
     setNewMenuBlank(false);
     onNotify(`Added navigation item "${newMenuTitle.trim()}"`, "success");
   };
 
+  const handleStartEditMenuItem = (index: number) => {
+    const item = menuItems[index] as any;
+    if (!item) return;
+    setEditingMenuIndex(index);
+    setEditMenuTitle(item.title || "");
+    setEditMenuUrl(item.url || "");
+    setEditMenuBlank(Boolean(item.target_blank || item.new_tab));
+  };
+
+  const handleCancelEditMenuItem = () => {
+    setEditingMenuIndex(null);
+    setEditMenuTitle("");
+    setEditMenuUrl("");
+    setEditMenuBlank(false);
+  };
+
+  const handleSaveEditMenuItem = (index: number) => {
+    if (!editMenuTitle.trim() || !editMenuUrl.trim()) {
+      onNotify("Please provide both menu item title and destination URL.", "error");
+      return;
+    }
+    const updated = menuItems.map((item, idx) =>
+      idx === index
+        ? ({
+            ...item,
+            title: editMenuTitle.trim(),
+            url: editMenuUrl.trim(),
+            target_blank: editMenuBlank,
+            new_tab: editMenuBlank,
+          } as any)
+        : item
+    );
+    setMenuItems(updated);
+    localStorage.setItem("slea_menu_items", JSON.stringify(updated));
+    syncSettingsToServer({ menu_items: updated });
+    setEditingMenuIndex(null);
+    onNotify(`Updated navigation item "${editMenuTitle.trim()}"`, "success");
+  };
+
+  const handleMoveMenuItem = (index: number, direction: -1 | 1) => {
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= menuItems.length) return;
+    const updated = [...menuItems];
+    const temp = updated[index];
+    updated[index] = updated[targetIdx];
+    updated[targetIdx] = temp;
+    setMenuItems(updated);
+    localStorage.setItem("slea_menu_items", JSON.stringify(updated));
+    syncSettingsToServer({ menu_items: updated });
+    setEditingMenuIndex(null);
+    onNotify("Menu item order updated.", "info");
+  };
+
   const handleRemoveMenuItem = (index: number) => {
     const updated = menuItems.filter((_, idx) => idx !== index);
     setMenuItems(updated);
     localStorage.setItem("slea_menu_items", JSON.stringify(updated));
+    syncSettingsToServer({ menu_items: updated });
+    if (editingMenuIndex === index) setEditingMenuIndex(null);
     onNotify("Menu item removed.", "info");
   };
 
   const handleSaveFooter = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem("slea_footer_text", footerText);
+    syncSettingsToServer({ footer_text: footerText });
     onNotify("Footer copyright text updated successfully!", "success");
   };
 
@@ -850,6 +995,81 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
         </form>
       </div>
 
+      {/* 0b. Custom Admin Login Page Path Configuration */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6" id="login-path-section">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-[#f0f4f9]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center font-bold">
+              <ShieldAlert className="w-5 h-5 text-[#0b57d0]" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-[#1f1f1f]">Admin Login Page Path</h3>
+              <p className="text-xs text-[#5f6368]">
+                Change the secret URL path used to access the administrator login screen. Unauthenticated visits to admin or private pages strictly return 404.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] self-start sm:self-auto">
+            /{sanitizeLoginSlugClient(loginSlug) || "login"}
+          </span>
+        </div>
+
+        <form onSubmit={handleSaveLoginSlug} className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-[#444746] block">
+                Custom Login Page Path (Slug)
+              </label>
+              <div className="flex items-center rounded-xl border border-[#c4c7c5] focus-within:border-[#0b57d0] focus-within:ring-1 focus-within:ring-[#0b57d0] bg-white overflow-hidden">
+                <span className="px-3 py-2.5 bg-[#f8fafd] border-r border-[#e0e4eb] text-xs font-mono text-[#5f6368] select-none">
+                  /
+                </span>
+                <input
+                  type="text"
+                  value={loginSlug}
+                  onChange={(e) => setLoginSlug(e.target.value)}
+                  placeholder="login"
+                  className="w-full px-3 py-2.5 text-xs font-mono font-semibold text-[#1f1f1f] outline-none"
+                />
+              </div>
+              <span className="text-[11px] text-[#5f6368] block">
+                Default is <code className="font-mono text-[#0b57d0]">login</code>. Set a custom slug (e.g. <code className="font-mono">my-secret-login</code>) to hide the default <code className="font-mono">/login.php</code> behind a 404 error.
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-[#444746] block">
+                Active Admin Login URL
+              </label>
+              <div className="p-3 bg-[#f8fafd] border border-[#e0e4eb] rounded-xl flex items-center justify-between gap-2">
+                <code className="text-xs font-mono text-[#0b57d0] font-bold truncate">
+                  {typeof window !== "undefined" ? window.location.origin : ""}/{sanitizeLoginSlugClient(loginSlug) || "login"}
+                </code>
+                <button
+                  type="button"
+                  onClick={handleCopyLoginUrl}
+                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-[#e8f0fe] text-[#0b57d0] border border-[#d3e3fd] text-[11px] font-bold transition-colors cursor-pointer shrink-0"
+                >
+                  Copy URL
+                </button>
+              </div>
+              <span className="text-[11px] text-[#5f6368] block">
+                Bookmark this URL. Anyone visiting admin or private pages without logging in will see a 404 Not Found page.
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              className="px-5 py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <Save className="w-4 h-4" /> Save Login Page Path
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* 🛠️ Maintenance Mode Form */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6">
         <div className="flex items-center justify-between pb-4 border-b border-[#f0f4f9]">
@@ -1186,38 +1406,142 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
 
         {/* Existing Menu Items List */}
         <div className="space-y-2">
-          {menuItems.map((item, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0]"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="w-6 h-6 rounded-full bg-white border border-[#c4c7c5] text-[10px] font-bold text-[#444746] flex items-center justify-center shrink-0">
-                  {index + 1}
-                </span>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-[#1f1f1f] truncate">{item.title}</div>
-                  <div className="text-[11px] font-mono text-[#5f6368] truncate">{item.url}</div>
+          {menuItems.map((item, index) => {
+            const isBlank = Boolean((item as any).target_blank || (item as any).new_tab);
+            if (editingMenuIndex === index) {
+              return (
+                <div
+                  key={index}
+                  className="p-4 rounded-2xl bg-[#f8fafd] border-2 border-[#0b57d0] space-y-3 shadow-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#0b57d0]">
+                      Editing Menu Item #{index + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCancelEditMenuItem}
+                      className="text-[11px] font-semibold text-[#5f6368] hover:text-[#1f1f1f] cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-[#444746] block mb-1">
+                        Menu Title
+                      </label>
+                      <input
+                        type="text"
+                        value={editMenuTitle}
+                        onChange={(e) => setEditMenuTitle(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] outline-none text-xs font-medium bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-[#444746] block mb-1">
+                        Destination URL
+                      </label>
+                      <input
+                        type="text"
+                        value={editMenuUrl}
+                        onChange={(e) => setEditMenuUrl(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] outline-none text-xs font-mono bg-white"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <label className="flex items-center gap-2 text-xs text-[#444746] cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={editMenuBlank}
+                        onChange={(e) => setEditMenuBlank(e.target.checked)}
+                        className="rounded text-[#0b57d0]"
+                      />
+                      Open in new tab (_blank)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCancelEditMenuItem}
+                        className="px-3.5 py-1.5 rounded-xl bg-white border border-[#c4c7c5] hover:bg-slate-50 text-xs font-bold text-[#444746] cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEditMenuItem(index)}
+                        className="px-4 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-bold shadow-2xs cursor-pointer"
+                      >
+                        ✓ Save Changes
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={index}
+                className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="w-6 h-6 rounded-full bg-white border border-[#c4c7c5] text-[10px] font-bold text-[#444746] flex items-center justify-center shrink-0">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-[#1f1f1f] truncate">{item.title}</div>
+                    <div className="text-[11px] font-mono text-[#5f6368] truncate">{item.url}</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {isBlank && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                      New Tab
+                    </span>
+                  )}
+                  {index > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleMoveMenuItem(index, -1)}
+                      className="p-1.5 rounded-lg text-[#5f6368] hover:text-[#0b57d0] hover:bg-[#e8f0fe] transition-colors cursor-pointer"
+                      title="Move Up"
+                    >
+                      ↑
+                    </button>
+                  )}
+                  {index < menuItems.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleMoveMenuItem(index, 1)}
+                      className="p-1.5 rounded-lg text-[#5f6368] hover:text-[#0b57d0] hover:bg-[#e8f0fe] transition-colors cursor-pointer"
+                      title="Move Down"
+                    >
+                      ↓
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditMenuItem(index)}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#e8f0fe] text-[#0b57d0] border border-[#d3e3fd] text-[11px] font-bold transition-colors cursor-pointer"
+                    title="Edit item"
+                  >
+                    ✎ Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveMenuItem(index)}
+                    className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    title="Remove item"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                {item.target_blank && (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                    New Tab
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveMenuItem(index)}
-                  className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                  title="Remove item"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Add New Menu Item */}

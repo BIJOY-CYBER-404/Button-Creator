@@ -191,6 +191,24 @@ try {
             echo json_encode(['success' => true, 'site_identity' => $site_identity]);
             break;
 
+        case 'save_login_slug':
+            $raw_slug = $data['login_slug'] ?? '';
+            $saved_slug = SLEA_Datastore::save_login_slug($raw_slug);
+            echo json_encode([
+                'success'    => true,
+                'login_slug' => $saved_slug,
+                'login_url'  => SLEA_Datastore::get_login_url()
+            ]);
+            break;
+
+        case 'get_login_slug':
+            echo json_encode([
+                'success'    => true,
+                'login_slug' => SLEA_Datastore::get_login_slug(),
+                'login_url'  => SLEA_Datastore::get_login_url()
+            ]);
+            break;
+
         case 'save_menu_items':
             $items = $data['items'] ?? [];
             if (!is_array($items)) throw new Exception('Invalid items format.');

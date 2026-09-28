@@ -18,6 +18,11 @@
     RewriteRule ^logout/?$ logout.php [L,QSA]
     RewriteRule ^setup/?$ setup.php [L,QSA]
 
+    # Route custom login page path (with or without .php) to view.php handler
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^([a-zA-Z0-9_-]+)(?:\.php)?/?$ view.php?slug=$1 [L,QSA]
+
     # Block direct browser access to sensitive backend directories and config files
     RewriteRule ^data/ - [F,L]
     RewriteRule ^includes/ - [F,L]

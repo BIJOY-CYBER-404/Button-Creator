@@ -456,6 +456,52 @@ class SLEA_Datastore {
     }
 
     // -------------------------------------------------------------
+    // Custom Admin Login Page Path Settings
+    // -------------------------------------------------------------
+
+    public static function sanitize_login_slug($raw) {
+        $s = trim((string)$raw);
+        $s = trim($s, "/\\ \t\n\r\0\x0B");
+        $s = preg_replace('/\.php$/i', '', $s);
+        $s = trim($s, "/\\");
+        $s = preg_replace('/[^a-zA-Z0-9_-]/', '-', strtolower($s));
+        $s = preg_replace('/-+/', '-', $s);
+        $s = trim($s, '-');
+        return $s;
+    }
+
+    public static function get_login_slug() {
+        $raw = self::get_raw_setting('login_slug');
+        if (!empty($raw)) {
+            $decoded = json_decode($raw, true);
+            $val = (json_last_error() === JSON_ERROR_NONE && is_string($decoded)) ? $decoded : (is_string($raw) ? trim($raw, '"') : '');
+            $clean = self::sanitize_login_slug($val);
+            if (!empty($clean)) {
+                return $clean;
+            }
+        }
+        return 'login';
+    }
+
+    public static function save_login_slug($slug) {
+        $clean = self::sanitize_login_slug($slug);
+        if (empty($clean)) {
+            $clean = 'login';
+        }
+        $reserved = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'api', 'logout', 'setup', 'view', 'index', 'p', 'page', '404', 'assets', 'data', 'includes', 'database'];
+        if (in_array($clean, $reserved, true)) {
+            throw new Exception("The path '/{$clean}' is reserved by the system. Please choose a different login path.");
+        }
+        self::save_raw_setting('login_slug', $clean);
+        return $clean;
+    }
+
+    public static function get_login_url() {
+        $slug = self::get_login_slug();
+        return $slug === 'login' ? 'login.php' : $slug;
+    }
+
+    // -------------------------------------------------------------
     // Maintenance Mode Settings (With Countdown End Time)
     // -------------------------------------------------------------
 
@@ -874,6 +920,7 @@ class SLEA_Datastore {
         if ($include_settings) {
             $settings_data = [
                 'site_identity'        => self::get_site_identity(),
+                'login_slug'           => self::get_login_slug(),
                 'menu_items'           => self::get_menu_items(),
                 'footer_copyright'     => self::get_footer_copyright(),
                 'ad_settings'          => self::get_ad_settings(),
@@ -977,7 +1024,7 @@ class SLEA_Datastore {
         if (!empty($data_block['settings']) && is_array($data_block['settings'])) {
             $detected_settings = $data_block['settings'];
         } else {
-            $known_setting_keys = ['site_identity', 'menu_items', 'footer_copyright', 'ad_settings', 'maintenance_settings', 'share_settings', 'update_config'];
+            $known_setting_keys = ['site_identity', 'login_slug', 'menu_items', 'footer_copyright', 'ad_settings', 'maintenance_settings', 'share_settings', 'update_config'];
             $matched_settings = [];
             foreach ($known_setting_keys as $k) {
                 if (array_key_exists($k, $payload)) {

@@ -22,6 +22,25 @@ if (SLEA_Auth::is_logged_in()) {
     exit;
 }
 
+// Enforce Custom Login Page Path configured in Admin Settings
+SLEA_Auth::start_session();
+$configured_login_slug = SLEA_Datastore::get_login_slug();
+$req_uri_path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+$req_basename = trim(basename($req_uri_path), '/');
+$req_slug_clean = strtolower(preg_replace('/\.php$/i', '', $req_basename));
+$query_login_slug = isset($_GET['slug']) ? SLEA_Datastore::sanitize_login_slug($_GET['slug']) : '';
+
+$is_valid_login_path = defined('SLEA_LOGIN_ROUTED')
+    || ($req_slug_clean === $configured_login_slug)
+    || ($query_login_slug !== '' && $query_login_slug === $configured_login_slug)
+    || ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_SESSION['slea_login_form_token']));
+
+if (!$is_valid_login_path) {
+    SLEA_Auth::render_404();
+}
+
+$_SESSION['slea_login_form_token'] = true;
+
 $site_identity = SLEA_Datastore::get_site_identity();
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -113,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
 
                     <!-- Form -->
-                    <form method="POST" action="login.php" class="space-y-4">
+                    <form method="POST" action="" class="space-y-4">
                         <div class="space-y-1">
                             <label class="text-xs font-semibold text-[#444746] block">
                                 Username

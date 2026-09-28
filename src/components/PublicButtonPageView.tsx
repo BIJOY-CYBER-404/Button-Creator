@@ -38,7 +38,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   const effectiveToken = propAdminToken !== undefined ? propAdminToken : localStorage.getItem("slea_admin_token") || "";
   const isAdmin = propIsAdmin !== undefined ? propIsAdmin : Boolean(effectiveToken);
 
-  const [siteIdentity] = useState<SiteIdentity>(() => {
+  const [siteIdentity, setSiteIdentity] = useState<SiteIdentity>(() => {
     const saved = localStorage.getItem("slea_site_identity");
     if (saved) {
       try {
@@ -55,29 +55,83 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     };
   });
 
-  const [menuItems] = useState<{ title: string; url: string; new_tab?: boolean }[]>(() => {
+  const filterSafePublicMenuItems = (
+    items: { title: string; url: string; new_tab?: boolean; target_blank?: boolean }[],
+    loginSlug = "login"
+  ) => {
+    const blocked = new Set([
+      "admin",
+      "pages",
+      "settings",
+      "analytics",
+      "update",
+      "updater",
+      "login",
+      "logout",
+      "setup",
+      "api",
+      "cpanel",
+      "plugin",
+      loginSlug.toLowerCase(),
+    ]);
+    return items.filter((item) => {
+      const u = String(item?.url || "").trim();
+      if (!u || u === "#") return true;
+      try {
+        const parsed = new URL(u, window.location.origin);
+        const segs = parsed.pathname.replace(/^\/+|\/+$/g, "").split("/");
+        const first = (segs[0] || "").replace(/\.php$/i, "").toLowerCase();
+        if (blocked.has(first)) return false;
+      } catch {
+        // ignore
+      }
+      return true;
+    });
+  };
+
+  const [menuItems, setMenuItems] = useState<{ title: string; url: string; new_tab?: boolean; target_blank?: boolean }[]>(() => {
     const saved = localStorage.getItem("slea_menu_items");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return filterSafePublicMenuItems(parsed);
       } catch {
         // fallback
       }
     }
     return [
-      { title: "Home", url: "https://moviehubhq.com/", new_tab: true },
-      { title: "Korean Drama", url: "https://moviehubhq.com/catagory/korean/", new_tab: true },
-      { title: "Chinese Drama", url: "https://moviehubhq.com/catagory/chinese/", new_tab: true },
+      { title: "Home", url: "https://moviehubhq.com/", new_tab: false },
+      { title: "Korean Drama", url: "https://moviehubhq.com/catagory/korean/", new_tab: false },
+      { title: "Chinese Drama", url: "https://moviehubhq.com/catagory/chinese/", new_tab: false },
     ];
   });
 
-  const [footerText] = useState<string>(() => {
+  const [footerText, setFooterText] = useState<string>(() => {
     return (
       localStorage.getItem("slea_footer_text") ||
       `&copy; ${new Date().getFullYear()} MovieHubHQ 🍿 • Made with &#10084;&#65039; for Direct Episode Link Gateway 🎬 • All rights reserved 🚀`
     );
   });
+
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.settings) {
+          const s = data.settings;
+          if (s.site_identity) {
+            setSiteIdentity(s.site_identity);
+          }
+          if (Array.isArray(s.menu_items)) {
+            setMenuItems(filterSafePublicMenuItems(s.menu_items, s.login_slug || "login"));
+          }
+          if (s.footer_text) {
+            setFooterText(s.footer_text);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [adSettings] = useState<any>(() => {
     const saved = localStorage.getItem("slea_ad_settings");
@@ -561,87 +615,8 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
       className="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]"
       style={{ backgroundColor: themeObj.bg, color: "#1f1f1f" }}
     >
-      {/* Admin Quick Controls Bar (Visible only when logged in as admin - Matches cpanel-package/view.php lines 413-450) */}
-      {isAdmin && (
-        <>
-          <div className="w-full bg-white text-[#1f1f1f] border-b border-[#e1e7f0] px-4 py-2 text-xs z-50 sticky top-0 shadow-2xs">
-            <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] font-bold text-[10px] uppercase tracking-wider">
-                  Admin View
-                </span>
-                <span className="text-[#5f6368] hidden sm:inline">
-                  | Page #{page.id} ({page.views || 0} views)
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {/* Public / Private Live Toggle Switch */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[#444746] text-[11px] font-medium">Visibility:</span>
-                  <button
-                    type="button"
-                    onClick={toggleAdminStatus}
-                    role="switch"
-                    aria-checked={isPublic ? "true" : "false"}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      isPublic ? "bg-[#137333]" : "bg-slate-300"
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        isPublic ? "translate-x-4" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      isPublic
-                        ? "bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]"
-                        : "bg-[#fff0d4] text-[#b06000] border border-[#ffd599]"
-                    }`}
-                  >
-                    {isPublic ? "Public" : "Private"}
-                  </span>
-                </div>
-
-                {onEditPage && (
-                  <button
-                    type="button"
-                    onClick={() => onEditPage(page.id)}
-                    className="px-2.5 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-[11px] transition-colors inline-flex items-center gap-1 shadow-2xs cursor-pointer"
-                  >
-                    <span>Edit Page</span>
-                  </button>
-                )}
-
-                {onBackToAdmin && (
-                  <button
-                    type="button"
-                    onClick={onBackToAdmin}
-                    className="px-2.5 py-1 rounded-lg bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#1f1f1f] border border-[#dadce0] font-bold text-[11px] transition-colors cursor-pointer"
-                  >
-                    Pages Manager
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {!isPublic && (
-            <div className="w-full bg-[#fff4e5] border-b border-[#ffe0b2] text-[#663c00] px-4 py-2.5 text-xs text-center font-medium">
-              <strong>Notice:</strong> This page is currently set to <strong>PRIVATE</strong>. Regular visitors cannot access this page and will see a 404 error. You are viewing it because you are logged in as Admin.
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Public Header Navigation Bar (Google Material M3 Light Theme - Matches cpanel-package/view.php lines 453-491) */}
-      <header
-        className={`w-full bg-white/95 border-b border-[#e1e7f0] sticky ${
-          isAdmin ? "top-10" : "top-0"
-        } z-40 backdrop-blur-md shadow-2xs`}
-      >
+      {/* Public Header Navigation Bar (Google Material M3 Light Theme - No links or buttons to admin/private pages) */}
+      <header className="w-full bg-white/95 border-b border-[#e1e7f0] sticky top-0 z-40 backdrop-blur-md shadow-2xs">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
           {/* Left Header: Mobile 3-Line Hamburger Button + Site Logo/Name */}
           <div className="flex items-center gap-3">
@@ -673,17 +648,20 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
 
           {/* Right Header: Desktop Navigation Menu Buttons (Google Material M3 Chips) */}
           <nav className="hidden md:flex flex-row items-center gap-2">
-            {menuItems.map((item, idx) => (
-              <a
-                key={idx}
-                href={item.url || "#"}
-                target={item.new_tab !== false ? "_blank" : undefined}
-                rel={item.new_tab !== false ? "noopener noreferrer" : undefined}
-                className="px-3.5 py-1.5 rounded-full text-xs font-semibold text-[#444746] hover:text-[#0b57d0] bg-[#f0f4f9] hover:bg-[#e8f0fe] border border-[#e1e7f0] hover:border-[#c2e7ff] shadow-2xs transition-all whitespace-nowrap"
-              >
-                {item.title}
-              </a>
-            ))}
+            {menuItems.map((item, idx) => {
+              const openNewTab = Boolean(item.new_tab || item.target_blank);
+              return (
+                <a
+                  key={idx}
+                  href={item.url || "#"}
+                  target={openNewTab ? "_blank" : undefined}
+                  rel={openNewTab ? "noopener noreferrer" : undefined}
+                  className="px-3.5 py-1.5 rounded-full text-xs font-semibold text-[#444746] hover:text-[#0b57d0] bg-[#f0f4f9] hover:bg-[#e8f0fe] border border-[#e1e7f0] hover:border-[#c2e7ff] shadow-2xs transition-all whitespace-nowrap"
+                >
+                  {item.title}
+                </a>
+              );
+            })}
           </nav>
         </div>
       </header>

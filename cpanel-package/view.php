@@ -29,6 +29,15 @@ header('X-LiteSpeed-Cache-Control: no-cache');
 
 $slug = isset($_GET['slug']) ? trim($_GET['slug']) : (isset($_GET['p']) ? trim($_GET['p']) : '');
 
+// Check if request matches the custom Admin Login Page Path configured in Settings
+$configured_login_slug = SLEA_Datastore::get_login_slug();
+$req_path_only = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+if (!empty($slug) && strtolower($slug) === $configured_login_slug && !preg_match('#/(?:p|page)/#i', $req_path_only)) {
+    define('SLEA_LOGIN_ROUTED', true);
+    require __DIR__ . '/login.php';
+    exit;
+}
+
 // Fallback extraction from /p/{slug} path if empty
 if (empty($slug)) {
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
@@ -310,7 +319,17 @@ $site_identity = SLEA_Datastore::get_site_identity();
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive');
 $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_logo_url'] : '';
 
-$menu_items = SLEA_Datastore::get_menu_items();
+$menu_items = array_values(array_filter(SLEA_Datastore::get_menu_items(), function($item) use ($configured_login_slug) {
+    $u = strtolower(trim($item['url'] ?? ''));
+    if ($u === '' || $u === '#') return true;
+    $path = trim(parse_url($u, PHP_URL_PATH) ?: '', '/');
+    $base = preg_replace('/\.php$/i', '', basename($path));
+    $blocked = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'login', 'logout', 'setup', 'api', strtolower($configured_login_slug)];
+    if (in_array($base, $blocked, true)) {
+        return false;
+    }
+    return true;
+}));
 $footer_copyright = SLEA_Datastore::get_footer_copyright();
 $ad_settings = SLEA_Datastore::get_ad_settings();
 $share_settings = SLEA_Datastore::get_share_settings();
@@ -414,47 +433,8 @@ function resolve_server_info($provider, $url, $btn_text) {
     </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
-    <?php if ($is_admin): ?>
-    <!-- Admin Quick Controls Bar (Visible only when logged in as admin - Light Theme) -->
-    <div class="w-full bg-white text-[#1f1f1f] border-b border-[#e1e7f0] px-4 py-2 text-xs z-50 sticky top-0 shadow-2xs">
-        <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] font-bold text-[10px] uppercase tracking-wider">Admin View</span>
-                <span class="text-[#5f6368] hidden sm:inline">| Page #<?= $page_id ?> (<?= intval($page['views'] ?? 0) ?> views)</span>
-            </div>
-            
-                <div class="flex items-center gap-3">
-                    <!-- Public / Private Live Toggle Switch -->
-                    <div class="flex items-center gap-2">
-                        <span class="text-[#444746] text-[11px] font-medium">Visibility:</span>
-                        <button type="button" id="adminViewToggleBtn" onclick="toggleAdminStatus(<?= $page_id ?>)" role="switch" aria-checked="<?= $is_public ? 'true' : 'false' ?>"
-                            class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none <?= $is_public ? 'bg-[#137333]' : 'bg-slate-300' ?>">
-                            <span id="adminViewToggleThumb" class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out <?= $is_public ? 'translate-x-4' : 'translate-x-0' ?>"></span>
-                        </button>
-                        <span id="adminViewStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-bold <?= $is_public ? 'bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]' : 'bg-[#fff0d4] text-[#b06000] border border-[#ffd599]' ?>">
-                            <?= $is_public ? 'Public' : 'Private' ?>
-                        </span>
-                    </div>
-
-                    <a href="pages.php?edit=<?= $page_id ?>" class="px-2.5 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-[11px] transition-colors inline-flex items-center gap-1 shadow-2xs">
-                        <span>Edit Page</span>
-                    </a>
-                    <a href="pages.php" class="px-2.5 py-1 rounded-lg bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#1f1f1f] border border-[#dadce0] font-bold text-[11px] transition-colors">
-                        Pages Manager
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php if (!$is_public): ?>
-        <!-- Warning Banner for Private Page -->
-        <div id="privateNoticeBanner" class="w-full bg-[#fff4e5] border-b border-[#ffe0b2] text-[#663c00] px-4 py-2.5 text-xs text-center font-medium">
-            <strong>Notice:</strong> This page is currently set to <strong>PRIVATE</strong>. Regular visitors cannot access this page and will see a 404 error. You are viewing it because you are logged in as Admin.
-        </div>
-        <?php endif; ?>
-        <?php endif; ?>
-
         <!-- Public Header Navigation Bar (Google Material M3 Light Theme) -->
-        <header class="w-full bg-white/95 border-b border-[#e1e7f0] sticky <?= $is_admin ? 'top-10' : 'top-0' ?> z-40 backdrop-blur-md shadow-2xs">
+        <header class="w-full bg-white/95 border-b border-[#e1e7f0] sticky top-0 z-40 backdrop-blur-md shadow-2xs">
             <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
                 <!-- Left Header: Mobile 3-Line Hamburger Button + Site Logo/Name -->
                 <div class="flex items-center gap-3">

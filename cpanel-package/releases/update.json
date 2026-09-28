@@ -1,13 +1,15 @@
 {
-  "version": "12.0.0",
+  "version": "13.0.0",
   "release_date": "2026-09-28",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "release_notes": [
-    "Restored cPanel Episode Page UI design across public episode pages (/p/{slug}) with full-width sticky header, SVG social share bar, resolved server badges, and clean Watch Now pill buttons",
-    "Enforced strict authentication redirect to login.php when visiting admin pages without an admin account logged in",
-    "Enforced 404 Page Not Available response when visiting private episode pages or invalid routes without an admin account logged in",
-    "Disabled public caching on private/admin views and prevented file-backup fallback leaks on private pages"
+  "checksum": "sha256:8e9a555271cb43227e3ba5d86bc86f7b1210f5e50a8617adf0da5ce893042a10",
+  "changelog": [
+    "Editable Menu Items: Public navigation menu items can now be edited inline (Title, Destination URL, Open in new tab) and reordered directly from Admin Panel Settings",
+    "Strict 404 Protection on Admin & Private Pages: Visiting any admin page or private page without an active admin login strictly returns a 404 Not Found page instead of redirecting to the login screen",
+    "Customizable Admin Login Page Path: Added Admin Login Page Path setting in Admin Panel Settings to change the login URL slug dynamically and hide default /login.php behind a 404 error",
+    "Zero Admin/Private Links on Public Pages: Removed all admin/private links and control bars from public episode pages, setup screens, and headers"
   ],
-  "minimum_php": "7.4",
-  "checksum": "53fd79ba32a0c154aaa12a91085e9fbcfecabc92e6fed36ea868ce4e1a0f2bf4"
+  "migrations": true,
+  "min_php_version": "7.4",
+  "backup_required": true
 }

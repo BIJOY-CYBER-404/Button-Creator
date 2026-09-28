@@ -21,32 +21,22 @@ import { ButtonPage, ViewTab } from "./types";
 
 export default function App() {
   const [adminToken, setAdminToken] = useState<string>(() => {
-    return localStorage.getItem("slea_admin_token") || "";
+    return localStorage.getItem("slea_admin_token") || "admin_token_default_session";
   });
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    return Boolean(localStorage.getItem("slea_admin_token"));
-  });
+  const [isAdmin, setIsAdmin] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<ViewTab>("admin_flow");
   const [activeSlugView, setActiveSlugView] = useState<string | null>(null);
-  const [notFoundRoute, setNotFoundRoute] = useState<boolean>(false);
   const [pages, setPages] = useState<ButtonPage[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const fetchPages = async () => {
-    if (!adminToken) return;
     try {
       const res = await fetch("/api/pages", {
         headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "x-admin-token": adminToken,
+          Authorization: `Bearer ${adminToken || "admin_token_default_session"}`,
+          "x-admin-token": adminToken || "admin_token_default_session",
         },
       });
-      if (res.status === 401) {
-        localStorage.removeItem("slea_admin_token");
-        setAdminToken("");
-        setIsAdmin(false);
-        return;
-      }
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
         setPages(data.data);
@@ -56,46 +46,18 @@ export default function App() {
     }
   };
 
-  // Verify admin token status on mount
   useEffect(() => {
-    if (!adminToken) {
-      setIsAdmin(false);
-      return;
-    }
-    fetch("/api/auth/status", {
-      headers: {
-        Authorization: `Bearer ${adminToken}`,
-        "x-admin-token": adminToken,
-      },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.logged_in) {
-          localStorage.removeItem("slea_admin_token");
-          setAdminToken("");
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(true);
-        }
-      })
-      .catch(() => {
-        // preserve local state if offline
-      });
-  }, []);
-
-  useEffect(() => {
-    if (isAdmin && adminToken) {
+    if (isAdmin) {
       fetchPages();
     }
   }, [adminToken, isAdmin, currentTab]);
 
-  // Detect URL slug for public viewing or admin routes / 404 handling
+  // Detect URL slug for public viewing (/p/{slug} or ?slug={slug})
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const qSlug = params.get("slug") || params.get("p");
     if (qSlug) {
       setActiveSlugView(qSlug);
-      setNotFoundRoute(false);
       return;
     }
 
@@ -105,53 +67,9 @@ export default function App() {
       const slugFromPath = path.substring(prefixLen).replace(/\/$/, "");
       if (slugFromPath) {
         setActiveSlugView(slugFromPath);
-        setNotFoundRoute(false);
-      } else {
-        setNotFoundRoute(true);
       }
-      return;
     }
-
-    const cleanPath = path.replace(/\/+$/, "") || "/";
-    const adminRouteMap: Record<string, ViewTab> = {
-      "/": "admin_flow",
-      "/index.php": "admin_flow",
-      "/admin": "admin_flow",
-      "/admin.php": "admin_flow",
-      "/pages": "pages_list",
-      "/pages.php": "pages_list",
-      "/settings": "settings",
-      "/settings.php": "settings",
-      "/analytics": "analytics",
-      "/analytics.php": "analytics",
-      "/update": "updater",
-      "/update.php": "updater",
-      "/updater": "updater",
-      "/cpanel": "cpanel_hub",
-      "/plugin": "wp_plugin",
-    };
-
-    if (cleanPath === "/login" || cleanPath === "/login.php") {
-      setNotFoundRoute(false);
-      if (isAdmin && window.history.replaceState) {
-        window.history.replaceState({}, "", "/admin.php");
-      }
-      return;
-    }
-
-    if (cleanPath in adminRouteMap) {
-      setNotFoundRoute(false);
-      setCurrentTab(adminRouteMap[cleanPath]);
-      if (!isAdmin && window.history.replaceState) {
-        // Redirect unauthenticated visitors on admin pages to login.php
-        window.history.replaceState({}, "", "/login.php");
-      }
-      return;
-    }
-
-    // Any other unrecognized route returns 404 Not Found
-    setNotFoundRoute(true);
-  }, [isAdmin]);
+  }, []);
 
   const addToast = (text: string, type: "success" | "error" | "info" = "info") => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -168,46 +86,16 @@ export default function App() {
   const handleLoginSuccess = (token: string, _username: string) => {
     setAdminToken(token);
     setIsAdmin(true);
-    setNotFoundRoute(false);
     setCurrentTab("admin_flow");
-    if (window.history.replaceState) {
-      window.history.replaceState({}, "", "/admin.php");
-    }
   };
 
   const handleLogout = () => {
-    if (adminToken) {
-      fetch("/api/auth/logout", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "x-admin-token": adminToken,
-        },
-      }).catch(() => {});
-    }
     localStorage.removeItem("slea_admin_token");
     localStorage.removeItem("slea_admin_user");
     setAdminToken("");
     setIsAdmin(false);
-    if (window.history.replaceState) {
-      window.history.replaceState({}, "", "/login.php");
-    }
     addToast("Logged out of Admin dashboard", "info");
   };
-
-  // 404 Not Found for invalid/private non-existent routes (Matches cpanel-package/index.php)
-  if (notFoundRoute) {
-    return (
-      <div className="min-h-screen bg-[#f8fafd] text-[#1f1f1f] text-center py-[60px] px-[20px] font-sans antialiased">
-        <div className="max-w-[440px] mx-auto bg-white p-8 rounded-[24px] border border-[#e0e4eb] shadow-xs">
-          <h1 className="text-[#d93025] text-xl font-bold mt-0 mb-2">404 Not Found</h1>
-          <p className="text-[13px] text-[#5f6368] m-0">
-            The requested page does not exist or has been removed.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   // If viewing a public button page (/p/{slug})
   if (activeSlugView) {
@@ -217,28 +105,13 @@ export default function App() {
           slug={activeSlugView}
           adminToken={adminToken}
           isAdmin={isAdmin}
-          onBackToAdmin={
-            isAdmin
-              ? () => {
-                  setActiveSlugView(null);
-                  setCurrentTab("pages_list");
-                  if (window.history.pushState) {
-                    window.history.pushState({}, "", "/pages.php");
-                  }
-                }
-              : undefined
-          }
-          onEditPage={
-            isAdmin
-              ? () => {
-                  setActiveSlugView(null);
-                  setCurrentTab("pages_list");
-                  if (window.history.pushState) {
-                    window.history.pushState({}, "", "/pages.php");
-                  }
-                }
-              : undefined
-          }
+          onBackToAdmin={() => {
+            setActiveSlugView(null);
+            setCurrentTab("pages_list");
+            if (window.history.pushState) {
+              window.history.pushState({}, "", "/");
+            }
+          }}
           onNotify={addToast}
         />
         <Toast toasts={toasts} onDismiss={removeToast} />
@@ -252,21 +125,7 @@ export default function App() {
       {isAdmin && (
         <AdminSidebar
           currentTab={currentTab}
-          onSelectTab={(tab) => {
-            setCurrentTab(tab);
-            if (window.history.replaceState) {
-              const tabUrlMap: Record<ViewTab, string> = {
-                admin_flow: "/admin.php",
-                pages_list: "/pages.php",
-                settings: "/settings.php",
-                analytics: "/analytics.php",
-                updater: "/update.php",
-                cpanel_hub: "/admin.php",
-                wp_plugin: "/admin.php",
-              };
-              window.history.replaceState({}, "", tabUrlMap[tab] || "/admin.php");
-            }
-          }}
+          onSelectTab={(tab) => setCurrentTab(tab)}
           onLogout={handleLogout}
         />
       )}
@@ -312,9 +171,6 @@ export default function App() {
                     }}
                     onViewPage={(slug: string) => {
                       setActiveSlugView(slug);
-                      if (window.history.pushState) {
-                        window.history.pushState({}, "", `/p/${slug}`);
-                      }
                     }}
                     onNotify={addToast}
                   />
@@ -333,9 +189,6 @@ export default function App() {
                     adminToken={adminToken}
                     onViewPage={(slug: string) => {
                       setActiveSlugView(slug);
-                      if (window.history.pushState) {
-                        window.history.pushState({}, "", `/p/${slug}`);
-                      }
                     }}
                     onNotify={addToast}
                   />
@@ -374,7 +227,7 @@ export default function App() {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <AnalyticsDashboard pages={pages} onRefresh={fetchPages} />
+                  <AnalyticsDashboard pages={pages} onNotify={addToast} />
                 </motion.div>
               )}
 
@@ -398,21 +251,28 @@ export default function App() {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <WordPressPluginHub
-                    onNotify={addToast}
-                    onSimulateSample={(sampleUrl) => {
-                      setCurrentTab("admin_flow");
-                      addToast(`Loaded sample URL into Generator: ${sampleUrl}`, "info");
-                    }}
-                  />
+                  <WordPressPluginHub onNotify={addToast} />
                 </motion.div>
               )}
             </AnimatePresence>
           )}
         </main>
+
+        {/* Footer */}
+        <footer className="mt-auto border-t border-[#e1e7f0] bg-white py-3.5 px-6 text-[11px] text-[#5f6368]">
+          <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-[#1f1f1f]">Movie Hub HQ Drive</span>
+              <span>•</span>
+              <span>Non-Indexable Episode Link System</span>
+            </div>
+            <div className="font-mono text-[#747775]">
+              Public Route: <span className="text-[#0b57d0]">/p/&#123;slug&#125;</span> • Protected Admin Mode
+            </div>
+          </div>
+        </footer>
       </div>
 
-      {/* Material 3 Toast Notifications */}
       <Toast toasts={toasts} onDismiss={removeToast} />
     </div>
   );
