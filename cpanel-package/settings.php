@@ -46,6 +46,8 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
     </style>
 </head>
 <body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
@@ -98,7 +100,7 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                 <!-- Analytics -->
                 <a href="analytics.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Monthly Analytics & Statistics (/analytics.php)">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-                        <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+                        <path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Analytics</span>
                 </a>
@@ -1203,10 +1205,12 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                 }
                 if (btnText) btnText.innerText = 'Auto-Detecting & Restoring...';
 
+                const b64Payload = btoa(unescape(encodeURIComponent(text)));
                 const res = await fetch('api.php?action=restore_backup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        backup_b64: b64Payload,
                         backup: parsed,
                         scope: 'auto',
                         mode: 'merge'
@@ -1214,6 +1218,7 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                 });
                 const data = await res.json();
                 if (data.success) {
+                    if (textEl && data.detected_type) textEl.innerText = data.detected_type + ' (' + summary + ')';
                     if (statusEl) statusEl.innerText = '✓ Restored Automatically';
                     showToast(data.message || `Auto-Detected [${summary}] & Restored successfully!`, 'success');
                     setTimeout(() => window.location.reload(), 1200);

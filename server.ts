@@ -573,15 +573,15 @@ async function startServer() {
     }
     return res.json({
       name: "Movie Hub HQ Drive",
-      version: "v-5.8.0",
-      release_date: "2026-09-27",
+      version: "v-5.9.0",
+      release_date: "2026-09-28",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
       minimum_php: "7.4",
       release_notes: [
-        "Unified cPanel Admin Panel Design with React Website Design across all pages (Generate, Pages, Settings, Update, Analytics, Login, and Setup)",
-        "Added identical Left Icon Sidebar, Top AppHeader, Lucide SVG iconography, and card layouts to cPanel PHP admin pages",
-        "Interactive 2-Tab Generator Mode (Auto Short-Link Page & Manual Batch Extractor) in cPanel admin.php matching React AdminFlowGenerator",
-        "Synchronized Backup & Restore Center, Site Branding, Maintenance Mode, AdSense & Banner Ads, Navigation Menu, and Footer settings UI in cPanel settings.php"
+        "Removed legacy One-Click Application Update System card from Settings page (settings.php)",
+        "Enabled full Backup & Restore Center in cPanel shared hosting (settings.php & api.php) with Full, Settings Only, Pages Only, and Others Only exports",
+        "Automatic backup format detection on restore (auto-detects Full Backup, Settings, Pages, or Accounts/Analytics without data loss)",
+        "Unified cPanel Admin Panel design with React Website Design across all pages and removed stale nested package archives"
       ]
     });
   });

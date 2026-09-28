@@ -68,73 +68,81 @@ class SLEA_Downloader {
             @unlink($target_file);
         }
 
-        // Ensure CDN cache bypass on package download URL
-        $fetch_package_url = $download_url;
-        if (strpos($download_url, 'http://') === 0 || strpos($download_url, 'https://') === 0) {
-            $separator = (strpos($download_url, '?') === false) ? '?' : '&';
-            $cb = time() . '_' . mt_rand(100000, 999999);
-            $fetch_package_url = $download_url . $separator . '_nocache=1&_cb=' . $cb;
-        }
+        $candidate_urls = array_unique(array_filter([
+            $download_url,
+            "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
+            "https://cdn.jsdelivr.net/gh/BIJOY-CYBER-404/Button-Creator@main/public/cpanel-app-package.zip",
+            "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/cpanel-app-package.zip",
+            "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-shared-hosting.zip"
+        ]));
 
-        if (function_exists('curl_init')) {
-            $ch = curl_init($fetch_package_url);
-            $fp = fopen($target_file, 'wb');
-            curl_setopt($ch, CURLOPT_FILE, $fp);
-            curl_setopt($ch, CURLOPT_HEADER, 0);
-            if (!ini_get('open_basedir')) {
-                @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        foreach ($candidate_urls as $cand_url) {
+            $fetch_package_url = $cand_url;
+            if (strpos($cand_url, 'http://') === 0 || strpos($cand_url, 'https://') === 0) {
+                $separator = (strpos($cand_url, '?') === false) ? '?' : '&';
+                $cb = time() . '_' . mt_rand(100000, 999999);
+                $fetch_package_url = $cand_url . $separator . '_nocache=1&_cb=' . $cb;
             }
-            curl_setopt($ch, CURLOPT_TIMEOUT, 180);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);
-            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/3.9');
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
-            curl_setopt($ch, CURLOPT_FORBID_REUSE, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Cache-Control: no-cache, no-store, must-revalidate, max-age=0',
-                'Pragma: no-cache',
-                'Expires: 0',
-                'Accept: */*'
+
+            if (function_exists('curl_init')) {
+                $ch = curl_init($fetch_package_url);
+                $fp = fopen($target_file, 'wb');
+                curl_setopt($ch, CURLOPT_FILE, $fp);
+                curl_setopt($ch, CURLOPT_HEADER, 0);
+                if (!ini_get('open_basedir')) {
+                    @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                }
+                curl_setopt($ch, CURLOPT_TIMEOUT, 180);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);
+                curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/5.9');
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
+                curl_setopt($ch, CURLOPT_FORBID_REUSE, true);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Cache-Control: no-cache, no-store, must-revalidate, max-age=0',
+                    'Pragma: no-cache',
+                    'Expires: 0',
+                    'Accept: */*'
+                ]);
+
+                $executed = curl_exec($ch);
+                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                fclose($fp);
+
+                if ($executed && $http_code === 200 && filesize($target_file) > 1024) {
+                    $filesize = @filesize($target_file);
+                    $this->logger->log("Downloading package", "Successfully downloaded release package (" . round($filesize / 1024, 1) . " KB)");
+                    return true;
+                }
+                @unlink($target_file);
+            }
+
+            // Stream Fallback with anti-cache headers
+            $ctx = stream_context_create([
+                'http' => [
+                    'method'          => 'GET',
+                    'timeout'         => 180,
+                    'follow_location' => 1,
+                    'header'          => "User-Agent: MovieHubHQ-Updater/5.9\r\n" .
+                                         "Cache-Control: no-cache, no-store, must-revalidate, max-age=0\r\n" .
+                                         "Pragma: no-cache\r\n" .
+                                         "Expires: 0\r\n" .
+                                         "Accept: */*\r\n"
+                ],
+                'ssl' => [
+                    'verify_peer'      => false,
+                    'verify_peer_name' => false
+                ]
             ]);
-
-            $executed = curl_exec($ch);
-            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curl_err = curl_error($ch);
-            curl_close($ch);
-            fclose($fp);
-
-            if ($executed && $http_code === 200 && filesize($target_file) > 1024) {
+            $content = @file_get_contents($fetch_package_url, false, $ctx);
+            if ($content !== false && strlen($content) >= 1024) {
+                file_put_contents($target_file, $content);
                 $filesize = @filesize($target_file);
-                $this->logger->log("Downloading package", "Successfully downloaded release package (" . round($filesize / 1024, 1) . " KB)");
+                $this->logger->log("Downloading package", "Downloaded package via stream context (" . round($filesize / 1024, 1) . " KB)");
                 return true;
             }
-            @unlink($target_file);
-        }
-
-        // Stream Fallback with anti-cache headers
-        $ctx = stream_context_create([
-            'http' => [
-                'method'          => 'GET',
-                'timeout'         => 180,
-                'follow_location' => 1,
-                'header'          => "User-Agent: MovieHubHQ-Updater/3.9\r\n" .
-                                     "Cache-Control: no-cache, no-store, must-revalidate, max-age=0\r\n" .
-                                     "Pragma: no-cache\r\n" .
-                                     "Expires: 0\r\n" .
-                                     "Accept: */*\r\n"
-            ],
-            'ssl' => [
-                'verify_peer'      => false,
-                'verify_peer_name' => false
-            ]
-        ]);
-        $content = @file_get_contents($fetch_package_url, false, $ctx);
-        if ($content !== false && strlen($content) >= 1024) {
-            file_put_contents($target_file, $content);
-            $filesize = @filesize($target_file);
-            $this->logger->log("Downloading package", "Downloaded package via stream context (" . round($filesize / 1024, 1) . " KB)");
-            return true;
         }
 
         @unlink($target_file);

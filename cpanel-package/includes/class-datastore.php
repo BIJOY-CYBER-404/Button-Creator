@@ -597,6 +597,14 @@ class SLEA_Datastore {
         return '&copy; ' . date('Y') . ' MovieHubHQ 🍿 • Made with &#10084;&#65039; for Direct Episode Link Gateway 🎬 • All rights reserved 🚀';
     }
 
+    public static function get_footer_settings() {
+        return [
+            'copyright_text' => strip_tags(html_entity_decode(self::get_footer_copyright(), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+            'footer_html'    => self::get_footer_copyright(),
+            'footer_subtext' => ''
+        ];
+    }
+
     public static function save_footer_copyright($html) {
         $html = self::repair_corrupted_emojis($html);
         if (function_exists('mb_check_encoding') && !mb_check_encoding($html, 'UTF-8')) {

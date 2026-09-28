@@ -93,15 +93,8 @@ class SLEA_Updater {
             $saved_manifest,
             "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json",
             "https://cdn.jsdelivr.net/gh/BIJOY-CYBER-404/Button-Creator@main/public/releases/update.json",
-            "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/releases/update.json",
-            (!empty($_SERVER['HTTP_HOST']) ? ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . '/releases/update.json' : ''),
-            (!empty($_SERVER['HTTP_HOST']) ? ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . '/public/releases/update.json' : ''),
-            APP_ROOT . '/releases/update.json',
-            dirname(__DIR__) . '/releases/update.json',
-            dirname(__DIR__) . '/public/releases/update.json',
-            (!empty($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] . '/releases/update.json' : ''),
-            (!empty($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] . '/public/releases/update.json' : ''),
-            (!empty($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] . '/cpanel-package/releases/update.json' : '')
+            "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/cpanel-package/releases/update.json",
+            "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/releases/update.json"
         ]));
 
         $manifest = null;
@@ -539,13 +532,24 @@ class SLEA_Updater {
             if (is_dir($src_path)) {
                 self::copy_staging_files($src_path, $dst_path, $exclude);
             } else {
-                @copy($src_path, $dst_path);
+                if (file_exists($dst_path)) {
+                    @chmod($dst_path, 0644);
+                }
+                if (!@copy($src_path, $dst_path)) {
+                    $raw_bytes = @file_get_contents($src_path);
+                    if ($raw_bytes !== false) {
+                        @file_put_contents($dst_path, $raw_bytes);
+                    }
+                }
                 if (function_exists('opcache_invalidate') && substr($dst_path, -4) === '.php') {
                     @opcache_invalidate($dst_path, true);
                 }
             }
         }
         closedir($dir);
+        if (file_exists(APP_ROOT . '/public/cpanel-app-package.zip')) {
+            @unlink(APP_ROOT . '/public/cpanel-app-package.zip');
+        }
         @clearstatcache();
         if (function_exists('opcache_reset')) {
             @opcache_reset();

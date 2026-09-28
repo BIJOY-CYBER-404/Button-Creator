@@ -14,19 +14,28 @@ require_once __DIR__ . '/includes/class-updater.php';
 
 // Protect with Admin Auth
 SLEA_Auth::require_admin();
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 $current_user = SLEA_Auth::get_current_user();
 
 // Check and abort any interrupted updates if page was refreshed / navigated away
 SLEA_Updater::check_and_abort_interrupted_updates();
 
-$current_version = defined('APP_VERSION') ? ltrim(APP_VERSION, 'v-') : '5.8.0';
+$current_version = defined('APP_VERSION') ? ltrim(APP_VERSION, 'v-') : '5.9.0';
 $updater_config = SLEA_Updater::get_config();
 $update_check = SLEA_Updater::check_for_updates();
 $update_history = SLEA_Updater::get_update_history();
 
 $site_identity = SLEA_Datastore::get_site_identity();
-$site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub');
+$site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive');
 $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_logo_url'] : '';
+$words = preg_split('/\s+/', trim($site_name));
+$initials = '';
+foreach ($words as $w) {
+    if ($w !== '') $initials .= mb_substr($w, 0, 1);
+}
+$initials = strtoupper(mb_substr($initials, 0, 3)) ?: 'MHQ';
 
 // Process POST requests for AJAX or Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -89,6 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03); }
+        .shadow-xs { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05); }
+        .backdrop-blur-xs { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+        .pl-6\.5 { padding-left: 1.625rem; }
+        .w-5\.5 { width: 1.375rem; }
+        .h-5\.5 { height: 1.375rem; }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
@@ -98,99 +113,122 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     </style>
 </head>
-<body class="min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans selection:bg-[#d3e3fd] selection:text-[#041e49]">
+<body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
 
     <!-- Left Icon Sidebar (Matches React AdminSidebar.tsx) -->
-    <aside class="fixed inset-y-0 left-0 w-16 sm:w-20 bg-white border-r border-[#e1e7f0] z-40 flex flex-col items-center py-4 justify-between shadow-xs select-none">
-        <!-- Top Brand Logo -->
+    <aside id="admin-sidebar" class="fixed inset-y-0 left-0 w-16 sm:w-20 bg-white border-r border-[#e1e7f0] z-40 flex flex-col items-center py-4 justify-between shadow-xs select-none transition-colors" aria-label="Admin Navigation Sidebar">
         <div class="flex flex-col items-center w-full gap-5">
-            <a href="admin.php" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center font-black text-lg shadow-2xs hover:scale-105 transition-transform cursor-pointer overflow-hidden p-1" title="<?= htmlspecialchars($site_name) ?> Dashboard">
+            <a href="admin.php" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center font-black text-lg shadow-2xs hover:scale-105 transition-transform cursor-pointer overflow-hidden p-1" title="<?= htmlspecialchars($site_name) ?>">
                 <?php if (!empty($site_logo_url)): ?>
                     <img src="<?= htmlspecialchars($site_logo_url) ?>" alt="<?= htmlspecialchars($site_name) ?>" class="w-full h-full object-contain rounded-xl" />
                 <?php else: ?>
-                    <span class="font-bold text-[10px] text-center leading-tight truncate px-0.5"><?= htmlspecialchars($site_name) ?></span>
+                    <span class="text-xs font-black tracking-tight"><?= htmlspecialchars($initials) ?></span>
                 <?php endif; ?>
             </a>
 
-            <!-- Navigation Icons -->
             <nav class="flex flex-col items-center w-full gap-2 px-1 sm:px-2">
-                <!-- Generate -->
-                <a href="admin.php" title="Generate" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer group relative text-[#5f6368] hover:bg-[#f0f4f9] hover:text-[#1f1f1f]">
-                    <svg class="w-5 h-5 transition-transform group-hover:scale-105 text-[#5f6368] group-hover:text-[#1f1f1f]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m15 4-1 1 4 4 1-1a2.83 2.83 0 1 0-4-4Z"/><path d="m13 6-8.5 8.5a2.12 2.12 0 1 0 3 3L16 9"/><path d="m18 13 1.5-1.5"/><path d="m15 2-1.5 1.5"/></svg>
-                    <span class="text-[9px] font-bold tracking-tight text-[#5f6368]">Generate</span>
+                <!-- 1. Generate -->
+                <a href="admin.php" title="Generate (+ Generator)" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
+                    </svg>
+                    <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Generate</span>
                 </a>
 
-                <!-- Pages -->
-                <a href="pages.php" title="Pages" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer group relative text-[#5f6368] hover:bg-[#f0f4f9] hover:text-[#1f1f1f]">
-                    <svg class="w-5 h-5 transition-transform group-hover:scale-105 text-[#5f6368] group-hover:text-[#1f1f1f]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-                    <span class="text-[9px] font-bold tracking-tight text-[#5f6368]">Pages</span>
+                <!-- 2. Pages -->
+                <a href="pages.php" title="Pages (/pages)" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>
+                    </svg>
+                    <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Pages</span>
                 </a>
 
-                <!-- Settings -->
-                <a href="settings.php" title="Settings" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer group relative text-[#5f6368] hover:bg-[#f0f4f9] hover:text-[#1f1f1f]">
-                    <svg class="w-5 h-5 transition-transform group-hover:scale-105 text-[#5f6368] group-hover:text-[#1f1f1f]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <span class="text-[9px] font-bold tracking-tight text-[#5f6368]">Settings</span>
+                <!-- 3. Settings -->
+                <a href="settings.php" title="Settings (/settings)" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Settings</span>
                 </a>
 
-                <!-- Update (Active) -->
-                <a href="update.php" title="Update" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer group relative bg-[#e8f0fe] text-[#0b57d0] shadow-2xs">
-                    <svg class="w-5 h-5 transition-transform group-hover:scale-105 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                    <span class="text-[9px] font-bold tracking-tight text-[#0b57d0]">Update</span>
-                    <span class="absolute left-0 top-3 bottom-3 w-1 bg-[#0b57d0] rounded-r-full"></span>
+                <!-- 4. Update (Active) -->
+                <a href="update.php" title="One-Click System Updater (/update.php)" aria-current="page" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative bg-[#0b57d0] text-white shadow-xs">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+                    </svg>
+                    <span class="text-[9px] font-bold mt-0.5 tracking-tight text-white">Update</span>
                 </a>
 
-                <!-- Analytics -->
-                <a href="analytics.php" title="Analytics" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer group relative text-[#5f6368] hover:bg-[#f0f4f9] hover:text-[#1f1f1f]">
-                    <svg class="w-5 h-5 transition-transform group-hover:scale-105 text-[#5f6368] group-hover:text-[#1f1f1f]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-                    <span class="text-[9px] font-bold tracking-tight text-[#5f6368]">Analytics</span>
+                <!-- 5. Analytics -->
+                <a href="analytics.php" title="Monthly Analytics &amp; Statistics (/analytics.php)" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+                    </svg>
+                    <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Analytics</span>
                 </a>
             </nav>
         </div>
 
-        <!-- Bottom Admin Profile & Logout -->
-        <div class="flex flex-col items-center gap-3 w-full px-1 sm:px-2">
-            <!-- Admin Status Pill -->
-            <div class="w-10 h-10 rounded-full bg-[#e6f4ea] border border-[#a8dab5] text-[#137333] flex items-center justify-center font-bold text-xs shadow-2xs" title="Logged in as <?= htmlspecialchars($current_user['username']) ?>">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+        <div class="flex flex-col items-center w-full gap-2 px-1 sm:px-2 pb-3">
+            <div class="w-8 h-8 rounded-full bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center border border-[#d3e3fd]" title="Admin Mode Active (<?= htmlspecialchars($current_user['username']) ?>)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>
+                </svg>
             </div>
 
-            <!-- Logout Icon Button -->
-            <a href="logout.php" title="Sign Out (<?= htmlspecialchars($current_user['username']) ?>)" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[#5f6368] hover:bg-[#fce8e6] hover:text-[#c5221f] transition-colors cursor-pointer">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-                <span class="text-[8px] font-bold">Exit</span>
+            <a href="logout.php" class="w-10 h-10 rounded-xl flex items-center justify-center text-[#c5221f] hover:bg-[#fce8e6] transition-colors cursor-pointer" title="Sign Out" aria-label="Sign Out">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
+                </svg>
             </a>
 
-            <!-- Version Tag -->
-            <span class="text-[10px] font-bold font-mono text-[#444746] bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version <?= htmlspecialchars(APP_VERSION) ?>">
                 <?= htmlspecialchars(APP_VERSION) ?>
             </span>
         </div>
     </aside>
 
-    <!-- Main Content Area -->
-    <div class="flex-1 flex flex-col pl-16 sm:pl-20">
-        <!-- Top Header (Matches React AppHeader.tsx) -->
-        <header class="bg-white border-b border-[#e1e7f0] sticky top-0 z-30">
-            <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3 min-w-0">
-                    <span class="text-sm sm:text-base font-extrabold text-[#1f1f1f] tracking-tight truncate">
-                        One-Click Updater
-                    </span>
-                    <span class="hidden md:inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#e8f0fe] text-[#0b57d0]">
-                        Admin Mode (<?= htmlspecialchars($current_user['username']) ?>)
-                    </span>
+    <!-- Main App Content Wrapper with Left Margin for Sidebar -->
+    <div class="pl-16 sm:pl-20 min-h-screen flex flex-col flex-1">
+        <!-- Navigation Bar (Matches React AppHeader.tsx) -->
+        <header id="app-header" class="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+                <!-- Text Logo & Breadcrumb -->
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <h1 class="font-bold text-sm sm:text-base leading-snug text-[#1f1f1f] tracking-tight truncate">
+                                <?= htmlspecialchars($site_name) ?>
+                            </h1>
+                            <div class="flex items-center gap-1.5 text-xs text-[#5f6368] min-w-0">
+                                <svg class="w-3.5 h-3.5 text-[#8e918f] shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="m9 18 6-6-6-6"/>
+                                </svg>
+                                <span class="font-semibold text-[#0b57d0] truncate">One-Click System Updater (/update.php)</span>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-[#5f6368] truncate hidden sm:block">
+                            Shortlink Bypass • Episode Button Pages
+                        </p>
+                    </div>
                 </div>
 
-                <!-- Right Status Pill -->
-                <div class="flex items-center gap-2 text-xs text-[#444746]">
-                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="hidden sm:inline font-medium">System Online</span>
+                <!-- Status / Quick Action -->
+                <div class="flex items-center gap-3 shrink-0">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] border border-[#a8dab5] tracking-wide shrink-0 flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>
+                            </svg>
+                            <span class="hidden sm:inline">Admin Active</span>
+                        </span>
+                    </div>
                 </div>
             </div>
         </header>
 
         <!-- Main Workspace (Matches React OneClickUpdaterHub.tsx) -->
-        <main class="max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1">
+        <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7">
             <div class="space-y-8 animate-fade-in">
 
                 <!-- Top Banner Header -->
@@ -400,47 +438,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 </div>
 
-                <!-- Diagnostics and Check logs -->
-                <?php if (!empty($update_check['diagnostics'])): ?>
-                    <div class="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm space-y-4">
-                        <h3 class="text-base font-bold text-[#1f1f1f] flex items-center space-x-2">
-                            <svg class="w-5 h-5 text-[#5f6368]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
-                            <span>Remote Update Diagnostics Log</span>
-                        </h3>
-                        <p class="text-xs text-[#5f6368] leading-normal">
-                            Results of querying configured manifest URLs during the last update check.
-                        </p>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs border-collapse">
-                                <thead>
-                                    <tr class="bg-[#f8fafd] border-b border-[#e0e4eb] text-[#5f6368] font-bold uppercase tracking-wider">
-                                        <th class="p-3">Tested Candidate URL</th>
-                                        <th class="p-3">Status</th>
-                                        <th class="p-3">Detected Version</th>
-                                        <th class="p-3">Fetch Details / Error</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-[#f1f3f4] font-mono text-[11px] text-[#3c4043]">
-                                    <?php foreach ($update_check['diagnostics'] as $url => $diag): ?>
-                                        <tr>
-                                            <td class="p-3 truncate max-w-xs sm:max-w-md" title="<?= htmlspecialchars($url) ?>"><?= htmlspecialchars($url) ?></td>
-                                            <td class="p-3">
-                                                <?php if ($diag['status'] === 'success'): ?>
-                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#e6f4ea] text-[#137333]">SUCCESS</span>
-                                                <?php else: ?>
-                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#fce8e6] text-[#c5221f]">FAILED</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td class="p-3"><?= htmlspecialchars($diag['version'] ?? 'N/A') ?></td>
-                                            <td class="p-3 <?= $diag['status'] === 'success' ? 'text-[#137333]' : 'text-[#c5221f]' ?>"><?= htmlspecialchars($diag['message']) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
             </div>
         </main>
     </div>
@@ -520,8 +517,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
-    <!-- Top Right Notification Toast Container -->
-    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-full"></div>
+    <!-- Top Right Notification Toast Container (Matches React Toast.tsx) -->
+    <aside id="toastContainer" aria-label="Notifications" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-[calc(100%-2.5rem)]"></aside>
 
     <script>
         function escapeToastHtml(str) {
@@ -624,7 +621,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 btn.disabled = false;
                 if (data.success) {
                     showToast('Update check complete! Remote: v' + data.remote_version + (data.update_available ? ' (Update Available)' : ' (Up to date)'), data.update_available ? 'info' : 'success');
-                    setTimeout(() => window.location.reload(), 1500);
+                    setTimeout(() => { window.location.href = 'update.php?_cb=' + Date.now(); }, 1500);
                 } else {
                     showToast('Check failed: ' + (data.error || 'Unknown error'), 'error');
                 }
@@ -767,7 +764,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         modalLiveLog.innerHTML = '<span class="text-emerald-400 font-bold">[READY] Version updated successfully.</span>';
                     }
 
-                    setTimeout(() => window.location.reload(), 2400);
+                    setTimeout(() => { window.location.href = 'update.php?_updated=' + Date.now(); }, 2400);
                 } else {
                     showToast(data.error, 'error');
 

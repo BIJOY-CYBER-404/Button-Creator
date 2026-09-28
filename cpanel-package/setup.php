@@ -12,8 +12,10 @@ require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 
 $site_identity = SLEA_Datastore::get_site_identity();
-$site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub');
-$footer_settings = SLEA_Datastore::get_footer_settings();
+$site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 $has_users = SLEA_Auth::has_users();
 $error = '';
@@ -33,25 +35,36 @@ if ($has_users) {
         <style>
             body { font-family: 'Plus Jakarta Sans', sans-serif; }
             .font-mono { font-family: 'JetBrains Mono', monospace; }
+            .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+            .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
         </style>
     </head>
-    <body class="min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans selection:bg-[#d3e3fd] selection:text-[#041e49]">
-        <div class="flex-1 flex flex-col">
-            <header class="bg-white border-b border-[#e1e7f0] sticky top-0 z-30">
-                <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-                    <div class="flex items-center gap-3 min-w-0">
-                        <span class="text-sm sm:text-base font-extrabold text-[#1f1f1f] tracking-tight truncate">
-                            <?= htmlspecialchars($site_name) ?>
-                        </span>
+    <body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
+        <div class="min-h-screen flex flex-col flex-1">
+            <header id="app-header" class="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors">
+                <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+                    <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                <h1 class="font-bold text-sm sm:text-base leading-snug text-[#1f1f1f] tracking-tight truncate">
+                                    <?= htmlspecialchars($site_name) ?>
+                                </h1>
+                            </div>
+                            <p class="text-[11px] text-[#5f6368] truncate hidden sm:block">
+                                Shortlink Bypass • Episode Button Pages
+                            </p>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2 text-xs text-[#444746]">
-                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span class="hidden sm:inline font-medium">System Online</span>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div class="flex items-center gap-2 text-xs text-[#444746]">
+                            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span class="hidden sm:inline font-medium">System Online</span>
+                        </div>
                     </div>
                 </div>
             </header>
 
-            <main class="max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 flex items-center justify-center">
+            <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7 flex items-center justify-center">
                 <div class="w-full max-w-md mx-auto py-8 px-4">
                     <div class="bg-white rounded-2xl p-7 border border-[#d3e3fd] shadow-md space-y-6 text-center">
                         <div class="w-12 h-12 rounded-2xl bg-[#fce8e6] text-[#c5221f] flex items-center justify-center mx-auto shadow-2xs border border-[#fad2cf]">
@@ -114,28 +127,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
     </style>
 </head>
-<body class="min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans selection:bg-[#d3e3fd] selection:text-[#041e49]">
+<body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
 
-    <div class="flex-1 flex flex-col">
-        <!-- Top Header (Matches React AppHeader.tsx) -->
-        <header class="bg-white border-b border-[#e1e7f0] sticky top-0 z-30">
-            <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3 min-w-0">
-                    <span class="text-sm sm:text-base font-extrabold text-[#1f1f1f] tracking-tight truncate">
-                        <?= htmlspecialchars($site_name) ?>
-                    </span>
+    <div class="min-h-screen flex flex-col flex-1">
+        <!-- Navigation Bar (Matches React AppHeader.tsx) -->
+        <header id="app-header" class="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <h1 class="font-bold text-sm sm:text-base leading-snug text-[#1f1f1f] tracking-tight truncate">
+                                <?= htmlspecialchars($site_name) ?>
+                            </h1>
+                        </div>
+                        <p class="text-[11px] text-[#5f6368] truncate hidden sm:block">
+                            Shortlink Bypass • Episode Button Pages
+                        </p>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2 text-xs text-[#444746]">
-                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="hidden sm:inline font-medium">System Online</span>
+                <div class="flex items-center gap-3 shrink-0">
+                    <div class="flex items-center gap-2 text-xs text-[#444746]">
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="hidden sm:inline font-medium">System Online</span>
+                    </div>
                 </div>
             </div>
         </header>
 
         <!-- Main Workspace -->
-        <main class="max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1">
+        <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7">
             <div class="w-full max-w-md mx-auto py-8 px-4">
                 <div class="bg-white rounded-2xl p-7 border border-[#d3e3fd] shadow-md space-y-6">
                     <!-- Header -->

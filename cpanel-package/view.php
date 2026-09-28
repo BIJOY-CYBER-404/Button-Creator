@@ -62,6 +62,8 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
         <style>
             body { font-family: 'Plus Jakarta Sans', sans-serif; }
             .font-mono { font-family: 'JetBrains Mono', monospace; }
+            .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+            .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
             @keyframes spin-slow {
                 from { transform: rotate(0deg); }
                 to { transform: rotate(360deg); }
@@ -334,6 +336,8 @@ function resolve_server_info($provider, $url, $btn_text) {
             color: #1f1f1f;
         }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
         .theme-card {
             background-color: <?= $t['card'] ?>;
             border-color: <?= $t['border'] ?>;

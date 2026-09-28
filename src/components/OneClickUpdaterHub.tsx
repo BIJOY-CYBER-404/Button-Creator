@@ -60,19 +60,19 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "5.8.0",
-    remote_version: "5.8.0",
+    current_version: "5.9.0",
+    remote_version: "5.9.0",
     update_available: false,
-    release_date: "2026-09-27",
+    release_date: "2026-09-28",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Unified cPanel Admin Panel Design with React Website Design across all pages (Generate, Pages, Settings, Update, Analytics, Login, and Setup)",
-      "Added identical Left Icon Sidebar, Top AppHeader, Lucide SVG iconography, and card layouts to cPanel PHP admin pages",
-      "Interactive 2-Tab Generator Mode (Auto Short-Link Page & Manual Batch Extractor) in cPanel admin.php matching React AdminFlowGenerator",
-      "Synchronized Backup & Restore Center, Site Branding, Maintenance Mode, AdSense & Banner Ads, Navigation Menu, and Footer settings UI in cPanel settings.php"
+      "Removed legacy One-Click Application Update System card from Settings page (settings.php)",
+      "Enabled full Backup & Restore Center in cPanel shared hosting (settings.php & api.php) with Full, Settings Only, Pages Only, and Others Only exports",
+      "Automatic backup format detection on restore (auto-detects Full Backup, Settings, Pages, or Accounts/Analytics without data loss)",
+      "Unified cPanel Admin Panel design with React Website Design across all pages and removed stale nested package archives"
     ],
     minimum_php: "7.4",
-    checksum: "a81f9b30c4e123456789abcdef0123456789abcdef0123456789abcdef012345"
+    checksum: "349fe4046a84f250a97f483a2417295ec7ac56656d3eef0b4415476dc5a04269"
   });
 
   const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json");

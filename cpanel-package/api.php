@@ -306,15 +306,30 @@ try {
             break;
 
         case 'restore_backup':
-            $backup_payload = $data['backup'] ?? null;
-            if (is_string($backup_payload)) {
-                $backup_payload = json_decode($backup_payload, true);
+            $backup_payload = null;
+            if (!empty($data['backup_b64']) && is_string($data['backup_b64'])) {
+                $decoded_b64 = base64_decode($data['backup_b64'], true);
+                if ($decoded_b64 !== false) {
+                    $backup_payload = json_decode($decoded_b64, true);
+                }
+            }
+            if (!is_array($backup_payload)) {
+                $backup_payload = $data['backup'] ?? ($_POST['backup'] ?? null);
+                if (is_string($backup_payload)) {
+                    $backup_payload = json_decode($backup_payload, true);
+                }
+            }
+            if (!is_array($backup_payload) && !empty($_FILES['backup_file']['tmp_name'])) {
+                $file_raw = @file_get_contents($_FILES['backup_file']['tmp_name']);
+                if ($file_raw !== false) {
+                    $backup_payload = json_decode($file_raw, true);
+                }
             }
             if (!is_array($backup_payload)) {
                 throw new Exception('Please provide a valid JSON backup file.');
             }
-            $scope = $data['scope'] ?? 'auto';
-            $mode  = $data['mode'] ?? 'merge';
+            $scope = $data['scope'] ?? ($_POST['scope'] ?? 'auto');
+            $mode  = $data['mode'] ?? ($_POST['mode'] ?? 'merge');
             $counts = SLEA_Datastore::restore_backup_payload($backup_payload, $scope, $mode);
             $detected = $counts['detected_type'] ?? 'Backup Data';
             echo json_encode([
