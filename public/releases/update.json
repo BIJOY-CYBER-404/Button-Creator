@@ -3,8 +3,8 @@
   "version": "v-5.9.0",
   "release_date": "2026-09-28",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "sha256": "349fe4046a84f250a97f483a2417295ec7ac56656d3eef0b4415476dc5a04269",
-  "checksum": "349fe4046a84f250a97f483a2417295ec7ac56656d3eef0b4415476dc5a04269",
+  "sha256": "3174958060bfee6247438271d9dcff5d261378eb2cf37ed359814ae8896528c8",
+  "checksum": "3174958060bfee6247438271d9dcff5d261378eb2cf37ed359814ae8896528c8",
   "minimum_php": "7.4",
   "release_notes": [
     "Removed legacy One-Click Application Update System card from Settings page (settings.php)",

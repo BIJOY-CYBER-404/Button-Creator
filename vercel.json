@@ -11,6 +11,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/download-cpanel-zip",
+      "destination": "/api/download_cpanel_zip"
+    },
+    {
       "source": "/api/download-plugin-zip",
       "destination": "/api/download_plugin_zip"
     },

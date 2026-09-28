@@ -72,6 +72,7 @@ def main():
     # Step 4: Mirror archives to root and aliases
     mirror_targets = [
         os.path.join(ROOT_DIR, "cpanel-app-package.zip"),
+        os.path.join(ROOT_DIR, "api", "cpanel-app-package.zip"),
         os.path.join(PUBLIC_DIR, "cpanel-shared-hosting.zip"),
         os.path.join(ROOT_DIR, "cpanel-shared-hosting.zip")
     ]
@@ -79,8 +80,9 @@ def main():
         shutil.copy2(primary_zip, mirror)
         print(f"[*] Mirrored bundle to: {mirror}")
 
-    ver = manifest.get("version", "4.1.0") if "manifest" in locals() else "4.1.0"
-    print(f"[✓] Deployment bundle ready! Version: v-{ver} | SHA256: {checksum[:12]}...")
+    ver = manifest.get("version", "5.9.0") if "manifest" in locals() else "5.9.0"
+    clean_ver = "v-" + ver.lstrip("v-")
+    print(f"[✓] Deployment bundle ready! Version: {clean_ver} | SHA256: {checksum[:12]}...")
 
 if __name__ == "__main__":
     main()
