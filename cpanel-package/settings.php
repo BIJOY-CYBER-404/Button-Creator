@@ -1,7 +1,8 @@
 <?php
 /**
  * Admin Panel: /settings
- * Manage public navigation menu items and edit footer copyright text (HTML allowed).
+ * Matches React AdminSidebar + AppHeader + SettingsManager design
+ * Manage Backup & Restore Center, Site Branding & Logo, Maintenance Mode, AdSense & Banner Ads, Public Navigation Menu, and Footer Copyright.
  */
 
 require_once __DIR__ . '/config.php';
@@ -10,6 +11,10 @@ require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 
 SLEA_Auth::require_admin();
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 $current_user = SLEA_Auth::get_current_user();
 
 $menu_items = SLEA_Datastore::get_menu_items();
@@ -17,792 +22,964 @@ $footer_copyright = SLEA_Datastore::get_footer_copyright();
 $ad_settings = SLEA_Datastore::get_ad_settings();
 $site_identity = SLEA_Datastore::get_site_identity();
 $maintenance_settings = SLEA_Datastore::get_maintenance_settings();
-$server_snapshots = SLEA_Datastore::list_server_snapshots();
+$server_snapshots = method_exists('SLEA_Datastore', 'list_server_snapshots') ? SLEA_Datastore::list_server_snapshots() : [];
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : APP_NAME;
 $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_logo_url'] : '';
+
+$words = preg_split('/\s+/', trim($site_name));
+$initials = '';
+foreach ($words as $w) {
+    if ($w !== '') {
+        $initials .= strtoupper(substr($w, 0, 1));
+    }
+}
+$brand_initials = substr($initials ?: 'MHQ', 0, 3);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal Settings (/settings) - <?= htmlspecialchars($site_name) ?></title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <title>Admin Settings (/settings) - <?= htmlspecialchars($site_name) ?></title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
     </style>
 </head>
-<body class="bg-[#f0f4f9] text-[#1f1f1f] min-h-screen font-sans antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
-    <!-- Left Icon Sidebar (Generate, Pages, Settings) -->
-    <aside class="fixed inset-y-0 left-0 w-16 sm:w-20 bg-white border-r border-[#e1e7f0] z-40 flex flex-col items-center py-4 justify-between shadow-xs select-none">
-        <!-- Top: Logo & Main Navigation Icons -->
+<body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
+    <!-- Left Icon Sidebar (Matches React AdminSidebar.tsx) -->
+    <aside id="admin-sidebar" class="fixed inset-y-0 left-0 w-16 sm:w-20 bg-white border-r border-[#e1e7f0] z-40 flex flex-col items-center py-4 justify-between shadow-xs select-none transition-colors" aria-label="Admin Navigation Sidebar">
         <div class="flex flex-col items-center w-full gap-5">
-            <!-- Brand Logo -->
-            <a href="admin.php" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center font-black text-lg shadow-2xs hover:scale-105 transition-transform overflow-hidden p-1" title="<?= htmlspecialchars($site_name) ?>">
+            <!-- Brand Logo / Site Identity -->
+            <a href="admin.php" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center font-black text-lg shadow-2xs hover:scale-105 transition-transform cursor-pointer overflow-hidden p-1" title="<?= htmlspecialchars($site_name) ?>">
                 <?php if (!empty($site_logo_url)): ?>
                     <img src="<?= htmlspecialchars($site_logo_url) ?>" alt="<?= htmlspecialchars($site_name) ?>" class="w-full h-full object-contain rounded-xl" />
                 <?php else: ?>
-                    <span class="font-bold text-[10px] text-center leading-tight truncate px-0.5"><?= htmlspecialchars($site_name) ?></span>
+                    <span class="text-xs font-black tracking-tight"><?= htmlspecialchars($brand_initials) ?></span>
                 <?php endif; ?>
             </a>
 
-            <!-- Nav Icons (Generate, Pages, Settings) -->
+            <!-- Navigation Icon Buttons -->
             <nav class="flex flex-col items-center w-full gap-2 px-1 sm:px-2">
-                <!-- 1. Generate Icon -->
-                <a href="admin.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all group text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Generate (+ Generator)">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                <!-- Generate -->
+                <a href="admin.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Generate (+ Generator)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Generate</span>
                 </a>
 
-                <!-- 2. Pages Icon -->
-                <a href="pages.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all group text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Pages (/pages)">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                <!-- Pages -->
+                <a href="pages.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Pages (/pages)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Pages</span>
                 </a>
 
-                <!-- 3. Settings Icon (Active) -->
-                <a href="settings.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all group bg-[#0b57d0] text-white shadow-xs" title="Settings (/settings)">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <!-- Settings (Active) -->
+                <a href="settings.php" aria-current="page" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative bg-[#0b57d0] text-white shadow-xs" title="Settings (/settings)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-white">Settings</span>
                 </a>
 
-                <!-- 4. Update Icon -->
-                <a href="update.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all group text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="One-Click System Updater (/update.php)">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <!-- Update -->
+                <a href="update.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="One-Click System Updater (/update.php)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Update</span>
+                </a>
+
+                <!-- Analytics -->
+                <a href="analytics.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Monthly Analytics & Statistics (/analytics.php)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+                    </svg>
+                    <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Analytics</span>
                 </a>
             </nav>
         </div>
 
-        <!-- Bottom: User & Logout & Version -->
+        <!-- Bottom Area: Admin Status Badge & Logout & Version -->
         <div class="flex flex-col items-center w-full gap-2 px-1 sm:px-2 pb-3">
-            <div class="w-8 h-8 rounded-full bg-[#e8f0fe] text-[#0b57d0] font-black text-xs flex items-center justify-center border border-[#d3e3fd]" title="Logged in as <?= htmlspecialchars($current_user['username']) ?>">
-                <?= strtoupper(substr($current_user['username'], 0, 1)) ?>
+            <div class="w-8 h-8 rounded-full bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center border border-[#d3e3fd]" title="Admin Mode Active (<?= htmlspecialchars($current_user['username']) ?>)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>
+                </svg>
             </div>
-            <a href="logout.php" class="w-10 h-10 rounded-xl flex items-center justify-center text-[#c5221f] hover:bg-[#fce8e6] transition-colors" title="Logout">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+
+            <a href="logout.php" class="w-10 h-10 rounded-xl flex items-center justify-center text-[#c5221f] hover:bg-[#fce8e6] transition-colors cursor-pointer" title="Sign Out" aria-label="Sign Out">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
                 </svg>
             </a>
-            <span class="text-[10px] font-bold font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="System Version <?= htmlspecialchars(APP_VERSION) ?>">
+
+            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version <?= htmlspecialchars(APP_VERSION) ?>">
                 <?= htmlspecialchars(APP_VERSION) ?>
             </span>
         </div>
     </aside>
 
-    <!-- Main Wrapper (Offset for Left Sidebar) -->
-    <div class="pl-16 sm:pl-20 min-h-screen flex flex-col">
-        <!-- Top Header Bar -->
-        <header class="bg-white border-b border-[#e1e7f0] sticky top-0 z-30 shadow-2xs">
-            <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+    <!-- Main App Content Wrapper with Left Margin for Sidebar -->
+    <div class="pl-16 sm:pl-20 min-h-screen flex flex-col flex-1">
+        <!-- Navigation Bar (Matches React AppHeader.tsx) -->
+        <header id="app-header" class="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+                <!-- Text Logo & Breadcrumb -->
                 <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div class="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                    </div>
                     <div class="min-w-0 flex-1">
-                        <h1 class="font-bold text-sm sm:text-base text-[#1f1f1f] leading-tight truncate">
-                            <?= htmlspecialchars(APP_NAME) ?>
-                        </h1>
-                        <span class="text-[11px] text-[#5f6368] block truncate">Admin Settings (/settings)</span>
+                        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <h1 class="font-bold text-sm sm:text-base leading-snug text-[#1f1f1f] tracking-tight truncate">
+                                <?= htmlspecialchars($site_name) ?>
+                            </h1>
+                            <div class="flex items-center gap-1.5 text-xs text-[#5f6368] min-w-0">
+                                <svg class="w-3.5 h-3.5 text-[#8e918f] shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="m9 18 6-6-6-6"/>
+                                </svg>
+                                <span class="font-semibold text-[#0b57d0] truncate">Admin Settings (/settings)</span>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-[#5f6368] truncate hidden sm:block">
+                            Shortlink Bypass • Episode Button Pages
+                        </p>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2.5 shrink-0">
-                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] border border-[#a8dab5] hidden sm:inline-flex items-center gap-1">
-                        ● Admin Session
-                    </span>
-                    <span class="text-xs font-semibold text-slate-600">
-                        <?= htmlspecialchars($current_user['username']) ?>
-                    </span>
+                <!-- Status / Quick Action -->
+                <div class="flex items-center gap-3 shrink-0">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] border border-[#a8dab5] tracking-wide shrink-0 flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>
+                            </svg>
+                            <span class="hidden sm:inline">Admin Active</span>
+                        </span>
+                    </div>
                 </div>
             </div>
         </header>
 
-        <!-- Floating Global Toast Notification Container (Always visible regardless of scroll) -->
-        <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-full"></div>
-
-        <!-- Main Content Container -->
-        <main class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full space-y-7">
-
-        <!-- 0. Site Branding & Logo Configuration (Google Material M3) -->
-        <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-6">
-            <div class="pb-3 border-b border-[#f0f4f9] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                    <h2 class="text-base sm:text-lg font-bold text-[#111827] flex items-center gap-2">
-                        <span>🎨 Site Branding & Logo</span>
-                    </h2>
-                    <p class="text-xs text-[#5f6368]">
-                        Customize the website title, logo image URL, or logo icon displayed in the public header, sidebar drawer, and page cards.
-                    </p>
-                </div>
-                <span class="px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0] text-[11px] font-bold self-start sm:self-auto shrink-0 border border-[#c2e7ff]">
-                    Global Branding
-                </span>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-12 gap-5">
-                <!-- Site Name -->
-                <div class="sm:col-span-6 space-y-1.5">
-                    <label class="text-xs font-bold text-[#1f1f1f] block">
-                        Website Name / Brand Title:
-                    </label>
-                    <input type="text" id="siteNameInput" value="<?= htmlspecialchars($site_identity['site_name'] ?? 'Movie Hub HQ Drive') ?>"
-                        placeholder="Movie Hub HQ Drive" oninput="updateLogoLivePreview()"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-semibold text-slate-800" />
-                    <p class="text-[10px] text-[#747775]">Displayed in the browser title bar, top header, and sidebar navigation.</p>
-                </div>
-
-                <!-- Site Logo Image URL -->
-                <div class="sm:col-span-6 space-y-1.5">
-                    <label class="text-xs font-bold text-[#1f1f1f] block">
-                        Custom Logo Image URL (Optional):
-                    </label>
-                    <input type="url" id="siteLogoUrlInput" value="<?= htmlspecialchars($site_identity['site_logo_url'] ?? '') ?>"
-                        placeholder="https://example.com/logo.png" oninput="updateLogoLivePreview()"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800" />
-                    <p class="text-[10px] text-[#747775]">Provide a direct image URL (PNG, SVG, WebP). When provided, text fallback is suppressed.</p>
-                </div>
-
-                <!-- Live Preview in M3 Light Style -->
-                <div class="sm:col-span-6 space-y-1.5">
-                    <label class="text-[11px] font-bold uppercase text-[#5f6368] block">
-                        Live Header & Sidebar Preview:
-                    </label>
-                    <div class="p-3 rounded-2xl bg-[#f8fafd] border border-[#d3e3fd] flex items-center justify-between gap-3">
-                        <div class="flex items-center gap-2.5 min-w-0" id="liveBrandPreview">
-                            <?php if (!empty($site_identity['site_logo_url'])): ?>
-                                <img id="previewLogoImg" src="<?= htmlspecialchars($site_identity['site_logo_url']) ?>" alt="Logo" class="h-8 max-w-[130px] object-contain rounded" />
-                                <span id="previewSiteName" class="hidden font-bold text-sm text-[#111827] truncate">
-                                    <?= htmlspecialchars($site_identity['site_name'] ?? 'Movie Hub HQ Drive') ?>
-                                </span>
-                            <?php else: ?>
-                                <img id="previewLogoImg" src="" alt="Logo" class="hidden h-8 max-w-[130px] object-contain rounded" />
-                                <span id="previewSiteName" class="font-bold text-sm text-[#111827] truncate">
-                                    <?= htmlspecialchars($site_identity['site_name'] ?? 'Movie Hub HQ Drive') ?>
-                                </span>
-                            <?php endif; ?>
+        <!-- Main Workspace (Matches React SettingsManager.tsx) -->
+        <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7">
+            <div class="space-y-8" id="settings-manager">
+                <!-- Settings Header Card -->
+                <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-12 h-12 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center font-bold shadow-2xs">
+                            <svg class="w-6 h-6 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+                            </svg>
                         </div>
-                        <span class="px-2 py-0.5 rounded-md bg-[#e6f4ea] text-[#137333] text-[10px] font-bold shrink-0">
-                            Light Theme M3
+                        <div>
+                            <h2 class="text-lg font-bold text-[#1f1f1f] leading-tight flex items-center gap-2">
+                                <span>Admin Configuration</span>
+                                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0] border border-[#d3e3fd]">
+                                    Active
+                                </span>
+                            </h2>
+                            <p class="text-xs text-[#5f6368] mt-0.5">
+                                Manage AdSense &amp; custom banners, public navigation bar, and footer copyright text.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="text-xs text-[#5f6368] bg-[#f0f4f9] px-3.5 py-2 rounded-xl border border-[#e1e7f0] flex items-center gap-2">
+                        <svg class="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
+                        </svg>
+                        <span>Synced with cPanel <code>settings.php</code> specs</span>
+                    </div>
+                </div>
+
+                <!-- TOP: Backup & Restore Center (Matches React SettingsManager.tsx) -->
+                <div class="bg-white rounded-3xl p-6 sm:p-8 border-2 border-[#c2e7ff] shadow-sm space-y-6" id="backup-restore-section">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-[#f0f4f9]" id="backup-restore-center">
+                        <div>
+                            <h3 class="font-bold text-base text-[#1f1f1f] flex items-center gap-2 flex-wrap">
+                                <span>💾 Backup &amp; Restore Center</span>
+                                <span class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Auto-Detect Restore • Zero Data Loss
+                                </span>
+                            </h3>
+                            <p class="text-xs text-[#5f6368] mt-0.5">
+                                Backup <strong>Website Settings</strong>, <strong>Generated Pages</strong>, and <strong>Others (Admin Accounts &amp; Analytics)</strong> all together or separately. Restore automatically detects any backup file format!
+                            </p>
+                        </div>
+                        <span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] self-start sm:self-auto">
+                            Modular &amp; Update-Safe
                         </span>
                     </div>
-                </div>
-            </div>
 
-            <div class="pt-2 flex justify-end">
-                <button type="button" onclick="saveSiteIdentity()" id="saveIdentityBtn" class="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer">
-                    Save Site Branding & Logo
-                </button>
-            </div>
-        </div>
-
-        <!-- 🛠️ Maintenance Mode Configuration -->
-        <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-6">
-            <div class="pb-3 border-b border-[#f0f4f9] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                    <h2 class="text-base sm:text-lg font-bold text-[#111827] flex items-center gap-2">
-                        <span>🛠️ Maintenance Mode</span>
-                    </h2>
-                    <p class="text-xs text-[#5f6368]">
-                        Temporarily restrict public access to your movie portal and show an interactive, creative under-maintenance screen. Logged-in administrators can still view pages.
-                    </p>
-                </div>
-                <span class="px-2.5 py-1 rounded-full bg-[#fef7e0] text-[#b06000] text-[11px] font-bold self-start sm:self-auto shrink-0 border border-[#feebc8]">
-                    Under Construction
-                </span>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-                <!-- Inputs column -->
-                <div class="md:col-span-7 space-y-5">
-                    <!-- Status Toggle -->
-                    <div class="flex items-center justify-between p-4 bg-[#f8fafd] rounded-2xl border border-[#e1e7f0]">
-                        <div>
-                            <label class="text-xs font-bold text-[#1f1f1f] block">Enable Maintenance Mode</label>
-                            <span class="text-[10px] text-[#5f6368]">Toggle to turn public restrictions on or off instantly.</span>
-                        </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="maintenanceEnabledInput" <?= !empty($maintenance_settings['enabled']) ? 'checked' : '' ?> class="sr-only peer" onchange="updateMaintenanceLivePreview()">
-                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                    </div>
-
-                    <!-- End Time Countdown Configuration (Days & Minutes) -->
-                    <div class="space-y-2 p-4 bg-[#f8fafd] rounded-2xl border border-[#e1e7f0]">
+                    <!-- 1. Download Portable JSON Backups -->
+                    <div class="space-y-3">
                         <div class="flex items-center justify-between">
-                            <label class="text-xs font-bold text-[#1f1f1f] flex items-center gap-1.5">
-                                <svg class="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
-                                <span>Maintenance End Time (Countdown Timer)</span>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-[#444746]">
+                                1. Download Backup (.json) — All or Separately
+                            </h4>
+                            <span class="text-[11px] text-[#5f6368]">Instant JSON export</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <a href="api.php?action=export_backup&amp;scope=all&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#d3e3fd] text-left transition-all flex flex-col justify-between gap-3 cursor-pointer">
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-extrabold text-[#0b57d0]">📦 Full Backup (All)</span>
+                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">ALL</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#5f6368]">Settings + Generated Pages + Accounts &amp; Analytics.</p>
+                                </div>
+                                <span class="text-[11px] font-bold text-[#0b57d0]">⬇ Download Full Backup</span>
+                            </a>
+
+                            <a href="api.php?action=export_backup&amp;scope=settings&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-purple-50 border border-purple-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer">
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-extrabold text-purple-700">⚙️ Settings Only</span>
+                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">SETTINGS</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#5f6368]">Branding, Logo, Menu, Footer HTML, Ads &amp; Maintenance.</p>
+                                </div>
+                                <span class="text-[11px] font-bold text-purple-700">⬇ Download Settings Only</span>
+                            </a>
+
+                            <a href="api.php?action=export_backup&amp;scope=pages&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-emerald-50 border border-emerald-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer">
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-extrabold text-emerald-700">📄 Pages Only</span>
+                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PAGES</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#5f6368]">All generated episode button pages, slugs, links &amp; views.</p>
+                                </div>
+                                <span class="text-[11px] font-bold text-emerald-700">⬇ Download Pages Only</span>
+                            </a>
+
+                            <a href="api.php?action=export_backup&amp;scope=others&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-amber-50 border border-amber-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer">
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-extrabold text-amber-800">👤 Others Only</span>
+                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">OTHERS</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#5f6368]">Admin accounts, permissions &amp; monthly view statistics.</p>
+                                </div>
+                                <span class="text-[11px] font-bold text-amber-800">⬇ Download Others Only</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- 2. Restore from Backup File — Automatic Detection -->
+                    <div class="p-5 rounded-2xl bg-[#f8fafd] border border-[#d3e3fd] space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2 flex-wrap">
+                                    <span>2. Restore from Backup File (.json)</span>
+                                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-[#0b57d0] font-bold">
+                                        ✨ Auto-Detects Backup Type Automatically
+                                    </span>
+                                </h4>
+                                <p class="text-[11px] text-[#5f6368] mt-0.5">
+                                    Simply upload any backup JSON file (Full Backup, Settings Only, Pages Only, or Others Only). The system automatically detects what is inside and restores it safely without losing any other data.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div id="autoDetectBackupBanner" class="hidden p-3.5 rounded-xl bg-white border border-emerald-200 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                                    ✓
+                                </span>
+                                <div>
+                                    <div class="text-xs font-bold text-[#1f1f1f]">Auto-Detected Backup Content:</div>
+                                    <div id="autoDetectBackupText" class="text-[11px] text-emerald-700 font-mono">Inspecting backup file...</div>
+                                </div>
+                            </div>
+                            <span id="autoDetectBackupStatus" class="text-[10px] font-mono px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                                ✓ Restored Automatically
+                            </span>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#e0e4eb]">
+                            <div class="text-xs text-[#5f6368]">
+                                Select any <code class="font-mono text-[#0b57d0]">.json</code> backup file — automatic detection &amp; safe restore runs immediately upon selection.
+                            </div>
+                            <label id="restoreFileBtnLabel" class="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0">
+                                <span id="restoreFileBtnText">⬆ Select &amp; Auto-Restore Backup (.json)</span>
+                                <input
+                                    type="file"
+                                    id="restoreBackupFileInput"
+                                    accept=".json,application/json"
+                                    onchange="onBackupFileSelected(this)"
+                                    class="hidden"
+                                />
                             </label>
-                            <span class="text-[10px] text-[#0b57d0] font-semibold bg-[#e8f0fe] px-2 py-0.5 rounded-md">Live Countdown</span>
-                        </div>
-                        <p class="text-[11px] text-[#5f6368]">
-                            Configure target completion date and time. Visitors will see a real-time countdown (Days, Hours, Minutes, Seconds) with auto-reload upon completion.
-                        </p>
-                        <input type="datetime-local" id="maintenanceEndTimeInput" 
-                            value="<?= htmlspecialchars($maintenance_settings['end_time'] ?? '') ?>"
-                            onchange="updateMaintenanceLivePreview()"
-                            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-semibold text-slate-800 bg-white" />
-
-                        <!-- Quick Presets -->
-                        <div class="flex items-center gap-1.5 flex-wrap pt-1">
-                            <span class="text-[10px] font-bold text-[#5f6368] uppercase mr-1">Quick Presets:</span>
-                            <button type="button" onclick="setMaintenancePreset(30)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+30 Mins</button>
-                            <button type="button" onclick="setMaintenancePreset(60)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+1 Hour</button>
-                            <button type="button" onclick="setMaintenancePreset(180)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+3 Hours</button>
-                            <button type="button" onclick="setMaintenancePreset(360)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+6 Hours</button>
-                            <button type="button" onclick="setMaintenancePreset(720)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+12 Hours</button>
-                            <button type="button" onclick="setMaintenancePreset(1440)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+1 Day</button>
-                            <button type="button" onclick="setMaintenancePreset(2880)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+2 Days</button>
-                            <button type="button" onclick="clearMaintenancePreset()" class="px-2 py-1 rounded-lg bg-white border border-[#fce8e6] hover:bg-[#fce8e6] text-[11px] font-bold text-[#c5221f] transition-all cursor-pointer">Clear</button>
                         </div>
                     </div>
 
-                    <!-- Message Textarea -->
-                    <div class="space-y-1.5">
-                        <label class="text-xs font-bold text-[#1f1f1f] block">
-                            Custom Maintenance Message:
-                        </label>
-                        <textarea id="maintenanceMessageInput" rows="3" oninput="updateMaintenanceLivePreview()"
-                            placeholder="The website is currently undergoing scheduled maintenance. We will be back shortly!"
-                            class="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-semibold text-slate-800 leading-relaxed"><?= htmlspecialchars($maintenance_settings['message'] ?? '') ?></textarea>
-                        <p class="text-[10px] text-[#747775]">Provide information about the duration or reasons for the outage to your audience.</p>
-                    </div>
-                </div>
-
-                <!-- Live Preview Mockup Column -->
-                <div class="md:col-span-5 space-y-2">
-                    <label class="text-[11px] font-bold uppercase text-[#5f6368] block">Public Screen Preview:</label>
-                    <div class="border border-[#e0e4eb] rounded-3xl p-4 bg-[#f8fafd] shadow-2xs space-y-3 relative overflow-hidden">
-                        <!-- Preview Thumbnail -->
-                        <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9]">
-                            <img src="assets/images/maintenance_illustration.jpg" alt="Illustration" class="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        </div>
-                        <!-- Preview Message content -->
-                        <div class="text-center space-y-2">
-                            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fef7e0] border border-[#feebc8] text-[#b06000] text-[9px] font-bold font-mono">
-                                <span>SYSTEM MAINTENANCE</span>
+                    <!-- 3. One-Click Server Snapshots -->
+                    <div class="p-5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-[#111827]">
+                                    3. Instant Snapshots (Auto-Detected One-Click Restore)
+                                </h4>
+                                <p class="text-[11px] text-[#5f6368]">
+                                    Create instant restore points for Full Backup, Settings Only, Pages Only, or Others Only.
+                                </p>
                             </div>
-                            <h4 class="text-xs font-black text-[#111827]">Scheduled Upgrades in Progress</h4>
-                            <p id="maintenancePreviewMsg" class="text-[10px] text-[#5f6368] leading-normal line-clamp-2 px-1">
-                                <?= htmlspecialchars($maintenance_settings['message'] ?: 'The website is currently undergoing scheduled maintenance. We will be back shortly!') ?>
-                            </p>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <select id="snapshotScopeSelect" class="px-3 py-2 rounded-xl bg-white border border-[#c4c7c5] text-xs font-semibold">
+                                    <option value="all">Scope: Full Everything</option>
+                                    <option value="settings">Scope: Settings Only</option>
+                                    <option value="pages">Scope: Pages Only</option>
+                                    <option value="others">Scope: Others Only</option>
+                                </select>
+                                <input
+                                    type="text"
+                                    id="snapshotLabelInput"
+                                    placeholder="Optional snapshot note..."
+                                    class="px-3 py-2 rounded-xl bg-white border border-[#c4c7c5] text-xs w-44"
+                                />
+                                <button
+                                    type="button"
+                                    id="createSnapshotBtn"
+                                    onclick="createServerSnapshot()"
+                                    class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer"
+                                >
+                                    + Create Snapshot
+                                </button>
+                            </div>
+                        </div>
 
-                            <!-- Live Countdown Badges Preview -->
-                            <div id="maintenancePreviewCountdownCard" class="p-2.5 rounded-xl bg-white border border-[#e0e4eb] space-y-1.5 shadow-2xs">
-                                <div class="text-[9px] font-bold uppercase tracking-wider text-[#0b57d0] flex items-center justify-center gap-1">
-                                    <svg class="w-3 h-3 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
-                                    <span>Estimated End Time Countdown</span>
+                        <div id="snapshotsListContainer" class="space-y-2 max-h-64 overflow-y-auto">
+                            <?php if (empty($server_snapshots)): ?>
+                                <div class="text-center py-5 text-xs text-[#5f6368] bg-white rounded-xl border border-dashed border-[#c4c7c5]">
+                                    No snapshots created yet. Click <strong>+ Create Snapshot</strong> above to save an instant restore point.
                                 </div>
-                                <div class="grid grid-cols-4 gap-1 text-center font-mono">
-                                    <div class="bg-[#f0f4f9] rounded-lg p-1">
-                                        <div id="prevCountdownDays" class="text-xs font-extrabold text-[#0b57d0]">00</div>
-                                        <div class="text-[8px] text-[#5f6368] font-sans uppercase">Days</div>
+                            <?php else: ?>
+                                <?php foreach ($server_snapshots as $snap): ?>
+                                    <div class="p-3 bg-white rounded-xl border border-[#e0e4eb] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div>
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="text-xs font-bold text-[#1f1f1f]"><?= htmlspecialchars($snap['label']) ?></span>
+                                                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold uppercase"><?= htmlspecialchars($snap['scope']) ?></span>
+                                                <span class="text-[10px] font-mono text-[#747775]"><?= htmlspecialchars($snap['created_at']) ?></span>
+                                            </div>
+                                            <div class="text-[11px] font-mono text-[#5f6368]">
+                                                Settings: <?= intval($snap['counts']['settings'] ?? 0) ?> • Pages: <?= intval($snap['counts']['pages'] ?? 0) ?> • Others: <?= intval($snap['counts']['users'] ?? 0) ?>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+                                            <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'auto')" class="px-3 py-1.5 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white text-[11px] font-bold cursor-pointer">
+                                                ↻ Restore (Auto-Detect)
+                                            </button>
+                                            <a href="api.php?action=download_snapshot&amp;filename=<?= urlencode($snap['filename']) ?>" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold" title="Download Snapshot JSON">
+                                                ⬇
+                                            </a>
+                                            <button type="button" onclick="deleteSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>')" class="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold cursor-pointer">
+                                                ✕
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div class="bg-[#f0f4f9] rounded-lg p-1">
-                                        <div id="prevCountdownHours" class="text-xs font-extrabold text-[#0b57d0]">00</div>
-                                        <div class="text-[8px] text-[#5f6368] font-sans uppercase">Hours</div>
-                                    </div>
-                                    <div class="bg-[#f0f4f9] rounded-lg p-1">
-                                        <div id="prevCountdownMins" class="text-xs font-extrabold text-[#0b57d0]">00</div>
-                                        <div class="text-[8px] text-[#5f6368] font-sans uppercase">Mins</div>
-                                    </div>
-                                    <div class="bg-[#f0f4f9] rounded-lg p-1">
-                                        <div id="prevCountdownSecs" class="text-xs font-extrabold text-[#0b57d0]">00</div>
-                                        <div class="text-[8px] text-[#5f6368] font-sans uppercase">Secs</div>
-                                    </div>
-                                </div>
-                                <div id="prevCountdownTargetText" class="text-[9px] text-[#747775] font-sans">
-                                    No countdown configured (Back online shortly)
-                                </div>
-                            </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="pt-2 flex justify-end">
-                <button type="button" onclick="saveMaintenanceSettings()" id="saveMaintenanceBtn" class="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer">
-                    Save Maintenance Settings
-                </button>
-            </div>
-        </div>
-
-        <!-- 1. Google AdSense & Manual Banner Ads Configuration -->
-        <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-6">
-            <div class="pb-3 border-b border-[#f0f4f9] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                    <h2 class="text-base sm:text-lg font-bold text-[#111827] flex items-center gap-2">
-                        <span>📢 Monetization & Ads Configuration</span>
-                    </h2>
-                    <p class="text-xs text-[#5f6368]">
-                        Configure Google AdSense automatic ads and manual HTML/JS banner ad placements for all public episode button pages.
-                    </p>
-                </div>
-                <span class="px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0] text-[11px] font-bold self-start sm:self-auto shrink-0 border border-[#c2e7ff]">
-                    Public Pages
-                </span>
-            </div>
-
-            <!-- Subsection A: Google AdSense Automatic Ads -->
-            <div class="p-5 rounded-2xl bg-[#f8fafd] border border-[#d3e3fd] space-y-4">
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <div class="text-xs font-bold text-[#041e49] flex items-center gap-1.5">
-                            <span>Google AdSense Automatic Ads</span>
-                            <span class="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-mono text-[10px] font-bold">Auto Ads</span>
-                        </div>
-                        <p class="text-[11px] text-[#5f6368] mt-0.5">
-                            Automatically injects Google's optimized auto-ad script into the <code>&lt;head&gt;</code> of all public button pages.
-                        </p>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                        <input type="checkbox" id="adsenseAutoEnabled" class="sr-only peer" <?= !empty($ad_settings['adsense_auto_enabled']) ? 'checked' : '' ?>>
-                        <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0b57d0]"></div>
-                    </label>
-                </div>
-
-                <div class="space-y-1.5 pt-1">
-                    <label class="text-[11px] font-bold uppercase text-[#5f6368] block">
-                        AdSense Publisher / Client ID or Full Script Code:
-                    </label>
-                    <input type="text" id="adsenseClientId" value="<?= htmlspecialchars($ad_settings['adsense_client_id'] ?? '') ?>"
-                        placeholder="e.g. ca-pub-1234567890123456 or &lt;script async src=&quot;https://pagead2...&quot;&gt;&lt;/script&gt;"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800" />
-                    <p class="text-[10px] text-[#747775]">
-                        Tip: You can enter just your publisher ID (<code>ca-pub-XXXXXXXXXX</code>) or paste the full Google AdSense script tag.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Subsection B: Manual Banner Ads -->
-            <div class="p-5 rounded-2xl bg-[#fafafa] border border-[#e0e4eb] space-y-5">
-                <div class="flex items-center justify-between gap-3 pb-3 border-b border-slate-200">
-                    <div>
-                        <div class="text-xs font-bold text-[#111827] flex items-center gap-1.5">
-                            <span>Manual Banner Ads Placements</span>
-                            <span class="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 font-mono text-[10px] font-bold">Custom Banners</span>
-                        </div>
-                        <p class="text-[11px] text-[#5f6368] mt-0.5">
-                            Insert custom display banners (AdSense display units, Adsterra, PropellerAds, or custom HTML/image banners).
-                        </p>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                        <input type="checkbox" id="bannerAdsEnabled" class="sr-only peer" <?= !empty($ad_settings['banner_ads_enabled']) ? 'checked' : '' ?>>
-                        <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0b57d0]"></div>
-                    </label>
-                </div>
-
-                <!-- Spot 1: Top Banner Ad -->
-                <div class="space-y-2 p-4 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                    <div class="flex items-center justify-between">
-                        <label class="text-xs font-bold text-[#1f1f1f] flex items-center gap-2">
-                            <span>1. Top Banner Ad (Above Title & Content)</span>
-                        </label>
-                        <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
-                            <input type="checkbox" id="adTopEnabled" class="rounded text-blue-600" <?= !empty($ad_settings['ad_top_enabled']) ? 'checked' : '' ?> />
-                            <span class="font-semibold">Enable Top Spot</span>
-                        </label>
-                    </div>
-                    <textarea id="adTopCode" rows="3" placeholder="Paste HTML/JavaScript banner code (e.g. 728x90 leaderboard or responsive banner)"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($ad_settings['ad_top_code'] ?? '') ?></textarea>
-                </div>
-
-                <!-- Spot 2: In-Feed Middle Banner Ad (Between Episode Buttons) -->
-                <div class="space-y-2 p-4 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                    <div class="flex items-center justify-between">
-                        <label class="text-xs font-bold text-[#1f1f1f] flex items-center gap-2">
-                            <span>2. In-Feed Middle Ad (Between Episode Buttons / In-Feed Manual Ad Code)</span>
-                        </label>
-                        <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
-                            <input type="checkbox" id="adMiddleEnabled" class="rounded text-blue-600" <?= !empty($ad_settings['ad_middle_enabled']) ? 'checked' : '' ?> />
-                            <span class="font-semibold">Enable In-Feed Middle Spot</span>
-                        </label>
-                    </div>
-                    <p class="text-[11px] text-[#5f6368]">
-                        Paste manual HTML/JavaScript banner code (e.g. 300x250, native in-feed unit, or Adsterra/PropellerAds). Automatically inserted in-feed between episode buttons (repeats every 4 episodes) on all public button pages.
-                    </p>
-                    <textarea id="adMiddleCode" rows="3" placeholder="Paste HTML/JavaScript banner code for in-feed middle ad space"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($ad_settings['ad_middle_code'] ?? '') ?></textarea>
-                </div>
-
-                <!-- Spot 3: Bottom Banner Ad -->
-                <div class="space-y-2 p-4 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                    <div class="flex items-center justify-between">
-                        <label class="text-xs font-bold text-[#1f1f1f] flex items-center gap-2">
-                            <span>3. Bottom Banner Ad (Below Episode Buttons / Above Footer)</span>
-                        </label>
-                        <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
-                            <input type="checkbox" id="adBottomEnabled" class="rounded text-blue-600" <?= !empty($ad_settings['ad_bottom_enabled']) ? 'checked' : '' ?> />
-                            <span class="font-semibold">Enable Bottom Spot</span>
-                        </label>
-                    </div>
-                    <textarea id="adBottomCode" rows="3" placeholder="Paste HTML/JavaScript banner code (e.g. 728x90, 300x250, or responsive banner)"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars($ad_settings['ad_bottom_code'] ?? '') ?></textarea>
-                </div>
-            </div>
-
-            <div class="pt-2 flex justify-end">
-                <button type="button" onclick="saveAdSettings()" id="saveAdsBtn" class="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-md transition-all cursor-pointer">
-                    Save Ad Configurations
-                </button>
-            </div>
-        </div>
-
-        <!-- 2. Public Navigation Menu Manager -->
-        <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-5">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#f0f4f9]">
-                <div>
-                    <h2 class="text-base sm:text-lg font-bold text-[#111827] flex items-center gap-2">
-                        <span>Public Header Navigation Menu</span>
-                    </h2>
-                    <p class="text-xs text-[#5f6368]">
-                        Configures the desktop navigation buttons and mobile hamburger menu on all public button pages.
-                    </p>
-                </div>
-
-                <button type="button" onclick="addNewMenuItem()" class="px-3.5 py-2 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-bold transition-all shadow-2xs self-start sm:self-auto cursor-pointer">
-                    + Add Menu Item
-                </button>
-            </div>
-
-            <!-- Menu Items List -->
-            <div class="space-y-3" id="menuItemsContainer">
-                <?php foreach ($menu_items as $index => $item): ?>
-                    <div class="menu-item-card bg-[#f8fafd] border border-[#d3e3fd] rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3" data-id="<?= htmlspecialchars($item['id'] ?? ('m' . $index)) ?>">
-                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 flex-1 w-full">
-                            <div class="sm:col-span-4">
-                                <label class="text-[10px] font-bold uppercase text-[#5f6368] block mb-1">Button Name</label>
-                                <input type="text" class="menu-title w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:border-blue-600"
-                                    value="<?= htmlspecialchars($item['title'] ?? '') ?>" placeholder="e.g. Home" required />
+                <!-- 0. Site Branding & Logo Configuration Form -->
+                <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6">
+                    <div class="flex items-center justify-between pb-4 border-b border-[#f0f4f9]">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>
+                                </svg>
                             </div>
-                            <div class="sm:col-span-6">
-                                <label class="text-[10px] font-bold uppercase text-[#5f6368] block mb-1">Link URL</label>
-                                <input type="url" class="menu-url w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono text-slate-700 outline-none focus:border-blue-600"
-                                    value="<?= htmlspecialchars($item['url'] ?? '') ?>" placeholder="https://..." required />
+                            <div>
+                                <h3 class="font-bold text-base text-[#1f1f1f]">Site Branding &amp; Logo</h3>
+                                <p class="text-xs text-[#5f6368]">
+                                    Configure public website name and logo image URL.
+                                </p>
                             </div>
-                            <div class="sm:col-span-2 flex items-center pt-2 sm:pt-4">
-                                <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
-                                    <input type="checkbox" class="menu-newtab rounded text-blue-600" <?= !empty($item['new_tab']) ? 'checked' : '' ?> />
-                                    <span>New tab</span>
+                        </div>
+                        <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0]">
+                            <?= htmlspecialchars($site_name) ?>
+                        </span>
+                    </div>
+
+                    <div class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div class="space-y-1.5">
+                                <label class="text-xs font-bold text-[#444746] block">
+                                    Website Name
                                 </label>
+                                <input
+                                    type="text"
+                                    id="siteNameInput"
+                                    value="<?= htmlspecialchars($site_identity['site_name'] ?? 'Movie Hub HQ Drive') ?>"
+                                    oninput="updateLogoLivePreview()"
+                                    placeholder="Movie Hub HQ Drive"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] text-xs font-medium focus:border-[#0b57d0] focus:ring-1 focus:ring-[#0b57d0] outline-none"
+                                />
+                                <span class="text-[11px] text-[#5f6368] block">
+                                    Public gateway brand title displayed on headers and sidebar.
+                                </span>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <label class="text-xs font-bold text-[#444746] block">
+                                    Site Logo Image URL (Optional)
+                                </label>
+                                <div class="relative">
+                                    <input
+                                        type="url"
+                                        id="siteLogoUrlInput"
+                                        value="<?= htmlspecialchars($site_identity['site_logo_url'] ?? '') ?>"
+                                        oninput="updateLogoLivePreview()"
+                                        placeholder="https://example.com/logo.png"
+                                        class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] focus:ring-1 focus:ring-[#0b57d0] outline-none"
+                                    />
+                                    <svg class="w-4 h-4 text-[#747775] absolute left-3 top-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                        <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                                    </svg>
+                                </div>
+                                <span class="text-[11px] text-[#5f6368] block">
+                                    Provide a direct image URL (PNG, SVG, WebP). When provided, text fallback is suppressed.
+                                </span>
+                            </div>
+
+                            <div class="space-y-1.5 md:col-span-2">
+                                <label class="text-xs font-bold text-[#444746] block">
+                                    Brand Live Preview
+                                </label>
+                                <div class="p-4 bg-[#f8fafd] border border-[#e0e4eb] rounded-xl flex items-center justify-between min-h-[64px]">
+                                    <div class="flex items-center gap-2.5 min-w-0" id="liveBrandPreview">
+                                        <?php if (!empty($site_identity['site_logo_url'])): ?>
+                                            <img id="previewLogoImg" src="<?= htmlspecialchars($site_identity['site_logo_url']) ?>" alt="Logo Preview" class="h-8 max-w-[180px] object-contain rounded" />
+                                            <span id="previewSiteName" class="hidden font-bold text-sm text-[#111827] truncate"><?= htmlspecialchars($site_identity['site_name'] ?? 'Movie Hub HQ Drive') ?></span>
+                                        <?php else: ?>
+                                            <img id="previewLogoImg" src="" alt="Logo Preview" class="hidden h-8 max-w-[180px] object-contain rounded" />
+                                            <span id="previewSiteName" class="font-bold text-sm text-[#111827] truncate"><?= htmlspecialchars($site_identity['site_name'] ?? 'Movie Hub HQ Drive') ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded-md bg-[#e6f4ea] text-[#137333] text-[10px] font-bold shrink-0">
+                                        M3 Light Preview
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-2 self-end sm:self-center">
-                            <button type="button" onclick="this.closest('.menu-item-card').remove()" class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer text-xs font-bold" title="Delete menu item">
-                                Delete
+                        <div class="flex justify-end pt-2">
+                            <button
+                                type="button"
+                                id="saveIdentityBtn"
+                                onclick="saveSiteIdentity()"
+                                class="px-5 py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>
+                                </svg>
+                                <span>Save Site Branding &amp; Logo</span>
                             </button>
                         </div>
                     </div>
-                <?php endforeach; ?>
-            </div>
-
-            <div class="pt-2 flex justify-end">
-                <button type="button" onclick="saveMenuItems()" id="saveMenuBtn" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer">
-                    Save Navigation Menu
-                </button>
-            </div>
-        </div>
-
-        <!-- 2. Public Pages Footer Copyright Editor (HTML Allowed) -->
-        <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-5">
-            <div class="pb-3 border-b border-[#f0f4f9]">
-                <h2 class="text-base sm:text-lg font-bold text-[#111827]">
-                    Public Pages Footer Copyright Text (HTML Allowed)
-                </h2>
-                <p class="text-xs text-[#5f6368]">
-                    Rendered at the bottom of every public button page. You can include links, disclaimer text, or HTML styling.
-                </p>
-            </div>
-
-            <div class="space-y-3">
-                <label class="text-xs font-bold text-[#444746] block">
-                    Footer Copyright HTML Content:
-                </label>
-                <div class="flex flex-wrap items-center gap-1.5 pb-2">
-                    <span class="text-[11px] font-bold text-slate-500 mr-1">Quick Emojis & Symbols:</span>
-                    <?php foreach (['🍿', '🎬', '❤️', '🚀', '⭐', '🎥', '📺', '🛡️', '💬', '📅', '✨', '🔥', '⚡', '🔒', '©️'] as $emoji): ?>
-                        <button type="button" onclick="insertPhpEmoji('<?= $emoji ?>')"
-                            class="w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-sm transition-all cursor-pointer select-none active:scale-95"
-                            title="Insert <?= $emoji ?>">
-                            <?= $emoji ?>
-                        </button>
-                    <?php endforeach; ?>
-                    <button type="button" onclick="repairFooterEmojis()"
-                        class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition-all cursor-pointer sm:ml-auto"
-                        title="Auto-repair and fix ?? symbols into emojis">
-                        🔧 Auto-Repair ?? Emojis
-                    </button>
-                    <button type="button" onclick="resetFooterToDefault()"
-                        class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold transition-all cursor-pointer"
-                        title="Reset to default clean template with emojis">
-                        🔄 Restore Default with Emojis
-                    </button>
                 </div>
-                <textarea id="footerCopyrightInput" rows="4" oninput="updateFooterPreview()"
-                    class="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-xs font-mono text-slate-800 leading-relaxed"><?= htmlspecialchars(html_entity_decode($footer_copyright, ENT_QUOTES | ENT_HTML5, 'UTF-8'), ENT_QUOTES, 'UTF-8') ?></textarea>
-            </div>
 
-            <!-- Live HTML Preview -->
-            <div class="space-y-1.5">
-                <span class="text-[11px] font-bold uppercase text-[#747775]">Live Footer Preview:</span>
-                <div id="footerPreviewBox" class="p-4 rounded-xl bg-[#f8f9fa] border border-[#e0e4eb] text-xs text-center text-[#5f6368] overflow-hidden">
-                    <?= $footer_copyright ?>
-                </div>
-            </div>
-
-            <div class="pt-2 flex justify-end">
-                <button type="button" onclick="saveFooterCopyright()" id="saveFooterBtn" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer">
-                    Save Footer Text
-                </button>
-            </div>
-        </div>
-
-        <!-- 3. Backup & Restore Center (Website Settings, Pages & Others - Together or Separately) -->
-        <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-6" id="backup-restore-center">
-            <div class="pb-3 border-b border-[#f0f4f9] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                    <h2 class="text-base sm:text-lg font-bold text-[#111827] flex items-center gap-2">
-                        <span>💾 Backup &amp; Restore Center</span>
-                        <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Zero Data Loss</span>
-                    </h2>
-                    <p class="text-xs text-[#5f6368] mt-0.5">
-                        Backup and restore <strong>Website Settings</strong>, <strong>Generated Pages</strong>, and <strong>Others (Admin Accounts &amp; Analytics)</strong> all together or completely separately.
-                    </p>
-                </div>
-                <span class="px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0] text-[11px] font-bold self-start sm:self-auto shrink-0 border border-[#c2e7ff]">
-                    Modular &amp; Update-Safe
-                </span>
-            </div>
-
-            <!-- Section A: Download Portable JSON Backups (All or Separate) -->
-            <div class="space-y-3">
-                <div class="flex items-center justify-between flex-wrap gap-2">
-                    <h3 class="text-xs font-bold uppercase tracking-wider text-[#444746]">1. Download Backup File (.json) — All or Separately</h3>
-                    <span class="text-[11px] text-[#5f6368]">Save directly to your device</span>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <!-- Full Backup -->
-                    <a href="api.php?action=export_backup&amp;scope=all&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#d3e3fd] transition-all flex flex-col justify-between gap-3 group">
-                        <div class="space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-extrabold text-[#0b57d0]">📦 Full Backup (All)</span>
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">ALL</span>
+                <!-- 🛠️ Maintenance Mode Form -->
+                <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6">
+                    <div class="flex items-center justify-between pb-4 border-b border-[#f0f4f9]">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-[#fef7e0] text-[#b06000] flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5 text-[#b06000]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+                                </svg>
                             </div>
-                            <p class="text-[11px] text-[#5f6368] leading-snug">Website Settings + All Generated Pages + Admin Accounts &amp; Analytics.</p>
-                        </div>
-                        <span class="text-[11px] font-bold text-[#0b57d0] group-hover:underline flex items-center gap-1">
-                            ⬇ Download Full Backup
-                        </span>
-                    </a>
-
-                    <!-- Settings Only Backup -->
-                    <a href="api.php?action=export_backup&amp;scope=settings&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-purple-50 border border-purple-200 transition-all flex flex-col justify-between gap-3 group">
-                        <div class="space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-extrabold text-purple-700">⚙️ Settings Only</span>
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">SETTINGS</span>
+                            <div>
+                                <h3 class="font-bold text-base text-[#1f1f1f]">Maintenance Mode</h3>
+                                <p class="text-xs text-[#5f6368]">
+                                    Temporarily restrict public access to the portal with an interactive creative screen.
+                                </p>
                             </div>
-                            <p class="text-[11px] text-[#5f6368] leading-snug">Branding, Logo, Menu Links, Footer HTML, AdSense/Banners &amp; Maintenance.</p>
                         </div>
-                        <span class="text-[11px] font-bold text-purple-700 group-hover:underline flex items-center gap-1">
-                            ⬇ Download Settings Only
+                        <span id="maintenanceStatusBadge" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#fef7e0] text-[#b06000] border border-[#feebc8]">
+                            Status: <?= !empty($maintenance_settings['enabled']) ? 'Active' : 'Inactive' ?>
                         </span>
-                    </a>
-
-                    <!-- Pages Only Backup -->
-                    <a href="api.php?action=export_backup&amp;scope=pages&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-emerald-50 border border-emerald-200 transition-all flex flex-col justify-between gap-3 group">
-                        <div class="space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-extrabold text-emerald-700">📄 Pages Only</span>
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PAGES</span>
-                            </div>
-                            <p class="text-[11px] text-[#5f6368] leading-snug">All generated episode button pages, slugs, episode links, views &amp; themes.</p>
-                        </div>
-                        <span class="text-[11px] font-bold text-emerald-700 group-hover:underline flex items-center gap-1">
-                            ⬇ Download Pages Only
-                        </span>
-                    </a>
-
-                    <!-- Others Only Backup -->
-                    <a href="api.php?action=export_backup&amp;scope=others&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-amber-50 border border-amber-200 transition-all flex flex-col justify-between gap-3 group">
-                        <div class="space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-extrabold text-amber-800">👤 Others Only</span>
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">OTHERS</span>
-                            </div>
-                            <p class="text-[11px] text-[#5f6368] leading-snug">Admin user accounts, password hashes, roles &amp; monthly view analytics.</p>
-                        </div>
-                        <span class="text-[11px] font-bold text-amber-800 group-hover:underline flex items-center gap-1">
-                            ⬇ Download Others Only
-                        </span>
-                    </a>
-                </div>
-            </div>
-
-            <!-- Section B: Restore from JSON Backup File (Supports Separate or Full Restore) -->
-            <div class="p-5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] space-y-4">
-                <div class="flex items-center justify-between flex-wrap gap-2">
-                    <div>
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-[#111827]">2. Restore from Backup File (.json) — Together or Separately</h3>
-                        <p class="text-[11px] text-[#5f6368]">Upload any backup file and choose whether to restore everything or only a specific part (Settings, Pages, or Others).</p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                    <div class="sm:col-span-5 space-y-1">
-                        <label class="text-[11px] font-bold text-[#444746] block">Select Backup JSON File</label>
-                        <input type="file" id="restoreBackupFileInput" accept=".json,application/json"
-                            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-700 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
                     </div>
 
-                    <div class="sm:col-span-3 space-y-1">
-                        <label class="text-[11px] font-bold text-[#444746] block">What to Restore</label>
-                        <select id="restoreScopeSelect" class="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600">
-                            <option value="auto">Auto / Everything in File</option>
-                            <option value="settings">Website Settings Only</option>
-                            <option value="pages">Generated Pages Only</option>
-                            <option value="others">Others (Accounts &amp; Analytics) Only</option>
-                        </select>
-                    </div>
-
-                    <div class="sm:col-span-2 space-y-1">
-                        <label class="text-[11px] font-bold text-[#444746] block">Restore Mode</label>
-                        <select id="restoreModeSelect" class="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600">
-                            <option value="merge">Safe Merge (Default)</option>
-                            <option value="overwrite">Replace / Overwrite</option>
-                        </select>
-                    </div>
-
-                    <div class="sm:col-span-2">
-                        <button type="button" onclick="handleRestoreFromFile()" id="restoreFileBtn"
-                            class="w-full px-4 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer">
-                            Restore Now
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Section C: One-Click Server Snapshots (Stored in /data/snapshots - Never Lost on Updates) -->
-            <div class="p-5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-[#111827]">3. Instant Server Snapshots (Protected in <code>/data/snapshots</code>)</h3>
-                        <p class="text-[11px] text-[#5f6368]">Create one-click restore points on your hosting server before making changes or updates. Restore all or separate modules anytime.</p>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <select id="snapshotScopeSelect" class="px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-800 outline-none">
-                            <option value="all">Scope: Full Everything</option>
-                            <option value="settings">Scope: Settings Only</option>
-                            <option value="pages">Scope: Pages Only</option>
-                            <option value="others">Scope: Others Only</option>
-                        </select>
-                        <input type="text" id="snapshotLabelInput" placeholder="Optional note (e.g. Before theme change)"
-                            class="px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none w-48" />
-                        <button type="button" onclick="createServerSnapshot()" id="createSnapshotBtn"
-                            class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer">
-                            + Create Snapshot
-                        </button>
-                    </div>
-                </div>
-
-                <div id="snapshotsListContainer" class="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    <?php if (empty($server_snapshots)): ?>
-                        <div class="text-center py-6 text-xs text-slate-500 bg-white rounded-xl border border-dashed border-slate-200">
-                            No server snapshots created yet. Click <strong>+ Create Snapshot</strong> above or run an update to generate one automatically.
-                        </div>
-                    <?php else: ?>
-                        <?php foreach ($server_snapshots as $snap): ?>
-                            <div class="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div class="space-y-0.5">
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="text-xs font-bold text-slate-800"><?= htmlspecialchars($snap['label']) ?></span>
-                                        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold uppercase"><?= htmlspecialchars($snap['scope']) ?></span>
-                                        <span class="text-[10px] font-mono text-slate-400"><?= htmlspecialchars($snap['created_at']) ?> (<?= htmlspecialchars($snap['size_kb']) ?> KB)</span>
+                    <div class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                            <!-- Inputs Column -->
+                            <div class="md:col-span-7 space-y-5">
+                                <div class="flex items-center justify-between p-4 bg-[#f8fafd] rounded-2xl border border-[#e1e7f0]">
+                                    <div>
+                                        <span class="text-xs font-bold text-[#1f1f1f] block">Enable Maintenance Mode</span>
+                                        <span class="text-[10px] text-[#5f6368]">Toggle to block or resume public site access instantly.</span>
                                     </div>
-                                    <div class="text-[11px] text-slate-500 font-mono">
-                                        Settings: <?= intval($snap['counts']['settings'] ?? 0) ?> • Pages: <?= intval($snap['counts']['pages'] ?? 0) ?> • Accounts: <?= intval($snap['counts']['users'] ?? 0) ?> • Analytics: <?= intval($snap['counts']['analytics'] ?? 0) ?>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            id="maintenanceEnabledInput"
+                                            <?= !empty($maintenance_settings['enabled']) ? 'checked' : '' ?>
+                                            onchange="updateMaintenanceLivePreview()"
+                                            class="sr-only peer"
+                                        />
+                                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+
+                                <!-- End Time Countdown Configuration -->
+                                <div class="space-y-2 p-4 bg-[#f8fafd] rounded-2xl border border-[#e1e7f0]">
+                                    <div class="flex items-center justify-between">
+                                        <label class="text-xs font-bold text-[#1f1f1f] flex items-center gap-1.5">
+                                            <svg class="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                                            <span>Maintenance End Time (Optional Countdown)</span>
+                                        </label>
+                                        <span class="text-[10px] text-[#0b57d0] font-semibold bg-[#e8f0fe] px-2 py-0.5 rounded-md">Live Countdown</span>
+                                    </div>
+                                    <input
+                                        type="datetime-local"
+                                        id="maintenanceEndTimeInput"
+                                        value="<?= htmlspecialchars($maintenance_settings['end_time'] ?? '') ?>"
+                                        onchange="updateMaintenanceLivePreview()"
+                                        class="w-full px-3.5 py-2 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] outline-none text-xs font-semibold bg-white"
+                                    />
+                                    <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                                        <span class="text-[10px] font-bold text-[#5f6368] uppercase mr-1">Quick Presets:</span>
+                                        <button type="button" onclick="setMaintenancePreset(30)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] text-[11px] font-bold text-[#444746] cursor-pointer">+30m</button>
+                                        <button type="button" onclick="setMaintenancePreset(60)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] text-[11px] font-bold text-[#444746] cursor-pointer">+1h</button>
+                                        <button type="button" onclick="setMaintenancePreset(180)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] text-[11px] font-bold text-[#444746] cursor-pointer">+3h</button>
+                                        <button type="button" onclick="setMaintenancePreset(1440)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] text-[11px] font-bold text-[#444746] cursor-pointer">+1d</button>
+                                        <button type="button" onclick="clearMaintenancePreset()" class="px-2 py-1 rounded-lg bg-white border border-[#fce8e6] hover:bg-[#fce8e6] text-[11px] font-bold text-[#c5221f] cursor-pointer">Clear</button>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-1.5 flex-wrap shrink-0">
-                                    <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'auto')" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer" title="Restore all data in this snapshot">
-                                        Restore All
-                                    </button>
-                                    <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'settings')" class="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-bold cursor-pointer" title="Restore only Website Settings from this snapshot">
-                                        Settings Only
-                                    </button>
-                                    <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'pages')" class="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer" title="Restore only Generated Pages from this snapshot">
-                                        Pages Only
-                                    </button>
-                                    <button type="button" onclick="restoreSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>', 'others')" class="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold cursor-pointer" title="Restore only Accounts &amp; Analytics from this snapshot">
-                                        Others Only
-                                    </button>
-                                    <a href="api.php?action=download_snapshot&amp;filename=<?= urlencode($snap['filename']) ?>" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold" title="Download Snapshot JSON">
-                                        ⬇
-                                    </a>
-                                    <button type="button" onclick="deleteSnapshot('<?= htmlspecialchars($snap['filename'], ENT_QUOTES) ?>')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold cursor-pointer" title="Delete Snapshot">
-                                        ✕
-                                    </button>
+
+                                <div class="space-y-1.5">
+                                    <label class="text-xs font-bold text-[#444746] block">
+                                        Custom Maintenance Message:
+                                    </label>
+                                    <textarea
+                                        id="maintenanceMessageInput"
+                                        rows="4"
+                                        oninput="updateMaintenanceLivePreview()"
+                                        placeholder="The website is currently undergoing scheduled maintenance. We will be back shortly!"
+                                        class="w-full px-4 py-3 rounded-2xl border border-[#c4c7c5] text-xs font-medium focus:border-[#0b57d0] focus:ring-1 focus:ring-[#0b57d0] outline-none leading-relaxed"
+                                    ><?= htmlspecialchars($maintenance_settings['message'] ?? '') ?></textarea>
+                                    <span class="text-[10px] text-[#747775] block">Provide dynamic info about current system optimizations or upgrades.</span>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
 
-        <!-- 4. One-Click Application Update System Card -->
-        <div class="bg-white rounded-3xl p-6 sm:p-7 border border-[#e0e4eb] shadow-xs space-y-4">
-            <div class="pb-3 border-b border-[#f0f4f9] flex items-center justify-between flex-wrap gap-2">
-                <div>
-                    <h2 class="text-base sm:text-lg font-bold text-[#111827] flex items-center gap-2">
-                        <span>One-Click Application Update System</span>
-                        <span class="text-xs font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">update.php</span>
-                    </h2>
-                    <p class="text-xs text-[#5f6368] mt-0.5">
-                        Check for application updates from remote repository, download release ZIP packages, perform automated file/database backups, and execute zero-downtime updates.
-                    </p>
-                </div>
-                <a href="update.php" class="px-4 py-2 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-all">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    <span>Launch One-Click Updater</span>
-                </a>
-            </div>
+                            <!-- Preview Column (Matches React SettingsManager.tsx) -->
+                            <div class="md:col-span-5 space-y-2">
+                                <span class="text-[11px] font-bold uppercase text-[#5f6368] block">Public Preview Mockup:</span>
+                                <div class="border border-[#e0e4eb] rounded-3xl p-4 bg-[#f8fafd] space-y-3 relative overflow-hidden">
+                                    <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9] flex items-center justify-center">
+                                        <div class="absolute inset-0 bg-[#0b57d0]/5 flex items-center justify-center text-[#0b57d0] font-mono text-[10px] text-center p-4">
+                                            <div class="space-y-1">
+                                                <div class="w-8 h-8 rounded-full border-2 border-[#0b57d0] border-t-transparent animate-spin mx-auto"></div>
+                                                <span class="block font-bold">Optimization Engaged</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-center space-y-1">
+                                        <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fef7e0] border border-[#feebc8] text-[#b06000] text-[9px] font-bold font-mono">
+                                            <span>SYSTEM MAINTENANCE</span>
+                                        </div>
+                                        <h4 class="text-xs font-black text-[#111827]">We'll Be Right Back</h4>
+                                        <p id="maintenancePreviewMsg" class="text-[10px] text-[#5f6368] leading-normal line-clamp-2 px-2">
+                                            <?= htmlspecialchars($maintenance_settings['message'] ?: 'The website is currently undergoing scheduled maintenance. We will be back shortly!') ?>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-            <div class="p-3.5 bg-[#f8fafd] rounded-2xl border border-[#e0e4eb] flex items-center justify-between text-xs text-[#5f6368] flex-wrap gap-2">
-                <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-[#137333]"></span>
-                    <span>Target Destination Format:</span>
-                    <code class="font-mono font-bold text-[#0b57d0]">https://mydverse02.blogspot.com/p/*.html</code>
+                        <div class="flex justify-end pt-2">
+                            <button
+                                type="button"
+                                id="saveMaintenanceBtn"
+                                onclick="saveMaintenanceSettings()"
+                                class="px-5 py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>
+                                </svg>
+                                <span>Save Maintenance Settings</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <span class="text-[11px] text-[#747775]">Safe & Non-Destructive</span>
+
+                <!-- 1. Google AdSense & Banner Ads Form (Matches React SettingsManager.tsx) -->
+                <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6">
+                    <div class="flex items-center justify-between gap-3 pb-4 border-b border-[#f0f4f9]">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-base text-[#1f1f1f]">AdSense &amp; Banner Ads Configuration</h3>
+                                <p class="text-xs text-[#5f6368]">
+                                    Insert Google AdSense Auto-Ads or custom responsive banner ad HTML/JavaScript code.
+                                </p>
+                            </div>
+                        </div>
+                        <label class="inline-flex items-center gap-2 text-xs font-bold text-[#1f1f1f] cursor-pointer">
+                            <input type="checkbox" id="bannerAdsEnabled" class="w-4 h-4 text-[#0b57d0] rounded border-gray-300" <?= !isset($ad_settings['banner_ads_enabled']) || !empty($ad_settings['banner_ads_enabled']) ? 'checked' : '' ?> />
+                            <span>Master Banner Switch</span>
+                        </label>
+                    </div>
+
+                    <div class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div class="space-y-1.5">
+                                <label class="text-xs font-bold text-[#444746] block">
+                                    Google AdSense Publisher ID
+                                </label>
+                                <input
+                                    type="text"
+                                    id="adsenseClientId"
+                                    value="<?= htmlspecialchars($ad_settings['adsense_client_id'] ?? '') ?>"
+                                    placeholder="ca-pub-XXXXXXXXXXXXXXXX"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] focus:ring-1 focus:ring-[#0b57d0] outline-none"
+                                />
+                                <span class="text-[11px] text-[#5f6368] block">
+                                    Optional: Auto-inserts <code>pagead2.googlesyndication.com</code> snippet in the page header.
+                                </span>
+                            </div>
+
+                            <div class="space-y-2 pt-5">
+                                <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        id="adsenseAutoEnabled"
+                                        <?= !empty($ad_settings['adsense_auto_enabled']) ? 'checked' : '' ?>
+                                        class="w-4 h-4 text-[#0b57d0] rounded border-gray-300 focus:ring-[#0b57d0]"
+                                    />
+                                    <span class="text-xs font-bold text-[#1f1f1f]">Enable Google Auto-Ads</span>
+                                </label>
+                                <p class="text-[11px] text-[#5f6368] pl-6">
+                                    Automatically places machine learning ads across optimal positions on the button page.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4 pt-2">
+                            <!-- Top Banner -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-xs font-bold text-[#444746] flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                        <span>Top Banner Ad HTML (Placed under the navigation bar)</span>
+                                    </label>
+                                    <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
+                                        <input type="checkbox" id="adTopEnabled" class="rounded text-[#0b57d0]" <?= !empty($ad_settings['ad_top_enabled']) ? 'checked' : '' ?> />
+                                        <span class="font-semibold">Enabled</span>
+                                    </label>
+                                </div>
+                                <textarea
+                                    id="adTopCode"
+                                    rows="3"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] outline-none"
+                                    placeholder="Paste HTML/JS ad code here..."
+                                ><?= htmlspecialchars($ad_settings['ad_top_code'] ?? '') ?></textarea>
+                            </div>
+
+                            <!-- Middle Banner -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-xs font-bold text-[#444746] flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                        <span>In-Between Episode Buttons Ad HTML (Placed between button rows)</span>
+                                    </label>
+                                    <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
+                                        <input type="checkbox" id="adMiddleEnabled" class="rounded text-[#0b57d0]" <?= !empty($ad_settings['ad_middle_enabled']) ? 'checked' : '' ?> />
+                                        <span class="font-semibold">Enabled</span>
+                                    </label>
+                                </div>
+                                <textarea
+                                    id="adMiddleCode"
+                                    rows="3"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] outline-none"
+                                    placeholder="Paste HTML/JS ad code here..."
+                                ><?= htmlspecialchars($ad_settings['ad_middle_code'] ?? '') ?></textarea>
+                            </div>
+
+                            <!-- Bottom Banner -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-xs font-bold text-[#444746] flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                        <span>Bottom Banner Ad HTML (Placed above footer)</span>
+                                    </label>
+                                    <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
+                                        <input type="checkbox" id="adBottomEnabled" class="rounded text-[#0b57d0]" <?= !empty($ad_settings['ad_bottom_enabled']) ? 'checked' : '' ?> />
+                                        <span class="font-semibold">Enabled</span>
+                                    </label>
+                                </div>
+                                <textarea
+                                    id="adBottomCode"
+                                    rows="3"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] outline-none"
+                                    placeholder="Paste HTML/JS ad code here..."
+                                ><?= htmlspecialchars($ad_settings['ad_bottom_code'] ?? '') ?></textarea>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-2">
+                            <button
+                                type="button"
+                                id="saveAdsBtn"
+                                onclick="saveAdSettings()"
+                                class="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>
+                                </svg>
+                                <span>Save Ad Settings</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Public Header Navigation Menu (Matches React SettingsManager.tsx) -->
+                <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6">
+                    <div class="flex items-center justify-between gap-3 pb-4 border-b border-[#f0f4f9]">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-base text-[#1f1f1f]">Public Header Navigation Menu</h3>
+                                <p class="text-xs text-[#5f6368]">
+                                    Define links displayed across every generated button page header for visitor navigation.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Existing Menu Items List -->
+                    <div class="space-y-2" id="menuItemsContainer"></div>
+
+                    <!-- Add New Menu Item Form (Matches React SettingsManager.tsx) -->
+                    <form onsubmit="handleAddMenuItem(event)" class="pt-3 border-t border-[#f0f4f9] space-y-3">
+                        <h4 class="text-xs font-bold text-[#1f1f1f]">+ Add New Navigation Link</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                            <div class="sm:col-span-4 space-y-1">
+                                <label class="text-[11px] font-semibold text-[#5f6368]">Item Title</label>
+                                <input
+                                    type="text"
+                                    id="newMenuTitle"
+                                    placeholder="e.g. Movies"
+                                    class="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] text-xs focus:border-[#0b57d0] outline-none"
+                                />
+                            </div>
+                            <div class="sm:col-span-5 space-y-1">
+                                <label class="text-[11px] font-semibold text-[#5f6368]">Target URL</label>
+                                <input
+                                    type="text"
+                                    id="newMenuUrl"
+                                    placeholder="e.g. /movies or https://..."
+                                    class="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] outline-none"
+                                />
+                            </div>
+                            <div class="sm:col-span-3 flex items-center justify-between sm:justify-end gap-2">
+                                <label class="flex items-center gap-1.5 text-xs text-[#5f6368] cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        id="newMenuBlank"
+                                        class="rounded text-[#0b57d0]"
+                                    />
+                                    <span>New Tab</span>
+                                </label>
+                                <button
+                                    type="submit"
+                                    id="saveMenuBtn"
+                                    class="px-4 py-2 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                                >
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                    <span>Add</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 3. Footer Copyright Text (Matches React SettingsManager.tsx) -->
+                <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-5">
+                    <div class="flex items-center gap-3 pb-4 border-b border-[#f0f4f9]">
+                        <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-base text-[#1f1f1f]">Footer Copyright &amp; Disclaimer</h3>
+                            <p class="text-xs text-[#5f6368]">
+                                Configures the copyright statement and legal disclaimer displayed at the bottom of public pages.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-bold text-[#444746] block">Footer Content (HTML allowed)</label>
+                            <div class="flex flex-wrap items-center gap-1.5 pb-2">
+                                <span class="text-[11px] font-bold text-[#5f6368] self-center mr-1">Quick Emojis &amp; Symbols:</span>
+                                <?php foreach (['🍿', '🎬', '❤️', '🚀', '⭐', '🎥', '📺', '🛡️', '💬', '📅', '✨', '🔥', '⚡', '🔒', '©️'] as $emoji): ?>
+                                    <button type="button" onclick="insertPhpEmoji('<?= $emoji ?>')"
+                                        class="w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 border border-[#e0e4eb] flex items-center justify-center text-sm transition-all cursor-pointer select-none active:scale-95"
+                                        title="Insert <?= $emoji ?>">
+                                        <?= $emoji ?>
+                                    </button>
+                                <?php endforeach; ?>
+                            </div>
+                            <textarea
+                                id="footerCopyrightInput"
+                                rows="3"
+                                oninput="updateFooterPreview()"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] outline-none"
+                                placeholder="&amp;copy; 2026 ... All rights reserved."
+                            ><?= htmlspecialchars(html_entity_decode($footer_copyright, ENT_QUOTES | ENT_HTML5, 'UTF-8'), ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <span class="text-[11px] font-bold uppercase text-[#747775]">Live Footer Preview:</span>
+                            <div id="footerPreviewBox" class="p-4 rounded-xl bg-[#f8f9fa] border border-[#e0e4eb] text-xs text-center text-[#5f6368] overflow-hidden">
+                                <?= $footer_copyright ?>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button
+                                type="button"
+                                id="saveFooterBtn"
+                                onclick="saveFooterCopyright()"
+                                class="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>
+                                </svg>
+                                <span>Save Footer Text</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-    </main>
+        </main>
     </div>
 
+    <!-- Top Right Notification Toast Container (Matches React Toast.tsx) -->
+    <aside id="toastContainer" aria-label="Notifications" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-[calc(100%-2.5rem)]"></aside>
+
     <script>
+        let MENU_ITEMS = <?= json_encode(array_values($menu_items), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?> || [];
+
+        function escapeToastHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function renderMenuItems() {
+            const container = document.getElementById('menuItemsContainer');
+            if (!container) return;
+            if (MENU_ITEMS.length === 0) {
+                container.innerHTML = `<div class="text-center py-4 text-xs text-[#747775] bg-[#f8fafd] rounded-2xl border border-dashed border-[#c4c7c5]">No navigation links configured yet. Add one below.</div>`;
+                return;
+            }
+            container.innerHTML = MENU_ITEMS.map((item, idx) => {
+                const isBlank = !!(item.new_tab || item.target_blank);
+                return `
+                    <div class="flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0]">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-6 h-6 rounded-full bg-white border border-[#c4c7c5] text-[10px] font-bold text-[#444746] flex items-center justify-center shrink-0">
+                                ${idx + 1}
+                            </span>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-[#1f1f1f] truncate">${escapeToastHtml(item.title)}</div>
+                                <div class="text-[11px] font-mono text-[#5f6368] truncate">${escapeToastHtml(item.url)}</div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${isBlank ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">New Tab</span>` : ''}
+                            <button
+                                type="button"
+                                onclick="removeMenuItem(${idx})"
+                                class="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                title="Remove item"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function persistMenuItems(toastMsg) {
+            try {
+                const res = await fetch('api.php?action=save_menu_items', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: MENU_ITEMS })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(toastMsg || 'Navigation menu updated successfully!', 'success');
+                } else {
+                    showToast('Error saving navigation menu: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('Request failed: ' + e.message, 'error');
+            }
+        }
+
+        async function handleAddMenuItem(e) {
+            e.preventDefault();
+            const titleEl = document.getElementById('newMenuTitle');
+            const urlEl = document.getElementById('newMenuUrl');
+            const blankEl = document.getElementById('newMenuBlank');
+
+            const title = titleEl.value.trim();
+            const url = urlEl.value.trim();
+            const newTab = blankEl.checked;
+
+            if (!title || !url) {
+                showToast('Please provide both menu item title and destination URL.', 'error');
+                return;
+            }
+
+            MENU_ITEMS.push({
+                id: 'm_' + Math.random().toString(36).substring(2, 7),
+                title: title,
+                url: url,
+                new_tab: newTab
+            });
+
+            titleEl.value = '';
+            urlEl.value = '';
+            blankEl.checked = false;
+            renderMenuItems();
+            await persistMenuItems(`Added navigation item "${title}"`);
+        }
+
+        async function removeMenuItem(idx) {
+            MENU_ITEMS.splice(idx, 1);
+            renderMenuItems();
+            await persistMenuItems('Menu item removed.');
+        }
+
         async function saveAdSettings() {
             const btn = document.getElementById('saveAdsBtn');
             btn.disabled = true;
-            btn.innerText = 'Saving Ads...';
 
             const payload = {
                 adsense_auto_enabled: document.getElementById('adsenseAutoEnabled').checked,
@@ -824,7 +1001,7 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Ad configurations saved successfully!', 'success');
+                    showToast('AdSense & Banner Ad settings saved successfully!', 'success');
                 } else {
                     showToast('Error saving ads: ' + (data.error || 'Unknown error'), 'error');
                 }
@@ -832,7 +1009,6 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerText = 'Save Ad Configurations';
             }
         }
 
@@ -848,114 +1024,12 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
             const val = input.value;
             input.value = val.substring(0, start) + ' ' + emoji + ' ' + val.substring(end);
             input.focus();
-            const newPos = start + emoji.length + 2;
-            input.setSelectionRange(newPos, newPos);
             updateFooterPreview();
-            showToast(`Inserted emoji ${emoji}`, 'info');
-        }
-
-        function repairFooterEmojis() {
-            const input = document.getElementById('footerCopyrightInput');
-            let val = input.value;
-            
-            // Auto repair corrupted question marks from legacy charset
-            val = val.replace(/(<span[^>]*class=["'][^"']*heart[^"']*["'][^>]*>)\s*\?+\s*(<\/span>)/gi, '$1❤️$2');
-            val = val.replace(/(<span[^>]*aria-label=["']love["'][^>]*>)\s*\?+\s*(<\/span>)/gi, '$1❤️$2');
-            val = val.replace(/(Designed\s+with)\s+\?+\s+(by)/gi, '$1 ❤️ $2');
-            val = val.replace(/(\bwith)\s+\?+\s+(\bby|\bfor)/gi, '$1 ❤️ $2');
-            val = val.replace(/\?\+\s*•\s*Made\s+with\s*\?\+/gi, '🍿 • Made with ❤️');
-            val = val.replace(/Gateway\s*\?\+\s*•\s*All\s+rights\s+reserved\s*\?\+/gi, 'Gateway 🎬 • All rights reserved 🚀');
-            val = val.replace(/MovieHubHQ\s*\?\+/gi, 'MovieHubHQ 🍿');
-            val = val.replace(/All\s+rights\s+reserved\s*\?\+/gi, 'All rights reserved 🚀');
-            val = val.replace(/\?\?/g, '❤️'); // Any other ?? replaced with heart
-
-            input.value = val;
-            updateFooterPreview();
-            showToast('Repaired corrupted ?? to emojis! Click "Save Footer Text" to save.', 'success');
-        }
-
-        function resetFooterToDefault() {
-            const defaultText = '&copy; <?= date("Y") ?> MovieHubHQ 🍿 • Made with ❤️ for Direct Episode Link Gateway 🎬 • All rights reserved 🚀';
-            document.getElementById('footerCopyrightInput').value = defaultText;
-            updateFooterPreview();
-            showToast('Reset footer to default template with emojis. Click "Save Footer Text" to persist.', 'info');
-        }
-
-        function addNewMenuItem() {
-            const container = document.getElementById('menuItemsContainer');
-            const newId = 'm_' + Math.random().toString(36).substring(2, 8);
-            const card = document.createElement('div');
-            card.className = 'menu-item-card bg-[#f8fafd] border border-[#d3e3fd] rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3';
-            card.setAttribute('data-id', newId);
-            card.innerHTML = `
-                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 flex-1 w-full">
-                    <div class="sm:col-span-4">
-                        <label class="text-[10px] font-bold uppercase text-[#5f6368] block mb-1">Button Name</label>
-                        <input type="text" class="menu-title w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:border-blue-600"
-                            placeholder="e.g. Action Movies" required />
-                    </div>
-                    <div class="sm:col-span-6">
-                        <label class="text-[10px] font-bold uppercase text-[#5f6368] block mb-1">Link URL</label>
-                        <input type="url" class="menu-url w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono text-slate-700 outline-none focus:border-blue-600"
-                            placeholder="https://moviehubhq.com/..." required />
-                    </div>
-                    <div class="sm:col-span-2 flex items-center pt-2 sm:pt-4">
-                        <label class="inline-flex items-center gap-1.5 text-xs text-[#444746] cursor-pointer">
-                            <input type="checkbox" class="menu-newtab rounded text-blue-600" />
-                            <span>New tab</span>
-                        </label>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 self-end sm:self-center">
-                    <button type="button" onclick="this.closest('.menu-item-card').remove()" class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer text-xs font-bold" title="Delete menu item">
-                        Delete
-                    </button>
-                </div>
-            `;
-            container.appendChild(card);
-        }
-
-        async function saveMenuItems() {
-            const btn = document.getElementById('saveMenuBtn');
-            btn.disabled = true;
-            btn.innerText = 'Saving...';
-
-            const cards = document.querySelectorAll('.menu-item-card');
-            const items = [];
-            cards.forEach(card => {
-                const title = card.querySelector('.menu-title').value.trim();
-                const url = card.querySelector('.menu-url').value.trim();
-                const newTab = card.querySelector('.menu-newtab').checked;
-                const id = card.getAttribute('data-id') || ('m_' + Math.random().toString(36).substring(2, 6));
-                if (title && url) {
-                    items.push({ id, title, url, new_tab: newTab });
-                }
-            });
-
-            try {
-                const res = await fetch('api.php?action=save_menu_items', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ items: items })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast('Navigation menu updated successfully!', 'success');
-                } else {
-                    showToast('Error saving navigation menu: ' + (data.error || 'Unknown error'), 'error');
-                }
-            } catch (e) {
-                showToast('Request failed: ' + e.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerText = 'Save Navigation Menu';
-            }
         }
 
         async function saveFooterCopyright() {
             const btn = document.getElementById('saveFooterBtn');
             btn.disabled = true;
-            btn.innerText = 'Saving...';
 
             const html = document.getElementById('footerCopyrightInput').value;
 
@@ -975,14 +1049,13 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerText = 'Save Footer Text';
             }
         }
 
         function updateLogoLivePreview() {
             const name = document.getElementById('siteNameInput').value.trim() || 'Movie Hub HQ Drive';
             const logoUrl = document.getElementById('siteLogoUrlInput').value.trim();
-            
+
             const previewName = document.getElementById('previewSiteName');
             const previewImg = document.getElementById('previewLogoImg');
 
@@ -1001,7 +1074,6 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
         async function saveSiteIdentity() {
             const btn = document.getElementById('saveIdentityBtn');
             btn.disabled = true;
-            btn.innerText = 'Saving Branding...';
 
             const payload = {
                 site_name: document.getElementById('siteNameInput').value.trim() || 'Movie Hub HQ Drive',
@@ -1024,21 +1096,18 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerText = 'Save Site Branding & Logo';
             }
         }
 
         function setMaintenancePreset(minutes) {
             const now = new Date();
             const future = new Date(now.getTime() + minutes * 60 * 1000);
-            
-            // Format to YYYY-MM-DDTHH:mm in local time
             const year = future.getFullYear();
             const month = String(future.getMonth() + 1).padStart(2, '0');
             const day = String(future.getDate()).padStart(2, '0');
             const hours = String(future.getHours()).padStart(2, '0');
             const mins = String(future.getMinutes()).padStart(2, '0');
-            
+
             document.getElementById('maintenanceEndTimeInput').value = `${year}-${month}-${day}T${hours}:${mins}`;
             updateMaintenanceLivePreview();
             showToast(`Maintenance countdown set to +${minutes >= 60 ? (minutes / 60) + ' hour(s)' : minutes + ' mins'}`, 'info');
@@ -1052,57 +1121,17 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
 
         function updateMaintenanceLivePreview() {
             const msg = document.getElementById('maintenanceMessageInput').value.trim() || 'The website is currently undergoing scheduled maintenance. We will be back shortly!';
+            const enabled = document.getElementById('maintenanceEnabledInput').checked;
             document.getElementById('maintenancePreviewMsg').innerText = msg;
-
-            const endTimeVal = document.getElementById('maintenanceEndTimeInput').value;
-            const targetTextEl = document.getElementById('prevCountdownTargetText');
-
-            if (!endTimeVal) {
-                document.getElementById('prevCountdownDays').innerText = '00';
-                document.getElementById('prevCountdownHours').innerText = '00';
-                document.getElementById('prevCountdownMins').innerText = '00';
-                document.getElementById('prevCountdownSecs').innerText = '00';
-                if (targetTextEl) targetTextEl.innerText = 'No countdown configured (Back online shortly)';
-                return;
-            }
-
-            const targetDate = new Date(endTimeVal);
-            const now = new Date();
-            const diffMs = targetDate.getTime() - now.getTime();
-
-            if (isNaN(diffMs) || diffMs <= 0) {
-                document.getElementById('prevCountdownDays').innerText = '00';
-                document.getElementById('prevCountdownHours').innerText = '00';
-                document.getElementById('prevCountdownMins').innerText = '00';
-                document.getElementById('prevCountdownSecs').innerText = '00';
-                if (targetTextEl) targetTextEl.innerText = 'Time reached / Wrapping up maintenance';
-                return;
-            }
-
-            const totalSecs = Math.floor(diffMs / 1000);
-            const days = Math.floor(totalSecs / 86400);
-            const hours = Math.floor((totalSecs % 86400) / 3600);
-            const mins = Math.floor((totalSecs % 3600) / 60);
-            const secs = totalSecs % 60;
-
-            document.getElementById('prevCountdownDays').innerText = String(days).padStart(2, '0');
-            document.getElementById('prevCountdownHours').innerText = String(hours).padStart(2, '0');
-            document.getElementById('prevCountdownMins').innerText = String(mins).padStart(2, '0');
-            document.getElementById('prevCountdownSecs').innerText = String(secs).padStart(2, '0');
-
-            if (targetTextEl) {
-                targetTextEl.innerText = 'Expected Completion: ' + targetDate.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const statusBadge = document.getElementById('maintenanceStatusBadge');
+            if (statusBadge) {
+                statusBadge.innerText = 'Status: ' + (enabled ? 'Active' : 'Inactive');
             }
         }
-
-        // Keep countdown preview ticking live
-        setInterval(updateMaintenanceLivePreview, 1000);
-        document.addEventListener('DOMContentLoaded', updateMaintenanceLivePreview);
 
         async function saveMaintenanceSettings() {
             const btn = document.getElementById('saveMaintenanceBtn');
             btn.disabled = true;
-            btn.innerText = 'Saving...';
 
             const payload = {
                 enabled: document.getElementById('maintenanceEnabledInput').checked,
@@ -1118,7 +1147,7 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Maintenance settings & countdown timer saved successfully!', 'success');
+                    showToast('Maintenance settings saved successfully!', 'success');
                 } else {
                     showToast('Error saving maintenance settings: ' + (data.error || 'Unknown error'), 'error');
                 }
@@ -1126,55 +1155,82 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 showToast('Request failed: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerText = 'Save Maintenance Settings';
             }
         }
 
-        async function handleRestoreFromFile() {
-            const fileInput = document.getElementById('restoreBackupFileInput');
-            const scope = document.getElementById('restoreScopeSelect').value;
-            const mode = document.getElementById('restoreModeSelect').value;
-            const btn = document.getElementById('restoreFileBtn');
+        function inspectBackupPayloadClient(parsed) {
+            if (!parsed || typeof parsed !== 'object') return 'Invalid Backup File';
+            const dataBlock = (parsed.data && typeof parsed.data === 'object') ? parsed.data : parsed;
+            const parts = [];
+            const hasSettings = (dataBlock.settings && typeof dataBlock.settings === 'object' && Object.keys(dataBlock.settings).length > 0)
+                || ['site_identity', 'menu_items', 'footer_copyright', 'ad_settings', 'maintenance_settings'].some(k => k in parsed);
+            const hasPages = Array.isArray(dataBlock.pages)
+                || (Array.isArray(parsed) && parsed.length > 0 && parsed[0].slug);
+            const hasOthers = (dataBlock.others && typeof dataBlock.others === 'object')
+                || Array.isArray(parsed.users)
+                || Array.isArray(parsed.page_views_monthly)
+                || (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].username || parsed[0].page_slug));
 
-            if (!fileInput.files || fileInput.files.length === 0) {
-                showToast('Please select a JSON backup file to restore.', 'error');
-                return;
+            if (hasSettings) {
+                const sCount = dataBlock.settings ? Object.keys(dataBlock.settings).length : 1;
+                parts.push(`Website Settings (${sCount})`);
             }
+            if (hasPages) {
+                const pCount = Array.isArray(dataBlock.pages) ? dataBlock.pages.length : (Array.isArray(parsed) ? parsed.length : 1);
+                parts.push(`Generated Pages (${pCount})`);
+            }
+            if (hasOthers) {
+                parts.push(`Others (Accounts & Analytics)`);
+            }
+            return parts.length > 0 ? parts.join(' • ') : 'Backup Data';
+        }
 
-            const file = fileInput.files[0];
-            btn.disabled = true;
-            btn.innerText = 'Restoring...';
+        async function onBackupFileSelected(input) {
+            if (!input.files || input.files.length === 0) return;
+            const banner = document.getElementById('autoDetectBackupBanner');
+            const textEl = document.getElementById('autoDetectBackupText');
+            const statusEl = document.getElementById('autoDetectBackupStatus');
+            const btnText = document.getElementById('restoreFileBtnText');
 
             try {
-                const text = await file.text();
-                let parsed;
-                try {
-                    parsed = JSON.parse(text);
-                } catch (err) {
-                    throw new Error('Selected file is not a valid JSON backup.');
+                const text = await input.files[0].text();
+                const parsed = JSON.parse(text);
+                const summary = inspectBackupPayloadClient(parsed);
+                if (banner && textEl && statusEl) {
+                    banner.classList.remove('hidden');
+                    textEl.innerText = summary;
+                    statusEl.innerText = 'Auto-Restoring...';
                 }
+                if (btnText) btnText.innerText = 'Auto-Detecting & Restoring...';
 
                 const res = await fetch('api.php?action=restore_backup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         backup: parsed,
-                        scope: scope,
-                        mode: mode
+                        scope: 'auto',
+                        mode: 'merge'
                     })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast(data.message || 'Backup restored successfully!', 'success');
+                    if (statusEl) statusEl.innerText = '✓ Restored Automatically';
+                    showToast(data.message || `Auto-Detected [${summary}] & Restored successfully!`, 'success');
                     setTimeout(() => window.location.reload(), 1200);
                 } else {
+                    if (statusEl) statusEl.innerText = 'Failed';
                     showToast('Restore failed: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                showToast('Restore error: ' + e.message, 'error');
+                if (banner && textEl && statusEl) {
+                    banner.classList.remove('hidden');
+                    textEl.innerText = 'Invalid JSON file selected';
+                    statusEl.innerText = 'Error';
+                }
+                showToast('Restore failed: ' + (e.message || 'Invalid JSON backup file'), 'error');
             } finally {
-                btn.disabled = false;
-                btn.innerText = 'Restore Now';
+                if (btnText) btnText.innerText = '⬆ Select & Auto-Restore Backup (.json)';
+                input.value = '';
             }
         }
 
@@ -1194,7 +1250,7 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast(data.message || 'Server snapshot created!', 'success');
+                    showToast(data.message || `Created ${scope.toUpperCase()} snapshot successfully!`, 'success');
                     document.getElementById('snapshotLabelInput').value = '';
                     renderSnapshotsList(data.snapshots || []);
                 } else {
@@ -1209,21 +1265,12 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
         }
 
         async function restoreSnapshot(filename, scope = 'auto') {
-            const scopeNames = {
-                auto: 'Everything in Snapshot',
-                settings: 'Website Settings Only',
-                pages: 'Generated Pages Only',
-                others: 'Accounts & Analytics Only'
-            };
-            if (!confirm(`Restore [${scopeNames[scope] || scope}] from snapshot "${filename}"? (Existing items are safely merged and preserved)`)) {
-                return;
-            }
-
             try {
+                showToast('Auto-detecting snapshot contents and restoring...', 'info');
                 const res = await fetch('api.php?action=restore_snapshot', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename, scope, mode: 'merge' })
+                    body: JSON.stringify({ filename, scope: 'auto', mode: 'merge' })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1261,35 +1308,28 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
             const container = document.getElementById('snapshotsListContainer');
             if (!container) return;
             if (!snapshots || snapshots.length === 0) {
-                container.innerHTML = `<div class="text-center py-6 text-xs text-slate-500 bg-white rounded-xl border border-dashed border-slate-200">No server snapshots created yet. Click <strong>+ Create Snapshot</strong> above or run an update to generate one automatically.</div>`;
+                container.innerHTML = `<div class="text-center py-5 text-xs text-[#5f6368] bg-white rounded-xl border border-dashed border-[#c4c7c5]">No snapshots created yet. Click <strong>+ Create Snapshot</strong> above to save an instant restore point.</div>`;
                 return;
             }
             container.innerHTML = snapshots.map(snap => `
-                <div class="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div class="space-y-0.5">
+                <div class="p-3 bg-white rounded-xl border border-[#e0e4eb] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
                         <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-xs font-bold text-slate-800">${escapeToastHtml(snap.label)}</span>
+                            <span class="text-xs font-bold text-[#1f1f1f]">${escapeToastHtml(snap.label)}</span>
                             <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold uppercase">${escapeToastHtml(snap.scope)}</span>
-                            <span class="text-[10px] font-mono text-slate-400">${escapeToastHtml(snap.created_at)} (${escapeToastHtml(snap.size_kb)} KB)</span>
+                            <span class="text-[10px] font-mono text-[#747775]">${escapeToastHtml(snap.created_at)}</span>
                         </div>
-                        <div class="text-[11px] text-slate-500 font-mono">
-                            Settings: ${Number(snap.counts?.settings || 0)} • Pages: ${Number(snap.counts?.pages || 0)} • Accounts: ${Number(snap.counts?.users || 0)} • Analytics: ${Number(snap.counts?.analytics || 0)}
+                        <div class="text-[11px] font-mono text-[#5f6368]">
+                            Settings: ${Number(snap.counts?.settings || 0)} • Pages: ${Number(snap.counts?.pages || 0)} • Others: ${Number(snap.counts?.users || 0)}
                         </div>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap shrink-0">
-                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'auto')" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer">Restore All</button>
-                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'settings')" class="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-bold cursor-pointer">Settings Only</button>
-                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'pages')" class="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer">Pages Only</button>
-                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'others')" class="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold cursor-pointer">Others Only</button>
-                        <a href="api.php?action=download_snapshot&filename=${encodeURIComponent(snap.filename)}" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold">⬇</a>
-                        <button type="button" onclick="deleteSnapshot('${escapeToastHtml(snap.filename)}')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold cursor-pointer">✕</button>
+                        <button type="button" onclick="restoreSnapshot('${escapeToastHtml(snap.filename)}', 'auto')" class="px-3 py-1.5 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white text-[11px] font-bold cursor-pointer">↻ Restore (Auto-Detect)</button>
+                        <a href="api.php?action=download_snapshot&filename=${encodeURIComponent(snap.filename)}" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold">⬇</a>
+                        <button type="button" onclick="deleteSnapshot('${escapeToastHtml(snap.filename)}')" class="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold cursor-pointer">✕</button>
                     </div>
                 </div>
             `).join('');
-        }
-
-        function escapeToastHtml(str) {
-            return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         function showToast(msg, type = 'success') {
@@ -1300,8 +1340,8 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
             const toast = document.createElement('div');
             toast.id = id;
             toast.className = `pointer-events-auto bg-white rounded-2xl shadow-xl border p-3.5 flex items-start gap-3 w-full ring-1 transform transition-all duration-300 translate-x-8 opacity-0 scale-95 ${
-                type === 'success' 
-                    ? 'border-emerald-200 ring-emerald-500/10' 
+                type === 'success'
+                    ? 'border-emerald-200 ring-emerald-500/10'
                     : (type === 'info' ? 'border-blue-200 ring-blue-500/10' : 'border-rose-200 ring-rose-500/10')
             }`;
 
@@ -1310,12 +1350,12 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                 : (type === 'info' ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600');
 
             const iconSvg = type === 'success'
-                ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>`
+                ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`
                 : (type === 'info'
-                    ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>`
-                    : `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`);
+                    ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`
+                    : `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`);
 
-            const title = type === 'success' ? 'Success' : (type === 'info' ? 'Information' : 'Notice');
+            const title = type === 'success' ? 'Success' : (type === 'info' ? 'Information' : 'Notice / Error');
 
             toast.innerHTML = `
                 <div class="p-2 rounded-xl shrink-0 mt-0.5 ${iconClass}">
@@ -1326,7 +1366,7 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                     <div class="text-xs font-medium text-slate-800 leading-snug mt-0.5 break-words">${escapeToastHtml(msg)}</div>
                 </div>
                 <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 transition-colors cursor-pointer" title="Dismiss">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
             `;
 
@@ -1343,8 +1383,13 @@ $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_
                     el.classList.add('translate-x-8', 'opacity-0', 'scale-95');
                     setTimeout(() => el.remove(), 250);
                 }
-            }, 4500);
+            }, 3500);
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderMenuItems();
+            updateMaintenanceLivePreview();
+        });
     </script>
 </body>
 </html>

@@ -18,7 +18,7 @@ UPDATE_JSON_PUBLIC = os.path.join(PUBLIC_DIR, "releases", "update.json")
 UPDATE_JSON_CPANEL = os.path.join(CPANEL_DIR, "releases", "update.json")
 
 EXCLUDE_EXTS = {".pyc", ".swp", ".DS_Store", ".tmp"}
-EXCLUDE_DIRS = {"__pycache__", ".git", ".idea", ".vscode", "backups", "temp", "data", "releases"}
+EXCLUDE_DIRS = {"__pycache__", ".git", ".idea", ".vscode", "backups", "temp", "data", "releases", "public"}
 EXCLUDE_FILES = {"config.local.php", ".maintenance"}
 
 def create_zip(target_zip_path):

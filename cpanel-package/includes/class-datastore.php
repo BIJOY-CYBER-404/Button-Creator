@@ -904,7 +904,9 @@ class SLEA_Datastore {
     }
 
     /**
-     * Restore a backup payload selectively or completely.
+     * Restore a backup payload with automatic content detection.
+     * Automatically detects whether the backup contains Full Backup (All), Website Settings Only,
+     * Generated Pages Only, or Others Only (Accounts & Analytics), as well as raw JSON files.
      * @param array  $payload The decoded JSON backup array
      * @param string $scope   'auto' | 'all' | 'settings' | 'pages' | 'others'
      * @param string $mode    'merge' | 'overwrite'
@@ -921,23 +923,72 @@ class SLEA_Datastore {
         $scope = strtolower(trim($scope ?: 'auto'));
         $mode  = strtolower(trim($mode ?: 'merge'));
 
-        // Support both v2 structured format and raw pages array / legacy format
+        // Support v2 structured format, v1 format, and raw settings/pages/users/analytics JSON files
         $data_block = isset($payload['data']) && is_array($payload['data']) ? $payload['data'] : $payload;
 
-        $restore_settings = ($scope === 'auto' || $scope === 'all' || $scope === 'settings');
-        $restore_pages    = ($scope === 'auto' || $scope === 'all' || $scope === 'pages');
-        $restore_others   = ($scope === 'auto' || $scope === 'all' || $scope === 'others');
+        // Auto-detect Settings payload
+        $detected_settings = null;
+        if (!empty($data_block['settings']) && is_array($data_block['settings'])) {
+            $detected_settings = $data_block['settings'];
+        } else {
+            $known_setting_keys = ['site_identity', 'menu_items', 'footer_copyright', 'ad_settings', 'maintenance_settings', 'share_settings', 'update_config'];
+            $matched_settings = [];
+            foreach ($known_setting_keys as $k) {
+                if (array_key_exists($k, $payload)) {
+                    $matched_settings[$k] = $payload[$k];
+                }
+            }
+            if (!empty($matched_settings)) {
+                $detected_settings = $matched_settings;
+            }
+        }
+
+        // Auto-detect Pages payload
+        $detected_pages = null;
+        if (isset($data_block['pages']) && is_array($data_block['pages'])) {
+            $detected_pages = $data_block['pages'];
+        } elseif (isset($payload[0]) && is_array($payload[0]) && isset($payload[0]['slug']) && (isset($payload[0]['buttons']) || isset($payload[0]['buttons_json']) || isset($payload[0]['title']))) {
+            $detected_pages = $payload;
+        } elseif (isset($payload['slug']) && (isset($payload['buttons']) || isset($payload['buttons_json']))) {
+            $detected_pages = [$payload];
+        }
+
+        // Auto-detect Others (Users & Analytics) payload
+        $detected_others = null;
+        if (!empty($data_block['others']) && is_array($data_block['others'])) {
+            $detected_others = $data_block['others'];
+        } elseif (isset($payload['users']) || isset($payload['page_views_monthly'])) {
+            $detected_others = [
+                'users'              => $payload['users'] ?? [],
+                'page_views_monthly' => $payload['page_views_monthly'] ?? []
+            ];
+        } elseif (isset($payload[0]) && is_array($payload[0]) && isset($payload[0]['username']) && isset($payload[0]['password_hash'])) {
+            $detected_others = ['users' => $payload, 'page_views_monthly' => []];
+        } elseif (isset($payload[0]) && is_array($payload[0]) && isset($payload[0]['page_slug']) && isset($payload[0]['year_month'])) {
+            $detected_others = ['users' => [], 'page_views_monthly' => $payload];
+        }
+
+        $restore_settings = ($scope === 'auto' || $scope === 'all' || $scope === 'settings') && !empty($detected_settings);
+        $restore_pages    = ($scope === 'auto' || $scope === 'all' || $scope === 'pages') && is_array($detected_pages);
+        $restore_others   = ($scope === 'auto' || $scope === 'all' || $scope === 'others') && !empty($detected_others);
+
+        $detected_parts = [];
+        if ($restore_settings) $detected_parts[] = 'Website Settings';
+        if ($restore_pages)    $detected_parts[] = 'Generated Pages';
+        if ($restore_others)   $detected_parts[] = 'Others (Accounts & Analytics)';
+        $detected_label = !empty($detected_parts) ? implode(' + ', $detected_parts) : 'Backup Data';
 
         $restored_counts = [
-            'settings'  => 0,
-            'pages'     => 0,
-            'users'     => 0,
-            'analytics' => 0
+            'detected_type' => $detected_label,
+            'settings'      => 0,
+            'pages'         => 0,
+            'users'         => 0,
+            'analytics'     => 0
         ];
 
         // 1. Restore Website Settings
-        if ($restore_settings && !empty($data_block['settings']) && is_array($data_block['settings'])) {
-            foreach ($data_block['settings'] as $s_key => $s_val) {
+        if ($restore_settings && is_array($detected_settings)) {
+            foreach ($detected_settings as $s_key => $s_val) {
                 if (empty($s_key) || !is_string($s_key)) continue;
                 if ($s_key === 'footer_copyright' && is_string($s_val)) {
                     self::save_footer_copyright($s_val);
@@ -949,13 +1000,7 @@ class SLEA_Datastore {
         }
 
         // 2. Restore Generated Pages
-        $pages_list = null;
-        if (isset($data_block['pages']) && is_array($data_block['pages'])) {
-            $pages_list = $data_block['pages'];
-        } elseif (isset($payload[0]['slug']) && isset($payload[0]['buttons'])) {
-            // Direct pages.json array upload
-            $pages_list = $payload;
-        }
+        $pages_list = $detected_pages;
 
         if ($restore_pages && is_array($pages_list)) {
             if ($mode === 'overwrite' && !empty($pages_list)) {
@@ -1041,8 +1086,8 @@ class SLEA_Datastore {
         }
 
         // 3. Restore Others (Admin Accounts, Monthly Analytics, Migrations)
-        if ($restore_others && !empty($data_block['others']) && is_array($data_block['others'])) {
-            $others = $data_block['others'];
+        if ($restore_others && !empty($detected_others) && is_array($detected_others)) {
+            $others = $detected_others;
 
             // 3a. Users / Admin Accounts
             if (!empty($others['users']) && is_array($others['users'])) {

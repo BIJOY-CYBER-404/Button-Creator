@@ -540,9 +540,16 @@ class SLEA_Updater {
                 self::copy_staging_files($src_path, $dst_path, $exclude);
             } else {
                 @copy($src_path, $dst_path);
+                if (function_exists('opcache_invalidate') && substr($dst_path, -4) === '.php') {
+                    @opcache_invalidate($dst_path, true);
+                }
             }
         }
         closedir($dir);
+        @clearstatcache();
+        if (function_exists('opcache_reset')) {
+            @opcache_reset();
+        }
     }
 
     private static function update_config_version($new_version) {
@@ -553,6 +560,9 @@ class SLEA_Updater {
             $updated = preg_replace("/define\('APP_VERSION',\s*'[^']+'\);/", "define('APP_VERSION', '{$clean_v}');", $content);
             if ($updated && $updated !== $content) {
                 file_put_contents($cfg_file, $updated);
+                if (function_exists('opcache_invalidate')) {
+                    @opcache_invalidate($cfg_file, true);
+                }
             }
         }
     }

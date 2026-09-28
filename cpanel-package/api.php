@@ -76,6 +76,8 @@ try {
             $page_title = '';
             if (!empty($data['title'])) {
                 $page_title = trim($data['title']);
+            } elseif (!empty($data['title_override'])) {
+                $page_title = trim($data['title_override']);
             }
             if (empty($page_title)) {
                 $page_title = SLEA_Extractor::extract_page_title($final_html, $resolved_dest);
@@ -314,12 +316,14 @@ try {
             $scope = $data['scope'] ?? 'auto';
             $mode  = $data['mode'] ?? 'merge';
             $counts = SLEA_Datastore::restore_backup_payload($backup_payload, $scope, $mode);
+            $detected = $counts['detected_type'] ?? 'Backup Data';
             echo json_encode([
-                'success'  => true,
-                'restored' => $counts,
-                'message'  => sprintf(
-                    'Restore complete (%s): %d setting(s), %d page(s), %d account(s), %d analytics record(s).',
-                    strtoupper($scope),
+                'success'       => true,
+                'detected_type' => $detected,
+                'restored'      => $counts,
+                'message'       => sprintf(
+                    'Auto-Detected [%s] — Restored %d setting(s), %d page(s), %d account(s), %d analytics record(s).',
+                    $detected,
                     $counts['settings'],
                     $counts['pages'],
                     $counts['users'],
@@ -354,12 +358,14 @@ try {
             $mode  = $data['mode'] ?? 'merge';
             $payload = SLEA_Datastore::get_server_snapshot_payload($filename);
             $counts = SLEA_Datastore::restore_backup_payload($payload, $scope, $mode);
+            $detected = $counts['detected_type'] ?? 'Snapshot Data';
             echo json_encode([
-                'success'  => true,
-                'restored' => $counts,
-                'message'  => sprintf(
-                    'Snapshot restored (%s): %d setting(s), %d page(s), %d account(s), %d analytics record(s).',
-                    strtoupper($scope),
+                'success'       => true,
+                'detected_type' => $detected,
+                'restored'      => $counts,
+                'message'       => sprintf(
+                    'Auto-Detected [%s] — Restored %d setting(s), %d page(s), %d account(s), %d analytics record(s).',
+                    $detected,
                     $counts['settings'],
                     $counts['pages'],
                     $counts['users'],

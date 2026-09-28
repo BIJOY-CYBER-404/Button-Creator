@@ -1,6 +1,7 @@
 <?php
 /**
  * Admin Panel: /pages
+ * Matches React AdminSidebar + AppHeader + PagesManager design
  * View, edit, delete, and toggle public/private visibility for all button pages.
  */
 
@@ -15,6 +16,15 @@ $site_identity = SLEA_Datastore::get_site_identity();
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : APP_NAME;
 $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_logo_url'] : '';
 
+$words = preg_split('/\s+/', trim($site_name));
+$initials = '';
+foreach ($words as $w) {
+    if ($w !== '') {
+        $initials .= strtoupper(substr($w, 0, 1));
+    }
+}
+$brand_initials = substr($initials ?: 'MHQ', 0, 3);
+
 $pages = SLEA_Datastore::get_all_pages();
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
 $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']), '/\\');
@@ -24,248 +34,332 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Button Pages (/pages) - <?= htmlspecialchars($site_name) ?></title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <title>Manage Pages (/pages) - <?= htmlspecialchars($site_name) ?></title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
     </style>
 </head>
-<body class="bg-[#f0f4f9] text-[#1f1f1f] min-h-screen font-sans antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
-    <!-- Left Icon Sidebar (Generate, Pages, Settings) -->
-    <aside class="fixed inset-y-0 left-0 w-16 sm:w-20 bg-white border-r border-[#e1e7f0] z-40 flex flex-col items-center py-4 justify-between shadow-xs select-none">
-        <!-- Top: Logo & Main Navigation Icons -->
+<body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
+    <!-- Left Icon Sidebar (Matches React AdminSidebar.tsx) -->
+    <aside id="admin-sidebar" class="fixed inset-y-0 left-0 w-16 sm:w-20 bg-white border-r border-[#e1e7f0] z-40 flex flex-col items-center py-4 justify-between shadow-xs select-none transition-colors" aria-label="Admin Navigation Sidebar">
         <div class="flex flex-col items-center w-full gap-5">
-            <!-- Brand Logo -->
-            <a href="admin.php" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center font-black text-lg shadow-2xs hover:scale-105 transition-transform overflow-hidden p-1" title="<?= htmlspecialchars($site_name) ?>">
+            <!-- Brand Logo / Site Identity -->
+            <a href="admin.php" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center font-black text-lg shadow-2xs hover:scale-105 transition-transform cursor-pointer overflow-hidden p-1" title="<?= htmlspecialchars($site_name) ?>">
                 <?php if (!empty($site_logo_url)): ?>
                     <img src="<?= htmlspecialchars($site_logo_url) ?>" alt="<?= htmlspecialchars($site_name) ?>" class="w-full h-full object-contain rounded-xl" />
                 <?php else: ?>
-                    <span class="font-bold text-[10px] text-center leading-tight truncate px-0.5"><?= htmlspecialchars($site_name) ?></span>
+                    <span class="text-xs font-black tracking-tight"><?= htmlspecialchars($brand_initials) ?></span>
                 <?php endif; ?>
             </a>
 
-            <!-- Nav Icons (Generate, Pages, Settings) -->
+            <!-- Navigation Icon Buttons -->
             <nav class="flex flex-col items-center w-full gap-2 px-1 sm:px-2">
-                <!-- 1. Generate Icon -->
-                <a href="admin.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all group text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Generate (+ Generator)">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                <!-- Generate -->
+                <a href="admin.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Generate (+ Generator)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Generate</span>
                 </a>
 
-                <!-- 2. Pages Icon (Active) -->
-                <a href="pages.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all group bg-[#0b57d0] text-white shadow-xs" title="Pages (/pages)">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                <!-- Pages (Active) -->
+                <a href="pages.php" aria-current="page" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative bg-[#0b57d0] text-white shadow-xs" title="Pages (/pages)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-white">Pages</span>
                 </a>
 
-                <!-- 3. Settings Icon -->
-                <a href="settings.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all group text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Settings (/settings)">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <!-- Settings -->
+                <a href="settings.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Settings (/settings)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Settings</span>
                 </a>
 
-                <!-- 4. Update Icon -->
-                <a href="update.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all group text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="One-Click System Updater (/update.php)">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <!-- Update -->
+                <a href="update.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="One-Click System Updater (/update.php)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
                     </svg>
                     <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Update</span>
+                </a>
+
+                <!-- Analytics -->
+                <a href="analytics.php" class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer group relative text-[#444746] hover:bg-[#f0f4f9] hover:text-[#0b57d0]" title="Monthly Analytics & Statistics (/analytics.php)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+                    </svg>
+                    <span class="text-[9px] font-bold mt-0.5 tracking-tight text-[#5f6368] group-hover:text-[#0b57d0]">Analytics</span>
                 </a>
             </nav>
         </div>
 
-        <!-- Bottom: User & Logout & Version -->
+        <!-- Bottom Area: Admin Status Badge & Logout & Version -->
         <div class="flex flex-col items-center w-full gap-2 px-1 sm:px-2 pb-3">
-            <div class="w-8 h-8 rounded-full bg-[#e8f0fe] text-[#0b57d0] font-black text-xs flex items-center justify-center border border-[#d3e3fd]" title="Logged in as <?= htmlspecialchars($current_user['username']) ?>">
-                <?= strtoupper(substr($current_user['username'], 0, 1)) ?>
+            <div class="w-8 h-8 rounded-full bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center border border-[#d3e3fd]" title="Admin Mode Active (<?= htmlspecialchars($current_user['username']) ?>)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>
+                </svg>
             </div>
-            <a href="logout.php" class="w-10 h-10 rounded-xl flex items-center justify-center text-[#c5221f] hover:bg-[#fce8e6] transition-colors" title="Logout">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+
+            <a href="logout.php" class="w-10 h-10 rounded-xl flex items-center justify-center text-[#c5221f] hover:bg-[#fce8e6] transition-colors cursor-pointer" title="Sign Out" aria-label="Sign Out">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
                 </svg>
             </a>
-            <span class="text-[10px] font-bold font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="System Version <?= htmlspecialchars(APP_VERSION) ?>">
+
+            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version <?= htmlspecialchars(APP_VERSION) ?>">
                 <?= htmlspecialchars(APP_VERSION) ?>
             </span>
         </div>
     </aside>
 
-    <!-- Main Wrapper (Offset for Left Sidebar) -->
-    <div class="pl-16 sm:pl-20 min-h-screen flex flex-col">
-        <!-- Top Header Bar -->
-        <header class="bg-white border-b border-[#e1e7f0] sticky top-0 z-30 shadow-2xs">
+    <!-- Main App Content Wrapper with Left Margin for Sidebar -->
+    <div class="pl-16 sm:pl-20 min-h-screen flex flex-col flex-1">
+        <!-- Navigation Bar (Matches React AppHeader.tsx) -->
+        <header id="app-header" class="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors">
             <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+                <!-- Text Logo & Breadcrumb -->
                 <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div class="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
-                    </div>
                     <div class="min-w-0 flex-1">
-                        <h1 class="font-bold text-sm sm:text-base text-[#1f1f1f] leading-tight truncate">
-                            <?= htmlspecialchars(APP_NAME) ?>
-                        </h1>
-                        <span class="text-[11px] text-[#5f6368] block truncate">Pages Manager (/pages)</span>
+                        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <h1 class="font-bold text-sm sm:text-base leading-snug text-[#1f1f1f] tracking-tight truncate">
+                                <?= htmlspecialchars($site_name) ?>
+                            </h1>
+                            <div class="flex items-center gap-1.5 text-xs text-[#5f6368] min-w-0">
+                                <svg class="w-3.5 h-3.5 text-[#8e918f] shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="m9 18 6-6-6-6"/>
+                                </svg>
+                                <span class="font-semibold text-[#0b57d0] truncate">Manage Pages (/pages)</span>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-[#5f6368] truncate hidden sm:block">
+                            Shortlink Bypass • Episode Button Pages
+                        </p>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2.5 shrink-0">
-                    <a href="admin.php" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#0b57d0] text-white hover:bg-[#0842a0] transition-colors shadow-2xs inline-flex items-center gap-1 shrink-0">
-                        + New Page
-                    </a>
-                    <span class="text-xs font-semibold text-slate-600 hidden sm:inline shrink-0">
-                        <?= htmlspecialchars($current_user['username']) ?>
-                    </span>
+                <!-- Status / Quick Action -->
+                <div class="flex items-center gap-3 shrink-0">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] border border-[#a8dab5] tracking-wide shrink-0 flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>
+                            </svg>
+                            <span class="hidden sm:inline">Admin Active</span>
+                        </span>
+                    </div>
                 </div>
             </div>
         </header>
 
-        <!-- Main Content Container -->
-        <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full space-y-6">
-        <!-- Title & Filter Header -->
-        <div class="bg-white rounded-3xl p-5 sm:p-6 border border-[#e0e4eb] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div class="space-y-1">
-                <h2 class="text-lg font-bold text-[#111827] flex items-center gap-2">
-                    <span>Manage Episode Button Pages</span>
-                    <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0]">
-                        <?= count($pages) ?> Total
-                    </span>
-                </h2>
-                <p class="text-xs text-[#5f6368]">
-                    Control public vs private visibility switches, edit episode buttons, and inspect traffic analytics.
-                </p>
-            </div>
+        <!-- Main Workspace (Matches React PagesManager.tsx) -->
+        <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7">
+            <div class="w-full space-y-4">
+                <div class="bg-white rounded-2xl p-5 sm:p-6 border border-[#e0e4eb] shadow-xs space-y-4">
+                    <!-- Header Row -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#f0f4f9]">
+                        <div class="space-y-0.5">
+                            <h2 class="text-base font-bold text-[#111827] flex items-center gap-2">
+                                <svg class="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>
+                                </svg>
+                                <span>Active Button Pages (<span id="totalPagesCount"><?= count($pages) ?></span>)</span>
+                            </h2>
+                            <p class="text-xs text-[#5f6368]">
+                                Manage, preview, and bulk delete generated episode button pages.
+                            </p>
+                        </div>
 
-            <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                <button type="button" id="bulkDeleteBtn" onclick="deleteSelectedPages()"
-                    class="hidden px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs items-center gap-1.5 cursor-pointer">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    <span>Delete Selected (<span id="selectedCountBadge">0</span>)</span>
-                </button>
-                <input type="text" id="filterInput" onkeyup="filterPages()" placeholder="Search title or slug..."
-                    class="px-3.5 py-2 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] outline-none text-xs w-44 sm:w-60" />
-                <a href="admin.php" class="px-4 py-2 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white text-xs font-bold transition-all shadow-2xs whitespace-nowrap flex items-center gap-1.5">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    <span>New Page</span>
-                </a>
-            </div>
-        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button
+                                type="button"
+                                id="bulkDeleteBtn"
+                                onclick="deleteSelectedPages()"
+                                class="hidden px-3 py-1.5 rounded-lg bg-[#ba1a1a] hover:bg-[#93000a] text-white text-xs font-semibold items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                                title="Delete all selected pages"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>
+                                </svg>
+                                <span>Delete Selected (<span id="selectedCountBadge">0</span>)</span>
+                            </button>
 
-        <!-- Pages Table -->
-        <div class="bg-white rounded-3xl border border-[#e0e4eb] shadow-xs overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs" id="pagesTable">
-                    <thead class="bg-[#f8fafd] border-b border-[#e0e4eb] text-[#5f6368] font-bold uppercase tracking-wider text-[11px]">
-                        <tr>
-                            <th class="py-4 px-4 sm:px-5 w-10 text-center">
-                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)"
-                                    class="w-4 h-4 rounded border-slate-300 text-[#0b57d0] focus:ring-[#0b57d0] cursor-pointer" title="Select All Pages" />
-                            </th>
-                            <th class="py-4 px-4 sm:px-6">Page Title & Slug</th>
-                            <th class="py-4 px-4">Visibility Switch</th>
-                            <th class="py-4 px-4 text-center">Buttons</th>
-                            <th class="py-4 px-4 text-center">Views</th>
-                            <th class="py-4 px-4">Created</th>
-                            <th class="py-4 px-4 sm:px-6 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-[#f0f4f9]">
+                            <input
+                                type="text"
+                                id="filterInput"
+                                oninput="filterPages()"
+                                placeholder="Filter pages..."
+                                class="px-3 py-1.5 rounded-lg border border-[#c4c7c5] text-xs outline-none focus:border-[#0b57d0]"
+                            />
+                            <button
+                                type="button"
+                                onclick="window.location.reload()"
+                                class="p-2 rounded-lg text-[#5f6368] hover:bg-[#f0f4f9] border border-[#e1e7f0] cursor-pointer transition-colors"
+                                title="Refresh list"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Selection bar if pages exist -->
+                    <div id="selectionBar" class="<?= empty($pages) ? 'hidden' : 'flex' ?> items-center justify-between px-3 py-2 bg-[#f8fafd] rounded-xl border border-[#e0e4eb] text-xs text-[#444746]">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                id="selectAllCheckbox"
+                                onchange="toggleSelectAll(this.checked)"
+                                class="w-4 h-4 text-[#0b57d0] rounded border-[#c4c7c5] focus:ring-[#0b57d0] cursor-pointer"
+                            />
+                            <span class="font-semibold text-[11px]" id="selectAllLabel">
+                                Select All (<span id="visiblePagesCount"><?= count($pages) ?></span> visible)
+                            </span>
+                        </label>
+
+                        <div id="selectionActionInfo" class="hidden items-center gap-2">
+                            <span class="text-[11px] font-bold text-[#0b57d0]" id="selectedPagesText">
+                                0 pages selected
+                            </span>
+                            <button
+                                type="button"
+                                onclick="clearSelection()"
+                                class="text-[11px] text-[#5f6368] hover:text-[#111827] underline cursor-pointer"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Pages Card List (Matches React PagesManager.tsx) -->
+                    <div id="pagesListContainer" class="space-y-3">
                         <?php if (empty($pages)): ?>
-                            <tr id="no-pages-row">
-                                <td colspan="7" class="py-12 text-center text-slate-400">
-                                    No button pages created yet. Click "+ New Page" to generate your first page.
-                                </td>
-                            </tr>
+                            <div id="no-pages-row" class="py-12 text-center text-xs text-[#747775] space-y-2">
+                                <svg class="w-8 h-8 mx-auto text-[#c4c7c5]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>
+                                </svg>
+                                <p>No button pages match your filter or none created yet.</p>
+                            </div>
                         <?php else: ?>
                             <?php foreach ($pages as $p):
                                 $clean_url = $base_url . '/p/' . urlencode($p['slug']);
-                                $view_url = $clean_url;
                                 $is_public = !empty($p['is_public']);
                                 $btn_count = count($p['buttons'] ?? []);
+                                $views_count = intval($p['views'] ?? 0);
+                                $created_date = !empty($p['created_at']) ? date('n/j/Y', strtotime($p['created_at'])) : '';
                             ?>
-                            <tr id="page-row-<?= $p['id'] ?>" class="hover:bg-[#fafcff] transition-colors">
-                                <td class="py-4 px-4 sm:px-5 w-10 text-center">
-                                    <input type="checkbox" class="page-checkbox w-4 h-4 rounded border-slate-300 text-[#0b57d0] focus:ring-[#0b57d0] cursor-pointer"
-                                        value="<?= $p['id'] ?>" onchange="updateSelectionState()" />
-                                </td>
-                                <td class="py-4 px-4 sm:px-6 min-w-[240px]">
-                                    <div class="font-bold text-sm text-[#111827] truncate max-w-xs sm:max-w-sm" id="row-title-<?= $p['id'] ?>">
-                                        <?= htmlspecialchars($p['title']) ?>
+                            <div
+                                id="page-row-<?= $p['id'] ?>"
+                                data-search="<?= htmlspecialchars(strtolower(($p['title'] ?? '') . ' ' . ($p['slug'] ?? ''))) ?>"
+                                class="page-item-card bg-white hover:bg-[#fdfdff] rounded-xl p-4 border transition-all shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-[#e3e7ee] hover:border-[#c2e7ff]"
+                            >
+                                <div class="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                                    <input
+                                        type="checkbox"
+                                        value="<?= $p['id'] ?>"
+                                        onchange="updateSelectionState()"
+                                        class="page-checkbox mt-1 sm:mt-0 w-4 h-4 text-[#0b57d0] rounded border-[#c4c7c5] focus:ring-[#0b57d0] cursor-pointer shrink-0"
+                                    />
+
+                                    <div class="space-y-1 min-w-0 flex-1">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span class="font-bold text-sm text-[#111827] break-words" id="row-title-<?= $p['id'] ?>">
+                                                <?= htmlspecialchars($p['title']) ?>
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded-full bg-[#e6f4ea] text-[#137333] text-[10px] font-bold shrink-0">
+                                                <?= $views_count ?> views
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded-full bg-[#f0f4f9] text-[#444746] text-[10px] font-mono shrink-0" id="row-btns-<?= $p['id'] ?>">
+                                                <?= $btn_count ?> buttons
+                                            </span>
+
+                                            <!-- Interactive Public / Private Toggle Pill -->
+                                            <button
+                                                type="button"
+                                                onclick="toggleStatus(<?= $p['id'] ?>)"
+                                                id="status-badge-<?= $p['id'] ?>"
+                                                title="Click to toggle Public / Private visibility"
+                                                class="px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors shrink-0 <?= $is_public ? 'bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]' : 'bg-[#fff0d4] text-[#b06000] border border-[#feebc8]' ?>"
+                                            >
+                                                <?= $is_public ? '● Public' : '○ Private' ?>
+                                            </button>
+                                        </div>
+
+                                        <div class="flex items-center gap-2 text-[11px] text-[#747775] flex-wrap">
+                                            <a href="<?= htmlspecialchars($clean_url) ?>" target="_blank" class="font-mono text-[#0b57d0] hover:underline shrink-0" id="row-link-<?= $p['id'] ?>">
+                                                /p/<?= htmlspecialchars($p['slug']) ?>
+                                            </a>
+                                            <span>•</span>
+                                            <span class="shrink-0"><?= htmlspecialchars($created_date) ?></span>
+                                            <?php if (!empty($p['resolved_url'])): ?>
+                                                <span>•</span>
+                                                <span class="break-all max-w-[280px] font-mono text-[10px] truncate">
+                                                    <?= htmlspecialchars($p['resolved_url']) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
-                                    <div class="flex items-center gap-1.5 text-[11px] text-[#0b57d0] font-mono mt-0.5">
-                                        <a href="<?= htmlspecialchars($clean_url) ?>" target="_blank" class="hover:underline" id="row-link-<?= $p['id'] ?>">
-                                            /p/<?= htmlspecialchars($p['slug']) ?>
-                                        </a>
-                                        <button type="button" onclick="copyText('<?= htmlspecialchars($clean_url) ?>')" title="Copy URL" class="text-slate-400 hover:text-slate-700 cursor-pointer">
-                                            📋
-                                        </button>
-                                    </div>
-                                </td>
+                                </div>
 
-                                <!-- Interactive Public / Private Switch Toggle -->
-                                <td class="py-4 px-4 whitespace-nowrap">
-                                    <div class="flex items-center gap-2.5">
-                                        <button type="button" role="switch" aria-checked="<?= $is_public ? 'true' : 'false' ?>"
-                                            onclick="toggleStatus(<?= $p['id'] ?>)" id="switch-btn-<?= $p['id'] ?>"
-                                            title="Click to toggle Public / Private"
-                                            class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none <?= $is_public ? 'bg-[#137333]' : 'bg-slate-300' ?>">
-                                            <span id="switch-thumb-<?= $p['id'] ?>" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out <?= $is_public ? 'translate-x-5' : 'translate-x-0' ?>"></span>
-                                        </button>
-                                        <span id="status-badge-<?= $p['id'] ?>" class="px-2 py-0.5 rounded-md text-[11px] font-bold <?= $is_public ? 'bg-[#e6f4ea] text-[#137333]' : 'bg-[#fff0d4] text-[#b06000]' ?>">
-                                            <?= $is_public ? 'Public' : 'Private' ?>
-                                        </span>
-                                    </div>
-                                </td>
+                                <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-auto pl-7 sm:pl-0">
+                                    <button
+                                        type="button"
+                                        onclick="copyText('<?= htmlspecialchars($clean_url, ENT_QUOTES) ?>')"
+                                        class="px-2.5 py-1.5 rounded-lg bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                                        title="Copy Public URL"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                                        </svg>
+                                        <span>Copy Link</span>
+                                    </button>
 
-                                <td class="py-4 px-4 text-center whitespace-nowrap">
-                                    <span class="px-2.5 py-1 rounded-lg bg-[#f0f4f9] text-[#444746] font-mono font-bold text-[11px]" id="row-btns-<?= $p['id'] ?>">
-                                        <?= $btn_count ?> btns
-                                    </span>
-                                </td>
+                                    <a
+                                        href="<?= htmlspecialchars($clean_url) ?>"
+                                        target="_blank"
+                                        id="row-preview-<?= $p['id'] ?>"
+                                        class="px-2.5 py-1.5 rounded-lg bg-[#e8f0fe] hover:bg-[#c2e7ff] text-[#0b57d0] text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                        <span>Preview</span>
+                                    </a>
 
-                                <td class="py-4 px-4 text-center whitespace-nowrap">
-                                    <span class="font-mono font-bold text-[#137333] bg-[#e6f4ea] px-2.5 py-0.5 rounded-full">
-                                        <?= intval($p['views'] ?? 0) ?>
-                                    </span>
-                                </td>
-
-                                <td class="py-4 px-4 whitespace-nowrap text-[#747775] text-[11px]">
-                                    <?= htmlspecialchars(substr($p['created_at'] ?? '', 0, 10)) ?>
-                                </td>
-
-                                <td class="py-4 px-4 sm:px-6 text-right whitespace-nowrap space-x-1.5">
-                                    <button type="button" onclick="openEditModal(<?= $p['id'] ?>)"
-                                        class="px-3 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs transition-all shadow-2xs cursor-pointer inline-flex items-center gap-1">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                    <button
+                                        type="button"
+                                        onclick="openEditModal(<?= $p['id'] ?>)"
+                                        class="px-2.5 py-1.5 rounded-lg bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#444746] text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                                        title="Edit Page & Episode Buttons"
+                                    >
                                         <span>Edit</span>
                                     </button>
-                                    <a href="<?= htmlspecialchars($view_url) ?>" target="_blank"
-                                        class="px-2.5 py-1.5 rounded-xl bg-[#e8f0fe] hover:bg-[#d3e3fd] text-[#0b57d0] font-bold text-xs transition-all inline-flex items-center gap-1">
-                                        <span>View</span>
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                                    </a>
-                                    <button type="button" onclick="deletePage(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['title'])) ?>')"
-                                        class="px-2.5 py-1.5 rounded-xl text-[#c5221f] hover:bg-[#fce8e6] font-bold text-xs transition-colors cursor-pointer">
-                                        Delete
+
+                                    <button
+                                        type="button"
+                                        onclick="deletePage(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['title'])) ?>')"
+                                        class="p-1.5 rounded-lg text-[#c5221f] hover:bg-[#fce8e6] cursor-pointer transition-colors"
+                                        title="Delete Page"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>
+                                        </svg>
                                     </button>
-                                </td>
-                            </tr>
+                                </div>
+                            </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
-                    </tbody>
-                </table>
+                    </div>
+                </div>
             </div>
-        </div>
-    </main>
+        </main>
     </div>
 
     <!-- Edit Page Modal Backdrop -->
@@ -273,15 +367,15 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
         <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-7 space-y-5 shadow-2xl border border-slate-100">
             <div class="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div class="flex items-center gap-2.5">
-                    <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                        ✏️
+                    <div class="w-8 h-8 rounded-xl bg-[#e8f0fe] text-[#0b57d0] flex items-center justify-center font-bold">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                     </div>
                     <div>
                         <h3 class="text-base font-bold text-slate-900" id="editModalTitle">Edit Button Page</h3>
                         <p class="text-[11px] text-slate-500">Update title, direct slug URL, public visibility, or individual episode links</p>
                     </div>
                 </div>
-                <button type="button" onclick="closeEditModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center transition-colors">✕</button>
+                <button type="button" onclick="closeEditModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center transition-colors cursor-pointer">✕</button>
             </div>
 
             <form id="editForm" onsubmit="savePageEdit(event)" class="space-y-4">
@@ -343,7 +437,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                             <label class="text-xs font-bold text-slate-800 block">Episode Buttons</label>
                             <p class="text-[10px] text-slate-500">Direct download or server links</p>
                         </div>
-                        <button type="button" onclick="addNewButtonRow()" class="px-3 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-bold transition-colors">
+                        <button type="button" onclick="addNewButtonRow()" class="px-3 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-bold transition-colors cursor-pointer">
                             + Add Button
                         </button>
                     </div>
@@ -362,8 +456,8 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
         </div>
     </div>
 
-    <!-- Floating Global Toast Notification Container -->
-    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full"></div>
+    <!-- Top Right Notification Toast Container (Matches React Toast.tsx) -->
+    <aside id="toastContainer" aria-label="Notifications" class="fixed top-5 right-5 z-50 flex flex-col items-end gap-3 pointer-events-none max-w-sm w-[calc(100%-2.5rem)]"></aside>
 
     <script>
         const baseUrl = '<?= $base_url ?>';
@@ -371,21 +465,25 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
 
         function filterPages() {
             const query = document.getElementById('filterInput').value.toLowerCase();
-            const rows = document.querySelectorAll('#pagesTable tbody tr:not(#no-pages-row)');
-            rows.forEach(r => {
-                const text = r.innerText.toLowerCase();
-                r.style.display = text.includes(query) ? '' : 'none';
+            const cards = document.querySelectorAll('.page-item-card');
+            let visible = 0;
+            cards.forEach(c => {
+                const text = (c.getAttribute('data-search') || c.innerText).toLowerCase();
+                const show = text.includes(query);
+                c.style.display = show ? '' : 'none';
+                if (show) visible++;
             });
+            const visEl = document.getElementById('visiblePagesCount');
+            if (visEl) visEl.innerText = visible;
+            updateSelectionState();
         }
 
         function copyText(txt) {
             navigator.clipboard.writeText(txt);
-            showToast('Copied link to clipboard: ' + txt);
+            showToast('Button page link copied to clipboard!', 'success');
         }
 
         async function toggleStatus(id) {
-            const btn = document.getElementById('switch-btn-' + id);
-            const thumb = document.getElementById('switch-thumb-' + id);
             const badge = document.getElementById('status-badge-' + id);
 
             try {
@@ -397,24 +495,19 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 const data = await res.json();
                 if (data.success && data.page) {
                     const isPub = Number(data.page.is_public) === 1;
-                    
-                    // Update in local memory
                     const pageObj = ALL_PAGES.find(p => p.id == id);
                     if (pageObj) pageObj.is_public = isPub ? 1 : 0;
 
-                    // Update Switch UI
-                    if (isPub) {
-                        btn.className = 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-[#137333]';
-                        thumb.className = 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out translate-x-5';
-                        badge.className = 'px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#e6f4ea] text-[#137333]';
-                        badge.innerText = 'Public';
-                        showToast('Page status changed to Public');
-                    } else {
-                        btn.className = 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-slate-300';
-                        thumb.className = 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out translate-x-0';
-                        badge.className = 'px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#fff0d4] text-[#b06000]';
-                        badge.innerText = 'Private';
-                        showToast('Page status changed to Private (Hidden)', 'info');
+                    if (badge) {
+                        if (isPub) {
+                            badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors shrink-0 bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]';
+                            badge.innerText = '● Public';
+                            showToast('Page status changed to Public', 'success');
+                        } else {
+                            badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors shrink-0 bg-[#fff0d4] text-[#b06000] border border-[#feebc8]';
+                            badge.innerText = '○ Private';
+                            showToast('Page status changed to Private (Hidden)', 'info');
+                        }
                     }
                 } else {
                     showToast('Failed to update status: ' + (data.error || 'Unknown error'), 'error');
@@ -426,30 +519,8 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
 
         function toggleModalVisibility() {
             const hiddenInput = document.getElementById('editIsPublic');
-            const toggleBtn = document.getElementById('modalVisibilityToggle');
-            const thumb = document.getElementById('modalVisibilityThumb');
-            const label = document.getElementById('modalVisibilityLabel');
-            const sub = document.getElementById('modalVisibilitySub');
-
             const current = Number(hiddenInput.value) === 1;
-            const next = !current;
-
-            hiddenInput.value = next ? '1' : '0';
-            toggleBtn.setAttribute('aria-checked', next ? 'true' : 'false');
-
-            if (next) {
-                toggleBtn.className = 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out bg-[#137333]';
-                thumb.className = 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out translate-x-5';
-                label.className = 'text-xs font-bold text-[#137333]';
-                label.innerText = 'Public';
-                sub.innerText = 'Accessible by visitors with link';
-            } else {
-                toggleBtn.className = 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out bg-slate-300';
-                thumb.className = 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out translate-x-0';
-                label.className = 'text-xs font-bold text-[#b06000]';
-                label.innerText = 'Private';
-                sub.innerText = 'Hidden & returns 404 to public';
-            }
+            setModalVisibilityState(!current);
         }
 
         function setModalVisibilityState(isPublic) {
@@ -478,7 +549,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
         }
 
         async function deletePage(id, title) {
-            if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) return;
+            if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
             try {
                 const res = await fetch('api.php?action=delete_page', {
                     method: 'POST',
@@ -490,8 +561,10 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     const row = document.getElementById('page-row-' + id);
                     if (row) row.remove();
                     ALL_PAGES = ALL_PAGES.filter(p => p.id != id);
-                    showToast('Page deleted successfully', 'success');
-                    updateSelectionState();
+                    const totalEl = document.getElementById('totalPagesCount');
+                    if (totalEl) totalEl.innerText = ALL_PAGES.length;
+                    showToast('Page deleted successfully.', 'info');
+                    filterPages();
                 } else {
                     showToast('Delete failed: ' + data.error, 'error');
                 }
@@ -503,39 +576,72 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
         function toggleSelectAll(checked) {
             const checkboxes = document.querySelectorAll('.page-checkbox');
             checkboxes.forEach(cb => {
-                const row = cb.closest('tr');
-                if (row && row.style.display !== 'none') {
+                const card = cb.closest('.page-item-card');
+                if (card && card.style.display !== 'none') {
                     cb.checked = checked;
                 }
             });
             updateSelectionState();
         }
 
+        function clearSelection() {
+            document.querySelectorAll('.page-checkbox').forEach(cb => { cb.checked = false; });
+            updateSelectionState();
+        }
+
         function updateSelectionState() {
             const checkedBoxes = document.querySelectorAll('.page-checkbox:checked');
-            const totalBoxes = document.querySelectorAll('.page-checkbox');
+            const allCards = document.querySelectorAll('.page-item-card');
             const bulkBtn = document.getElementById('bulkDeleteBtn');
             const badge = document.getElementById('selectedCountBadge');
             const selectAll = document.getElementById('selectAllCheckbox');
+            const selectionActionInfo = document.getElementById('selectionActionInfo');
+            const selectedPagesText = document.getElementById('selectedPagesText');
+
+            allCards.forEach(card => {
+                const cb = card.querySelector('.page-checkbox');
+                if (cb && cb.checked) {
+                    card.classList.add('border-[#0b57d0]', 'bg-[#f0f4f9]/50');
+                    card.classList.remove('border-[#e3e7ee]');
+                } else {
+                    card.classList.remove('border-[#0b57d0]', 'bg-[#f0f4f9]/50');
+                    card.classList.add('border-[#e3e7ee]');
+                }
+            });
 
             const count = checkedBoxes.length;
             if (badge) badge.innerText = count;
+            if (selectedPagesText) selectedPagesText.innerText = `${count} page${count === 1 ? '' : 's'} selected`;
 
             if (count > 0) {
                 if (bulkBtn) {
                     bulkBtn.classList.remove('hidden');
-                    bulkBtn.classList.add('inline-flex');
+                    bulkBtn.classList.add('flex');
+                }
+                if (selectionActionInfo) {
+                    selectionActionInfo.classList.remove('hidden');
+                    selectionActionInfo.classList.add('flex');
                 }
             } else {
                 if (bulkBtn) {
-                    bulkBtn.classList.remove('inline-flex');
+                    bulkBtn.classList.remove('flex');
                     bulkBtn.classList.add('hidden');
+                }
+                if (selectionActionInfo) {
+                    selectionActionInfo.classList.remove('flex');
+                    selectionActionInfo.classList.add('hidden');
                 }
             }
 
-            if (selectAll && totalBoxes.length > 0) {
-                selectAll.checked = count === totalBoxes.length;
-                selectAll.indeterminate = count > 0 && count < totalBoxes.length;
+            const visibleCheckboxes = Array.from(document.querySelectorAll('.page-checkbox')).filter(cb => {
+                const c = cb.closest('.page-item-card');
+                return c && c.style.display !== 'none';
+            });
+
+            if (selectAll && visibleCheckboxes.length > 0) {
+                const allVisChecked = visibleCheckboxes.every(cb => cb.checked);
+                selectAll.checked = allVisChecked;
+                selectAll.indeterminate = count > 0 && !allVisChecked;
             }
         }
 
@@ -544,14 +650,13 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             const ids = Array.from(checkedBoxes).map(cb => cb.value);
             if (ids.length === 0) return;
 
-            if (!confirm(`Are you sure you want to permanently delete ${ids.length} selected page(s)? This action cannot be undone.`)) {
+            if (!confirm(`Are you sure you want to permanently delete ${ids.length} selected button page${ids.length === 1 ? '' : 's'}?`)) {
                 return;
             }
 
             const bulkBtn = document.getElementById('bulkDeleteBtn');
             if (bulkBtn) {
                 bulkBtn.disabled = true;
-                bulkBtn.innerText = `Deleting ${ids.length}...`;
             }
 
             try {
@@ -567,22 +672,10 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                         if (row) row.remove();
                         ALL_PAGES = ALL_PAGES.filter(p => p.id != id);
                     });
-                    showToast(`Successfully deleted ${ids.length} page(s).`, 'success');
-                    updateSelectionState();
-
-                    const remainingRows = document.querySelectorAll('.page-checkbox');
-                    if (remainingRows.length === 0) {
-                        const tbody = document.querySelector('#pagesTable tbody');
-                        if (tbody) {
-                            tbody.innerHTML = `
-                                <tr id="no-pages-row">
-                                    <td colspan="7" class="py-12 text-center text-slate-400">
-                                        No button pages created yet. Click "+ New Page" to generate your first page.
-                                    </td>
-                                </tr>
-                            `;
-                        }
-                    }
+                    const totalEl = document.getElementById('totalPagesCount');
+                    if (totalEl) totalEl.innerText = ALL_PAGES.length;
+                    showToast(`Successfully deleted ${ids.length} page${ids.length === 1 ? '' : 's'}.`, 'success');
+                    filterPages();
                 } else {
                     showToast('Bulk delete failed: ' + (data.error || 'Unknown error'), 'error');
                 }
@@ -608,7 +701,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             document.getElementById('editSlug').value = page.slug || '';
             document.getElementById('editDescription').value = page.description || '';
             document.getElementById('editTheme').value = page.theme || 'indigo';
-            
+
             setModalVisibilityState(Number(page.is_public) === 1);
 
             const container = document.getElementById('buttonsContainer');
@@ -702,42 +795,33 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 });
                 const data = await res.json();
                 if (data.success && data.page) {
-                    // Update in local array
                     const idx = ALL_PAGES.findIndex(p => p.id == id);
                     if (idx !== -1) {
                         ALL_PAGES[idx] = data.page;
                     }
 
-                    // Update Table Row directly
                     const rowTitle = document.getElementById('row-title-' + id);
                     const rowLink = document.getElementById('row-link-' + id);
+                    const rowPreview = document.getElementById('row-preview-' + id);
                     const rowBtns = document.getElementById('row-btns-' + id);
+                    const badge = document.getElementById('status-badge-' + id);
+
                     if (rowTitle) rowTitle.innerText = data.page.title;
                     if (rowLink) {
                         rowLink.innerText = '/p/' + data.page.slug;
                         rowLink.href = baseUrl + '/p/' + encodeURIComponent(data.page.slug);
                     }
-                    if (rowBtns) {
-                        rowBtns.innerText = (data.page.buttons ? data.page.buttons.length : 0) + ' btns';
+                    if (rowPreview) {
+                        rowPreview.href = baseUrl + '/p/' + encodeURIComponent(data.page.slug);
                     }
-
-                    // Update Switch in row
-                    const isPub = Number(data.page.is_public) === 1;
-                    const btn = document.getElementById('switch-btn-' + id);
-                    const thumb = document.getElementById('switch-thumb-' + id);
-                    const badge = document.getElementById('status-badge-' + id);
-                    if (btn && thumb && badge) {
-                        if (isPub) {
-                            btn.className = 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-[#137333]';
-                            thumb.className = 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out translate-x-5';
-                            badge.className = 'px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#e6f4ea] text-[#137333]';
-                            badge.innerText = 'Public';
-                        } else {
-                            btn.className = 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-slate-300';
-                            thumb.className = 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out translate-x-0';
-                            badge.className = 'px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#fff0d4] text-[#b06000]';
-                            badge.innerText = 'Private';
-                        }
+                    if (rowBtns) {
+                        rowBtns.innerText = (data.page.buttons ? data.page.buttons.length : 0) + ' buttons';
+                    }
+                    if (badge) {
+                        const isPub = Number(data.page.is_public) === 1;
+                        badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors shrink-0 ' +
+                            (isPub ? 'bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]' : 'bg-[#fff0d4] text-[#b06000] border border-[#feebc8]');
+                        badge.innerText = isPub ? '● Public' : '○ Private';
                     }
 
                     closeEditModal();
@@ -757,6 +841,10 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
+        function escapeHtml(str) {
+            return escapeToastHtml(str);
+        }
+
         function showToast(msg, type = 'success') {
             const container = document.getElementById('toastContainer');
             if (!container) return;
@@ -765,8 +853,8 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             const toast = document.createElement('div');
             toast.id = id;
             toast.className = `pointer-events-auto bg-white rounded-2xl shadow-xl border p-3.5 flex items-start gap-3 w-full ring-1 transform transition-all duration-300 translate-x-8 opacity-0 scale-95 ${
-                type === 'success' 
-                    ? 'border-emerald-200 ring-emerald-500/10' 
+                type === 'success'
+                    ? 'border-emerald-200 ring-emerald-500/10'
                     : (type === 'info' ? 'border-blue-200 ring-blue-500/10' : 'border-rose-200 ring-rose-500/10')
             }`;
 
@@ -775,12 +863,12 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 : (type === 'info' ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600');
 
             const iconSvg = type === 'success'
-                ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>`
+                ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`
                 : (type === 'info'
-                    ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>`
-                    : `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`);
+                    ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`
+                    : `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`);
 
-            const title = type === 'success' ? 'Success' : (type === 'info' ? 'Information' : 'Notice');
+            const title = type === 'success' ? 'Success' : (type === 'info' ? 'Information' : 'Notice / Error');
 
             toast.innerHTML = `
                 <div class="p-2 rounded-xl shrink-0 mt-0.5 ${iconClass}">
@@ -791,7 +879,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     <div class="text-xs font-medium text-slate-800 leading-snug mt-0.5 break-words">${escapeToastHtml(msg)}</div>
                 </div>
                 <button type="button" onclick="document.getElementById('${id}').remove()" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 transition-colors cursor-pointer" title="Dismiss">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
             `;
 
@@ -808,14 +896,9 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     el.classList.add('translate-x-8', 'opacity-0', 'scale-95');
                     setTimeout(() => el.remove(), 250);
                 }
-            }, 4500);
+            }, 3500);
         }
 
-        function escapeHtml(str) {
-            return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#039;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-
-        // Auto open modal if URL has ?edit=ID
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const editId = urlParams.get('edit') || urlParams.get('id');

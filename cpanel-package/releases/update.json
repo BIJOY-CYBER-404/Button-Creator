@@ -1,16 +1,15 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "v-5.6.0",
+  "version": "v-5.8.0",
   "release_date": "2026-09-27",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "sha256": "8ac4e90fd8be9bd9d3bca13c60d12c9ffb8f1c6a710f8878b459af7a97c99722",
-  "checksum": "8ac4e90fd8be9bd9d3bca13c60d12c9ffb8f1c6a710f8878b459af7a97c99722",
+  "sha256": "051c84fcce0e62d17164acd1d1125726d7583fdcd89f0a1f2391d6307eab2b30",
+  "checksum": "051c84fcce0e62d17164acd1d1125726d7583fdcd89f0a1f2391d6307eab2b30",
   "minimum_php": "7.4",
   "release_notes": [
-    "Added complete Backup & Restore Center: export and restore Website Settings, Generated Pages, and Others (Accounts & Analytics) all together or separately",
-    "Added One-Click Server Snapshots stored in /data/snapshots with modular restore options (Restore All, Settings Only, Pages Only, Others Only)",
-    "Zero-Data-Loss Update & Auto-Heal Engine: guarantees settings, generated pages, admin accounts, and view analytics are never lost or corrupted during updates or rollbacks",
-    "Excluded 'Cookie Policy', 'RTL Mode', and 'View all articles' from being counted or extracted as episode buttons",
-    "Updated release package v-5.6.0 ready for remote one-click updates"
+    "Unified cPanel Admin Panel Design with React Website Design across all pages (Generate, Pages, Settings, Update, Analytics, Login, and Setup)",
+    "Added identical Left Icon Sidebar, Top AppHeader, Lucide SVG iconography, and card layouts to cPanel PHP admin pages",
+    "Interactive 2-Tab Generator Mode (Auto Short-Link Page & Manual Batch Extractor) in cPanel admin.php matching React AdminFlowGenerator",
+    "Synchronized Backup & Restore Center, Site Branding, Maintenance Mode, AdSense & Banner Ads, Navigation Menu, and Footer settings UI in cPanel settings.php"
   ]
 }

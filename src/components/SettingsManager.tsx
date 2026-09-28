@@ -184,13 +184,44 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
     }
   };
 
+  const [autoDetectedSummary, setAutoDetectedSummary] = useState<string>("");
+
+  const inspectBackupPayload = (parsed: any) => {
+    if (!parsed || typeof parsed !== "object") return "Invalid Backup File";
+    const dataBlock = parsed.data && typeof parsed.data === "object" ? parsed.data : parsed;
+    const parts: string[] = [];
+    const hasSettings =
+      (dataBlock.settings && typeof dataBlock.settings === "object" && Object.keys(dataBlock.settings).length > 0) ||
+      ["site_identity", "menu_items", "footer_copyright", "ad_settings", "maintenance_settings"].some((k) => k in parsed);
+    const hasPages = Array.isArray(dataBlock.pages) || (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.slug);
+    const hasOthers =
+      (dataBlock.others && typeof dataBlock.others === "object") ||
+      Array.isArray(parsed.users) ||
+      Array.isArray(parsed.page_views_monthly);
+
+    if (hasSettings) {
+      const sCount = dataBlock.settings ? Object.keys(dataBlock.settings).length : 1;
+      parts.push(`Website Settings (${sCount})`);
+    }
+    if (hasPages) {
+      const pCount = Array.isArray(dataBlock.pages) ? dataBlock.pages.length : Array.isArray(parsed) ? parsed.length : 1;
+      parts.push(`Generated Pages (${pCount})`);
+    }
+    if (hasOthers) {
+      parts.push(`Others (Accounts & Analytics)`);
+    }
+    return parts.length > 0 ? parts.join(" • ") : "Backup Data";
+  };
+
   const handleRestoreFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      await executeRestorePayload(parsed, restoreScope, restoreMode);
+      const summary = inspectBackupPayload(parsed);
+      setAutoDetectedSummary(summary);
+      await executeRestorePayload(parsed, "auto", "merge", summary);
     } catch (err: any) {
       onNotify(`Restore failed: ${err.message || "Invalid JSON backup file"}`, "error");
     } finally {
@@ -200,8 +231,9 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
 
   const executeRestorePayload = async (
     payload: any,
-    scope: "auto" | "settings" | "pages" | "others",
-    mode: "merge" | "overwrite"
+    scope: "auto" | "settings" | "pages" | "others" = "auto",
+    mode: "merge" | "overwrite" = "merge",
+    detectedLabel?: string
   ) => {
     const token = localStorage.getItem("slea_admin_token") || "admin_token_default_session";
     const res = await fetch("/api/backup/restore", {
@@ -211,20 +243,20 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
         Authorization: `Bearer ${token}`,
         "x-admin-token": token,
       },
-      body: JSON.stringify({ backup: payload, scope, mode }),
+      body: JSON.stringify({ backup: payload, scope: "auto", mode: "merge" }),
     });
     const data = await res.json();
     if (!data.success) {
       throw new Error(data.error || "Restore failed");
     }
-    if (scope === "auto" || scope === "settings") {
-      const settingsData = payload?.data?.settings || payload?.settings;
-      if (settingsData) {
-        applyRestoredSettingsBundle(settingsData);
-      }
+    const settingsData = payload?.data?.settings || payload?.settings || (payload?.site_identity ? payload : null);
+    if (settingsData) {
+      applyRestoredSettingsBundle(settingsData);
     }
+    const label = detectedLabel || inspectBackupPayload(payload);
+    setAutoDetectedSummary(label);
     onNotify(
-      `Restored (${scope.toUpperCase()}): ${data.restored?.settings || 0} setting group(s), ${data.restored?.pages || 0} page(s), ${data.restored?.others || 0} account/analytics bundle(s)!`,
+      `Auto-Detected [${label}] & Restored: ${data.restored?.settings || 0} setting group(s), ${data.restored?.pages || 0} page(s), ${data.restored?.others || 0} account/analytics bundle(s)!`,
       "success"
     );
   };
@@ -337,6 +369,235 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
         <div className="text-xs text-[#5f6368] bg-[#f0f4f9] px-3.5 py-2 rounded-xl border border-[#e1e7f0] flex items-center gap-2">
           <Globe className="w-4 h-4 text-[#0b57d0]" />
           <span>Synced with cPanel <code>settings.php</code> specs</span>
+        </div>
+      </div>
+
+      {/* TOP: Backup & Restore Center (Website Settings, Pages, and Others — Together or Separately with Automatic Restore Detection) */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-[#c2e7ff] shadow-sm space-y-6" id="backup-restore-section">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-[#f0f4f9]">
+          <div>
+            <h3 className="font-bold text-base text-[#1f1f1f] flex items-center gap-2">
+              <span>💾 Backup &amp; Restore Center</span>
+              <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Auto-Detect Restore • Zero Data Loss
+              </span>
+            </h3>
+            <p className="text-xs text-[#5f6368] mt-0.5">
+              Backup <strong>Website Settings</strong>, <strong>Generated Pages</strong>, and <strong>Others (Admin Accounts &amp; Analytics)</strong> all together or separately. Restore automatically detects any backup file format!
+            </p>
+          </div>
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] self-start sm:self-auto">
+            Modular &amp; Update-Safe
+          </span>
+        </div>
+
+        {/* 1. Download Portable JSON Backups */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[#444746]">
+              1. Download Backup (.json) — All or Separately
+            </h4>
+            <span className="text-[11px] text-[#5f6368]">Instant JSON export</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <button
+              type="button"
+              onClick={() => handleExportBackup("all")}
+              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#d3e3fd] text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-[#0b57d0]">📦 Full Backup (All)</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">ALL</span>
+                </div>
+                <p className="text-[11px] text-[#5f6368]">Settings + Generated Pages + Accounts &amp; Analytics.</p>
+              </div>
+              <span className="text-[11px] font-bold text-[#0b57d0]">⬇ Download Full Backup</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleExportBackup("settings")}
+              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-purple-50 border border-purple-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-purple-700">⚙️ Settings Only</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">SETTINGS</span>
+                </div>
+                <p className="text-[11px] text-[#5f6368]">Branding, Logo, Menu, Footer HTML, Ads &amp; Maintenance.</p>
+              </div>
+              <span className="text-[11px] font-bold text-purple-700">⬇ Download Settings Only</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleExportBackup("pages")}
+              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-emerald-50 border border-emerald-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-emerald-700">📄 Pages Only</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PAGES</span>
+                </div>
+                <p className="text-[11px] text-[#5f6368]">All generated episode button pages, slugs, links &amp; views.</p>
+              </div>
+              <span className="text-[11px] font-bold text-emerald-700">⬇ Download Pages Only</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleExportBackup("others")}
+              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-amber-50 border border-amber-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-amber-800">👤 Others Only</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">OTHERS</span>
+                </div>
+                <p className="text-[11px] text-[#5f6368]">Admin accounts, permissions &amp; monthly view statistics.</p>
+              </div>
+              <span className="text-[11px] font-bold text-amber-800">⬇ Download Others Only</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 2. Restore from Backup File — Automatic Detection */}
+        <div className="p-5 rounded-2xl bg-[#f8fafd] border border-[#d3e3fd] space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <span>2. Restore from Backup File (.json)</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-[#0b57d0] font-bold">
+                  ✨ Auto-Detects Backup Type Automatically
+                </span>
+              </h4>
+              <p className="text-[11px] text-[#5f6368] mt-0.5">
+                Simply upload any backup JSON file (Full Backup, Settings Only, Pages Only, or Others Only). The system automatically detects what is inside and restores it safely without losing any other data.
+              </p>
+            </div>
+          </div>
+
+          {autoDetectedSummary && (
+            <div className="p-3.5 rounded-xl bg-white border border-emerald-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                  ✓
+                </span>
+                <div>
+                  <div className="text-xs font-bold text-[#1f1f1f]">Auto-Detected Backup Content:</div>
+                  <div className="text-[11px] text-emerald-700 font-mono">{autoDetectedSummary}</div>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                ✓ Restored Automatically
+              </span>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#e0e4eb]">
+            <div className="text-xs text-[#5f6368]">
+              Select any <code className="font-mono text-[#0b57d0]">.json</code> backup file — automatic detection &amp; safe restore runs immediately upon selection.
+            </div>
+            <label className="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0">
+              <span>⬆ Select &amp; Auto-Restore Backup (.json)</span>
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={handleRestoreFileUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* 3. One-Click Server Snapshots */}
+        <div className="p-5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#111827]">
+                3. Instant Snapshots (Auto-Detected One-Click Restore)
+              </h4>
+              <p className="text-[11px] text-[#5f6368]">
+                Create instant restore points for Full Backup, Settings Only, Pages Only, or Others Only.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={snapshotScope}
+                onChange={(e) => setSnapshotScope(e.target.value as any)}
+                className="px-3 py-2 rounded-xl bg-white border border-[#c4c7c5] text-xs font-semibold"
+              >
+                <option value="all">Scope: Full Everything</option>
+                <option value="settings">Scope: Settings Only</option>
+                <option value="pages">Scope: Pages Only</option>
+                <option value="others">Scope: Others Only</option>
+              </select>
+              <input
+                type="text"
+                value={snapshotLabel}
+                onChange={(e) => setSnapshotLabel(e.target.value)}
+                placeholder="Optional snapshot note..."
+                className="px-3 py-2 rounded-xl bg-white border border-[#c4c7c5] text-xs w-44"
+              />
+              <button
+                type="button"
+                onClick={handleCreateSnapshot}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer"
+              >
+                + Create Snapshot
+              </button>
+            </div>
+          </div>
+
+          {snapshots.length === 0 ? (
+            <div className="text-center py-5 text-xs text-[#5f6368] bg-white rounded-xl border border-dashed border-[#c4c7c5]">
+              No snapshots created yet. Click <strong>+ Create Snapshot</strong> above to save an instant restore point.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {snapshots.map((snap) => (
+                <div
+                  key={snap.id}
+                  className="p-3 bg-white rounded-xl border border-[#e0e4eb] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-[#1f1f1f]">{snap.label}</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold uppercase">
+                        {snap.scope}
+                      </span>
+                      <span className="text-[10px] font-mono text-[#747775]">{snap.created_at}</span>
+                    </div>
+                    <div className="text-[11px] font-mono text-[#5f6368]">
+                      Settings: {snap.counts?.settings || 0} • Pages: {snap.counts?.pages || 0} • Others: {snap.counts?.users || 0}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => executeRestorePayload(snap.payload, "auto", "merge")}
+                      className="px-3 py-1.5 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white text-[11px] font-bold cursor-pointer"
+                    >
+                      ↻ Restore (Auto-Detect)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = snapshots.filter((s) => s.id !== snap.id);
+                        setSnapshots(next);
+                        localStorage.setItem("slea_server_snapshots", JSON.stringify(next));
+                        onNotify("Snapshot deleted.", "info");
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -772,259 +1033,6 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
             </button>
           </div>
         </form>
-      </div>
-
-      {/* 4. Backup & Restore Center (Website Settings, Pages, and Others — Together or Separately) */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6" id="backup-restore-section">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-[#f0f4f9]">
-          <div>
-            <h3 className="font-bold text-base text-[#1f1f1f] flex items-center gap-2">
-              <span>💾 Backup &amp; Restore Center</span>
-              <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Zero Data Loss
-              </span>
-            </h3>
-            <p className="text-xs text-[#5f6368] mt-0.5">
-              Backup and restore <strong>Website Settings</strong>, <strong>Generated Pages</strong>, and <strong>Others (Admin Accounts &amp; Analytics)</strong> all together or separately.
-            </p>
-          </div>
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] self-start sm:self-auto">
-            Modular &amp; Update-Safe
-          </span>
-        </div>
-
-        {/* 1. Download Portable JSON Backups */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[#444746]">
-              1. Download Backup (.json) — All or Separately
-            </h4>
-            <span className="text-[11px] text-[#5f6368]">Instant JSON export</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <button
-              type="button"
-              onClick={() => handleExportBackup("all")}
-              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#d3e3fd] text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-[#0b57d0]">📦 Full Backup (All)</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">ALL</span>
-                </div>
-                <p className="text-[11px] text-[#5f6368]">Settings + Generated Pages + Accounts &amp; Analytics.</p>
-              </div>
-              <span className="text-[11px] font-bold text-[#0b57d0]">⬇ Download Full Backup</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleExportBackup("settings")}
-              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-purple-50 border border-purple-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-purple-700">⚙️ Settings Only</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">SETTINGS</span>
-                </div>
-                <p className="text-[11px] text-[#5f6368]">Branding, Logo, Menu, Footer HTML, Ads &amp; Maintenance.</p>
-              </div>
-              <span className="text-[11px] font-bold text-purple-700">⬇ Download Settings Only</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleExportBackup("pages")}
-              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-emerald-50 border border-emerald-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-emerald-700">📄 Pages Only</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PAGES</span>
-                </div>
-                <p className="text-[11px] text-[#5f6368]">All generated episode button pages, slugs, links &amp; views.</p>
-              </div>
-              <span className="text-[11px] font-bold text-emerald-700">⬇ Download Pages Only</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleExportBackup("others")}
-              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-amber-50 border border-amber-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-800">👤 Others Only</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">OTHERS</span>
-                </div>
-                <p className="text-[11px] text-[#5f6368]">Admin accounts, permissions &amp; monthly view statistics.</p>
-              </div>
-              <span className="text-[11px] font-bold text-amber-800">⬇ Download Others Only</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 2. Restore from Backup File */}
-        <div className="p-5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] space-y-4">
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[#111827]">
-              2. Restore from Backup File (.json) — Together or Separately
-            </h4>
-            <p className="text-[11px] text-[#5f6368]">
-              Select what part of the backup file you want to restore (All, Settings Only, Pages Only, or Others Only).
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-            <div className="sm:col-span-4 space-y-1">
-              <label className="text-[11px] font-bold text-[#444746] block">What to Restore</label>
-              <select
-                value={restoreScope}
-                onChange={(e) => setRestoreScope(e.target.value as any)}
-                className="w-full px-3 py-2.5 rounded-xl bg-white border border-[#c4c7c5] text-xs font-semibold"
-              >
-                <option value="auto">Auto / Everything in File</option>
-                <option value="settings">Website Settings Only</option>
-                <option value="pages">Generated Pages Only</option>
-                <option value="others">Others (Accounts &amp; Analytics) Only</option>
-              </select>
-            </div>
-
-            <div className="sm:col-span-4 space-y-1">
-              <label className="text-[11px] font-bold text-[#444746] block">Restore Mode</label>
-              <select
-                value={restoreMode}
-                onChange={(e) => setRestoreMode(e.target.value as any)}
-                className="w-full px-3 py-2.5 rounded-xl bg-white border border-[#c4c7c5] text-xs font-semibold"
-              >
-                <option value="merge">Safe Merge (Keep Existing + Update)</option>
-                <option value="overwrite">Overwrite Selected Scope</option>
-              </select>
-            </div>
-
-            <div className="sm:col-span-4">
-              <label className="w-full px-4 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2">
-                <span>Upload &amp; Restore JSON</span>
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={handleRestoreFileUpload}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. One-Click Server Snapshots */}
-        <div className="p-5 rounded-2xl bg-[#f8fafd] border border-[#e1e7f0] space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[#111827]">
-                3. Instant Snapshots (Restore All or Separately Anytime)
-              </h4>
-              <p className="text-[11px] text-[#5f6368]">
-                Create instant restore points before updates or configuration changes.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <select
-                value={snapshotScope}
-                onChange={(e) => setSnapshotScope(e.target.value as any)}
-                className="px-3 py-2 rounded-xl bg-white border border-[#c4c7c5] text-xs font-semibold"
-              >
-                <option value="all">Scope: Full Everything</option>
-                <option value="settings">Scope: Settings Only</option>
-                <option value="pages">Scope: Pages Only</option>
-                <option value="others">Scope: Others Only</option>
-              </select>
-              <input
-                type="text"
-                value={snapshotLabel}
-                onChange={(e) => setSnapshotLabel(e.target.value)}
-                placeholder="Optional snapshot note..."
-                className="px-3 py-2 rounded-xl bg-white border border-[#c4c7c5] text-xs w-44"
-              />
-              <button
-                type="button"
-                onClick={handleCreateSnapshot}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer"
-              >
-                + Create Snapshot
-              </button>
-            </div>
-          </div>
-
-          {snapshots.length === 0 ? (
-            <div className="text-center py-5 text-xs text-[#5f6368] bg-white rounded-xl border border-dashed border-[#c4c7c5]">
-              No snapshots created yet. Click <strong>+ Create Snapshot</strong> above to save an instant restore point.
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {snapshots.map((snap) => (
-                <div
-                  key={snap.id}
-                  className="p-3 bg-white rounded-xl border border-[#e0e4eb] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-[#1f1f1f]">{snap.label}</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold uppercase">
-                        {snap.scope}
-                      </span>
-                      <span className="text-[10px] font-mono text-[#747775]">{snap.created_at}</span>
-                    </div>
-                    <div className="text-[11px] font-mono text-[#5f6368]">
-                      Settings: {snap.counts?.settings || 0} • Pages: {snap.counts?.pages || 0} • Others: {snap.counts?.users || 0}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => executeRestorePayload(snap.payload, "auto", "merge")}
-                      className="px-2.5 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white text-[11px] font-bold cursor-pointer"
-                    >
-                      Restore All
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => executeRestorePayload(snap.payload, "settings", "merge")}
-                      className="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-bold cursor-pointer"
-                    >
-                      Settings Only
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => executeRestorePayload(snap.payload, "pages", "merge")}
-                      className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer"
-                    >
-                      Pages Only
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => executeRestorePayload(snap.payload, "others", "merge")}
-                      className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold cursor-pointer"
-                    >
-                      Others Only
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = snapshots.filter((s) => s.id !== snap.id);
-                        setSnapshots(next);
-                        localStorage.setItem("slea_server_snapshots", JSON.stringify(next));
-                        onNotify("Snapshot deleted.", "info");
-                      }}
-                      className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

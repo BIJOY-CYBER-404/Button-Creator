@@ -60,17 +60,16 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "5.6.0",
-    remote_version: "5.6.0",
+    current_version: "5.8.0",
+    remote_version: "5.8.0",
     update_available: false,
     release_date: "2026-09-27",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Added complete Backup & Restore Center: export and restore Website Settings, Generated Pages, and Others (Accounts & Analytics) all together or separately",
-      "Added One-Click Server Snapshots stored in /data/snapshots with modular restore options (Restore All, Settings Only, Pages Only, Others Only)",
-      "Zero-Data-Loss Update & Auto-Heal Engine: guarantees settings, generated pages, admin accounts, and view analytics are never lost or corrupted during updates or rollbacks",
-      "Excluded 'Cookie Policy', 'RTL Mode', and 'View all articles' from being counted or extracted as episode buttons",
-      "Updated release package v-5.6.0 ready for remote one-click updates"
+      "Unified cPanel Admin Panel Design with React Website Design across all pages (Generate, Pages, Settings, Update, Analytics, Login, and Setup)",
+      "Added identical Left Icon Sidebar, Top AppHeader, Lucide SVG iconography, and card layouts to cPanel PHP admin pages",
+      "Interactive 2-Tab Generator Mode (Auto Short-Link Page & Manual Batch Extractor) in cPanel admin.php matching React AdminFlowGenerator",
+      "Synchronized Backup & Restore Center, Site Branding, Maintenance Mode, AdSense & Banner Ads, Navigation Menu, and Footer settings UI in cPanel settings.php"
     ],
     minimum_php: "7.4",
     checksum: "a81f9b30c4e123456789abcdef0123456789abcdef0123456789abcdef012345"
@@ -148,8 +147,8 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       });
       if (mRes.ok) {
         const mData = await mRes.json();
-        const remVer = mData.version ? mData.version.replace(/^v-?/, "") : "5.6.0";
-        const currVer = checkInfo.current_version || "5.6.0";
+        const remVer = mData.version ? mData.version.replace(/^v-?/, "") : "5.7.0";
+        const currVer = checkInfo.current_version || "5.7.0";
         setCheckInfo((prev) => ({
           ...prev,
           remote_version: remVer,
