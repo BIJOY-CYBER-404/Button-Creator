@@ -1,18 +1,18 @@
 {
-  "version": "15.0.0",
+  "version": "16.0.0",
   "release_date": "2026-09-28",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "3832fc7b1fa5aeec8afa2dc55330935d785652c084313ae1c7989c0745efd87f",
-  "sha256": "3832fc7b1fa5aeec8afa2dc55330935d785652c084313ae1c7989c0745efd87f",
+  "checksum": "be4e888a009832be1bde5547a17bc1db69fd93c26b74333f775955082a181aa1",
+  "sha256": "be4e888a009832be1bde5547a17bc1db69fd93c26b74333f775955082a181aa1",
   "changelog": [
-    "Fixed Admin View toolbar Edit Page button action to open the page editor directly",
-    "Admin View toolbar styled in a single clean horizontal line on pure white background",
-    "Completely removed episode button click counts"
+    "100% Real Database Analytics: Zero mock, fake, or synthetic data across all analytics metrics and charts",
+    "Verified Database Metrics: Range visits, top 10 most viewed pages, monthly comparisons, and real database traffic percentages",
+    "Transparent Telemetry Status: Direct N/A indicators for non-logged device, referrer, and geo-location tracking"
   ],
   "release_notes": [
-    "Fixed Admin View toolbar Edit Page button action to open the page editor directly",
-    "Admin View toolbar styled in a single clean horizontal line on pure white background",
-    "Completely removed episode button click counts"
+    "100% Real Database Analytics: Zero mock, fake, or synthetic data across all analytics metrics and charts",
+    "Verified Database Metrics: Range visits, top 10 most viewed pages, monthly comparisons, and real database traffic percentages",
+    "Transparent Telemetry Status: Direct N/A indicators for non-logged device, referrer, and geo-location tracking"
   ],
   "migrations": true,
   "min_php_version": "7.4",
