@@ -60,19 +60,19 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "12.0.0",
-    remote_version: "12.0.0",
+    current_version: "14.0.0",
+    remote_version: "14.0.0",
     update_available: false,
     release_date: "2026-09-28",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Restored cPanel Episode Page UI design across public episode pages (/p/{slug}) with full-width sticky header, SVG social share bar, resolved server badges, and clean Watch Now pill buttons",
-      "Enforced strict authentication redirect to login.php when visiting admin pages without an admin account logged in",
-      "Enforced 404 Page Not Available response when visiting private episode pages or invalid routes without an admin account logged in",
-      "Disabled public caching on private/admin views and prevented file-backup fallback leaks on private pages"
+      "Removed floating mobile FAB share icon from public episode pages",
+      "Admin View Toolbar only renders when an active admin account logged-in state is found",
+      "Editable & reorderable public navigation menu items in Admin Panel Settings",
+      "Customizable Admin Login Page Path (Slug) with strict 404 response on unauthenticated visits to admin & private pages in cPanel package"
     ],
     minimum_php: "7.4",
-    checksum: "53fd79ba32a0c154aaa12a91085e9fbcfecabc92e6fed36ea868ce4e1a0f2bf4"
+    checksum: "d668398e4c1090b28c5b95f8f3b7256d5a58591faf135025fde0a6bca3feb98c"
   });
 
   const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json");

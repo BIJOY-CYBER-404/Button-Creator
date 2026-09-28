@@ -1,16 +1,23 @@
 {
-  "version": "13.0.0",
+  "version": "14.0.0",
   "release_date": "2026-09-28",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "8714f91671d07b9077d39cacd59f631a84eb3cc9c95a98c558aa0f341b960d69",
+  "checksum": "d668398e4c1090b28c5b95f8f3b7256d5a58591faf135025fde0a6bca3feb98c",
+  "sha256": "d668398e4c1090b28c5b95f8f3b7256d5a58591faf135025fde0a6bca3feb98c",
   "changelog": [
-    "Editable Menu Items: Public navigation menu items can now be edited inline (Title, Destination URL, Open in new tab) and reordered directly from Admin Panel Settings",
-    "Strict 404 Protection on Admin & Private Pages: Visiting any admin page or private page without an active admin login strictly returns a 404 Not Found page instead of redirecting to the login screen",
-    "Customizable Admin Login Page Path: Added Admin Login Page Path setting in Admin Panel Settings to change the login URL slug dynamically and hide default /login.php behind a 404 error",
-    "Zero Admin/Private Links on Public Pages: Removed all admin/private links and control bars from public episode pages, setup screens, and headers"
+    "Removed floating mobile FAB share icon from public episode pages",
+    "Admin View Toolbar only renders when an active admin account logged-in state is found",
+    "Editable & reorderable public navigation menu items in Admin Panel Settings",
+    "Customizable Admin Login Page Path (Slug) with strict 404 response on unauthenticated visits to admin & private pages in cPanel package"
+  ],
+  "release_notes": [
+    "Removed floating mobile FAB share icon from public episode pages",
+    "Admin View Toolbar only renders when an active admin account logged-in state is found",
+    "Editable & reorderable public navigation menu items in Admin Panel Settings",
+    "Customizable Admin Login Page Path (Slug) with strict 404 response on unauthenticated visits to admin & private pages in cPanel package"
   ],
   "migrations": true,
   "min_php_version": "7.4",
-  "backup_required": true,
-  "sha256": "8714f91671d07b9077d39cacd59f631a84eb3cc9c95a98c558aa0f341b960d69"
+  "minimum_php": "7.4",
+  "backup_required": true
 }

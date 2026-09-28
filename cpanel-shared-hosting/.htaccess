@@ -1,0 +1,43 @@
+# cPanel Apache Configuration & Clean URL Routing
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Route /p/{slug} and /page/{slug} to view.php?slug={slug}
+    RewriteRule ^p/([a-zA-Z0-9_-]+)/?$ view.php?slug=$1 [L,QSA]
+    RewriteRule ^page/([a-zA-Z0-9_-]+)/?$ view.php?slug=$1 [L,QSA]
+
+    # Clean Admin Routes
+    RewriteRule ^admin/?$ admin.php [L,QSA]
+    RewriteRule ^pages/?$ pages.php [L,QSA]
+    RewriteRule ^settings/?$ settings.php [L,QSA]
+    RewriteRule ^analytics/?$ analytics.php [L,QSA]
+    RewriteRule ^update/?$ update.php [L,QSA]
+    RewriteRule ^updater/?$ update.php [L,QSA]
+    RewriteRule ^login/?$ login.php [L,QSA]
+    RewriteRule ^logout/?$ logout.php [L,QSA]
+    RewriteRule ^setup/?$ setup.php [L,QSA]
+
+    # Route custom login page path (with or without .php) to view.php handler
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^([a-zA-Z0-9_-]+)(?:\.php)?/?$ view.php?slug=$1 [L,QSA]
+
+    # Block direct browser access to sensitive backend directories and config files
+    RewriteRule ^data/ - [F,L]
+    RewriteRule ^includes/ - [F,L]
+    RewriteRule ^database/ - [F,L]
+    RewriteRule ^config\.php$ - [F,L]
+    RewriteRule \.(sql|log|bak|sqlite|db|env|py|sh|jsonl)$ - [F,L]
+    RewriteRule (extractor|resolver|unified_engine|pack_cpanel)\.py$ - [F,L]
+</IfModule>
+
+# Extra Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Disable Directory Listing
+Options -Indexes

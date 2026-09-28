@@ -155,12 +155,12 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     const saved = localStorage.getItem("slea_share_settings");
     if (saved) {
       try {
-        return { enabled: true, show_in_page: true, show_mobile_fab: true, ...JSON.parse(saved) };
+        return { enabled: true, show_in_page: true, ...JSON.parse(saved), show_mobile_fab: false };
       } catch {
         // fallback
       }
     }
-    return { enabled: true, show_in_page: true, show_mobile_fab: true };
+    return { enabled: true, show_in_page: true, show_mobile_fab: false };
   });
 
   // Check for ad blocker / private DNS
@@ -615,6 +615,68 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
       className="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]"
       style={{ backgroundColor: themeObj.bg, color: "#1f1f1f" }}
     >
+      {/* Admin Quick Controls Bar (Only shown when active admin account logged-in state is found) */}
+      {isAdmin && (
+        <div className="w-full bg-[#111827] text-white border-b border-slate-800 px-4 py-2 text-xs z-50">
+          <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0b57d0] text-white uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Admin View
+              </span>
+              <div className="flex items-center gap-2 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700">
+                <span className="text-[11px] text-slate-300 font-medium">Visibility:</span>
+                <button
+                  type="button"
+                  onClick={toggleAdminStatus}
+                  role="switch"
+                  aria-checked={isPublic}
+                  title="Click to toggle Public / Private visibility"
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isPublic ? "bg-[#137333]" : "bg-slate-500"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      isPublic ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    isPublic
+                      ? "bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]"
+                      : "bg-[#fff0d4] text-[#b06000] border border-[#ffd599]"
+                  }`}
+                >
+                  {isPublic ? "Public" : "Private"}
+                </span>
+              </div>
+              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="text-slate-300 font-mono text-[11px] hidden sm:inline">
+                👁️ {Number(page.views || 0).toLocaleString()} views
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => (onEditPage ? onEditPage(page.id) : onBackToAdmin?.())}
+                className="px-3 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <span>✏️ Edit Page</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => (onBackToAdmin ? onBackToAdmin() : (window.location.href = "/"))}
+                className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold transition-colors border border-slate-700 cursor-pointer"
+              >
+                Pages Manager
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Public Header Navigation Bar (Google Material M3 Light Theme - No links or buttons to admin/private pages) */}
       <header className="w-full bg-white/95 border-b border-[#e1e7f0] sticky top-0 z-40 backdrop-blur-md shadow-2xs">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
@@ -732,6 +794,19 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
 
       {/* Main Episode Content Area (Google Material M3 Light Theme - Matches cpanel-package/view.php lines 539-788) */}
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+        {/* Private Page Notice Banner for Admin */}
+        {isAdmin && !isPublic && (
+          <div className="rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-3.5 flex items-center justify-between gap-3 text-xs text-[#7c5e10] shadow-2xs">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🔒</span>
+              <div>
+                <span className="font-bold text-[#b06000]">Private Page Mode: </span>
+                <span>Only logged-in administrators can view this page. Public visitors see a 404 screen.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Top Banner Ad Placement */}
         {adSettings?.banner_top && (
           <div className="ad-slot-container w-full text-center space-y-1 my-2">
@@ -921,6 +996,14 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
                               ({btn.text})
                             </span>
                           )}
+                          {isAdmin && (
+                            <span
+                              className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-mono font-bold text-[10px]"
+                              title="Admin Only: Total Clicks"
+                            >
+                              👆 {Number(btn.clicks || 0).toLocaleString()} clicks
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 text-[11px] text-[#5f6368] mt-0.5">
@@ -1031,27 +1114,6 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
           <div className="leading-relaxed" dangerouslySetInnerHTML={{ __html: footerText }} />
         </div>
       </footer>
-
-      {/* Floating Mobile Share Button (Matches cpanel-package/view.php lines 803-813) */}
-      {shareSettings.enabled && shareSettings.show_mobile_fab && (
-        <div className="fixed bottom-5 right-4 z-40 sm:hidden">
-          <button
-            type="button"
-            onClick={handleMobileFabShare}
-            aria-label="Share page"
-            className="w-13 h-13 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white flex items-center justify-center shadow-xl transition-all active:scale-95 border-2 border-white ring-4 ring-[#0b57d0]/20 cursor-pointer"
-          >
-            <svg className="w-5.5 h-5.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-              />
-            </svg>
-          </button>
-        </div>
-      )}
 
       {/* QR Code Display Modal (Matches cpanel-package/view.php lines 815-843) */}
       {qrModalOpen && (

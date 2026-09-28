@@ -182,9 +182,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
         <span
           className="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none"
-          title="Movie Hub HQ Drive Version v-13.0.0"
+          title="Movie Hub HQ Drive Version v-14.0.0"
         >
-          v-13.0.0
+          v-14.0.0
         </span>
       </div>
     </aside>

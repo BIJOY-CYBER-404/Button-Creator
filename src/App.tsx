@@ -20,10 +20,27 @@ import { PublicButtonPageView } from "./components/PublicButtonPageView";
 import { ButtonPage, ViewTab } from "./types";
 
 export default function App() {
+  const isInitialPublicUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("slug") || params.get("p")) return true;
+    const path = window.location.pathname;
+    return path.startsWith("/p/") || path.startsWith("/page/");
+  };
+
   const [adminToken, setAdminToken] = useState<string>(() => {
-    return localStorage.getItem("slea_admin_token") || "admin_token_default_session";
+    const saved = localStorage.getItem("slea_admin_token");
+    if (saved) return saved;
+    if (!isInitialPublicUrl()) {
+      localStorage.setItem("slea_admin_token", "admin_token_default_session");
+      return "admin_token_default_session";
+    }
+    return "";
   });
-  const [isAdmin, setIsAdmin] = useState<boolean>(true);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    const saved = localStorage.getItem("slea_admin_token");
+    if (saved) return true;
+    return !isInitialPublicUrl();
+  });
   const [currentTab, setCurrentTab] = useState<ViewTab>("admin_flow");
   const [activeSlugView, setActiveSlugView] = useState<string | null>(null);
   const [pages, setPages] = useState<ButtonPage[]>([]);
