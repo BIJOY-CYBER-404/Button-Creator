@@ -1,15 +1,15 @@
 {
   "name": "Movie Hub HQ Drive",
-  "version": "v-6.0.0",
+  "version": "v-6.1.0",
   "release_date": "2026-09-28",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "sha256": "3d18163f05906a36d4d4aba26ff87e7737b92f327afb4bd42a770cbce3e1130c",
-  "checksum": "3d18163f05906a36d4d4aba26ff87e7737b92f327afb4bd42a770cbce3e1130c",
+  "sha256": "7af273e671f180486c13cd418f09aebc0620461a85aebb35d1f4b0939b9b6f32",
+  "checksum": "7af273e671f180486c13cd418f09aebc0620461a85aebb35d1f4b0939b9b6f32",
   "minimum_php": "7.4",
   "release_notes": [
+    "Hardened update deployment on cPanel shared hosting: automated unlinking of existing files prior to replacement to bypass strict Linux write locks",
+    "Enabled instantaneous OPcache invalidation and bytecode reset on file copy to prevent stale in-memory cached PHP execution",
     "Cleaned settings.php: Permanently removed legacy One-Click Application Update System card from Settings page",
-    "Enabled full Backup & Restore Center at the top of settings.php with Full, Settings Only, Pages Only, and Others Only JSON exports",
-    "Automatic backup format detection on restore (auto-detects Full Backup, Settings, Pages, or Accounts/Analytics without data loss)",
-    "Dedicated One-Click In-App System Updater accessible exclusively in update.php and sidebar navigation"
+    "Enabled full Backup & Restore Center at the top of settings.php with Full, Settings Only, Pages Only, and Others Only JSON exports"
   ]
 }

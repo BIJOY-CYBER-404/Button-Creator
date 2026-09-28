@@ -533,15 +533,18 @@ class SLEA_Updater {
                 self::copy_staging_files($src_path, $dst_path, $exclude);
             } else {
                 if (file_exists($dst_path)) {
-                    @chmod($dst_path, 0644);
+                    @chmod($dst_path, 0777);
+                    @unlink($dst_path);
                 }
-                if (!@copy($src_path, $dst_path)) {
+                $copied = @copy($src_path, $dst_path);
+                if (!$copied) {
                     $raw_bytes = @file_get_contents($src_path);
                     if ($raw_bytes !== false) {
-                        @file_put_contents($dst_path, $raw_bytes);
+                        @file_put_contents($dst_path, $raw_bytes, LOCK_EX);
                     }
                 }
-                if (function_exists('opcache_invalidate') && substr($dst_path, -4) === '.php') {
+                @chmod($dst_path, 0644);
+                if (function_exists('opcache_invalidate')) {
                     @opcache_invalidate($dst_path, true);
                 }
             }
@@ -550,7 +553,7 @@ class SLEA_Updater {
         if (file_exists(APP_ROOT . '/public/cpanel-app-package.zip')) {
             @unlink(APP_ROOT . '/public/cpanel-app-package.zip');
         }
-        @clearstatcache();
+        @clearstatcache(true);
         if (function_exists('opcache_reset')) {
             @opcache_reset();
         }

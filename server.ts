@@ -573,15 +573,15 @@ async function startServer() {
     }
     return res.json({
       name: "Movie Hub HQ Drive",
-      version: "v-6.0.0",
+      version: "v-6.1.0",
       release_date: "2026-09-28",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
       minimum_php: "7.4",
       release_notes: [
+        "Hardened update deployment on cPanel shared hosting: automated unlinking of existing files prior to replacement to bypass strict Linux write locks",
+        "Enabled instantaneous OPcache invalidation and bytecode reset on file copy to prevent stale in-memory cached PHP execution",
         "Cleaned settings.php: Permanently removed legacy One-Click Application Update System card from Settings page",
-        "Enabled full Backup & Restore Center at the top of settings.php with Full, Settings Only, Pages Only, and Others Only JSON exports",
-        "Automatic backup format detection on restore (auto-detects Full Backup, Settings, Pages, or Accounts/Analytics without data loss)",
-        "Dedicated One-Click In-App System Updater accessible exclusively in update.php and sidebar navigation"
+        "Enabled full Backup & Restore Center at the top of settings.php with Full, Settings Only, Pages Only, and Others Only JSON exports"
       ]
     });
   });
