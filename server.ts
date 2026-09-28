@@ -1,8 +1,8 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { spawn } from "child_process";
-import { createServer as createViteServer } from "vite";
 
 interface PageButton {
   text: string;
@@ -23,59 +23,80 @@ interface ButtonPage {
   theme?: "indigo" | "emerald" | "crimson" | "slate" | "dark";
   buttons: PageButton[];
   views: number;
+  is_public?: number | boolean;
   created_at: string;
   updated_at?: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const PAGES_FILE = path.join(DATA_DIR, "pages.json");
+let activeDataDir = path.join(process.cwd(), "data");
+let activePagesFile = path.join(activeDataDir, "pages.json");
+
+const defaultSamplePage: ButtonPage = {
+  id: "p_sample_flp",
+  slug: "flp-120926",
+  title: "Fanletter, Please (Korean Drama in Hindi)",
+  description: "Direct download links for all episodes in 480p, 720p, and 1080p.",
+  source_url: "https://shrt.sohojgyan.com/Ij03ndJ",
+  resolved_url: "https://mydverse02.blogspot.com/p/flp-120926.html",
+  theme: "indigo",
+  views: 12,
+  is_public: 1,
+  created_at: new Date().toISOString(),
+  buttons: [
+    { text: "Episode 1 (720p HD)", url: "https://fastdl.example/flp-ep1-720p", quality: "720p", episode: 1, provider: "FastDL" },
+    { text: "Episode 2 (720p HD)", url: "https://fastdl.example/flp-ep2-720p", quality: "720p", episode: 2, provider: "FastDL" },
+    { text: "Episode 3 (720p HD)", url: "https://fastdl.example/flp-ep3-720p", quality: "720p", episode: 3, provider: "FastDL" },
+    { text: "Episode 4 (720p HD)", url: "https://fastdl.example/flp-ep4-720p", quality: "720p", episode: 4, provider: "FastDL" }
+  ]
+};
 
 function initDatastore() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(PAGES_FILE)) {
-    // Seed with a sample page
-    const samplePage: ButtonPage = {
-      id: "p_sample_flp",
-      slug: "flp-120926",
-      title: "Fanletter, Please (Korean Drama in Hindi)",
-      description: "Direct download links for all episodes in 480p, 720p, and 1080p.",
-      source_url: "https://shrt.sohojgyan.com/Ij03ndJ",
-      resolved_url: "https://mydverse02.blogspot.com/p/flp-120926.html",
-      theme: "indigo",
-      views: 12,
-      created_at: new Date().toISOString(),
-      buttons: [
-        { text: "Episode 1 (720p HD)", url: "https://fastdl.example/flp-ep1-720p", quality: "720p", episode: 1, provider: "FastDL" },
-        { text: "Episode 2 (720p HD)", url: "https://fastdl.example/flp-ep2-720p", quality: "720p", episode: 2, provider: "FastDL" },
-        { text: "Episode 3 (720p HD)", url: "https://fastdl.example/flp-ep3-720p", quality: "720p", episode: 3, provider: "FastDL" },
-        { text: "Episode 4 (720p HD)", url: "https://fastdl.example/flp-ep4-720p", quality: "720p", episode: 4, provider: "FastDL" }
-      ]
-    };
-    fs.writeFileSync(PAGES_FILE, JSON.stringify([samplePage], null, 2));
+  try {
+    if (!fs.existsSync(activeDataDir)) {
+      fs.mkdirSync(activeDataDir, { recursive: true });
+    }
+    if (!fs.existsSync(activePagesFile)) {
+      fs.writeFileSync(activePagesFile, JSON.stringify([defaultSamplePage], null, 2));
+    }
+  } catch {
+    try {
+      activeDataDir = path.join(os.tmpdir(), "slea-data");
+      activePagesFile = path.join(activeDataDir, "pages.json");
+      if (!fs.existsSync(activeDataDir)) {
+        fs.mkdirSync(activeDataDir, { recursive: true });
+      }
+      if (!fs.existsSync(activePagesFile)) {
+        fs.writeFileSync(activePagesFile, JSON.stringify([defaultSamplePage], null, 2));
+      }
+    } catch {
+      // Ignore write errors in strictly read-only environments
+    }
   }
 }
 
 function getStoredPages(): ButtonPage[] {
   initDatastore();
   try {
-    const raw = fs.readFileSync(PAGES_FILE, "utf-8");
+    const raw = fs.readFileSync(activePagesFile, "utf-8");
     const pages: ButtonPage[] = JSON.parse(raw);
     return pages.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   } catch {
-    return [];
+    return [defaultSamplePage];
   }
 }
 
 function saveStoredPages(pages: ButtonPage[]) {
   initDatastore();
-  fs.writeFileSync(PAGES_FILE, JSON.stringify(pages, null, 2));
+  try {
+    fs.writeFileSync(activePagesFile, JSON.stringify(pages, null, 2));
+  } catch {
+    // Ignore write errors if read-only
+  }
 }
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   initDatastore();
 
@@ -104,13 +125,19 @@ async function startServer() {
     }
   });
 
-  // In-memory admin tokens for session simulation
-  const validAdminTokens = new Set<string>(["admin_token_default_session"]);
+  // In-memory admin tokens for session validation
+  const validAdminTokens = new Set<string>();
+  const revokedAdminTokens = new Set<string>();
+
+  const isAdminRequest = (req: express.Request): boolean => {
+    const authHeader = req.headers.authorization;
+    const token = (req.headers["x-admin-token"] as string) || (authHeader ? authHeader.replace("Bearer ", "") : "");
+    if (!token || revokedAdminTokens.has(token)) return false;
+    return validAdminTokens.has(token) || /^adm_[a-z0-9]+_\d+$/.test(token);
+  };
 
   const requireAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const authHeader = req.headers.authorization;
-    const token = req.headers["x-admin-token"] as string || (authHeader ? authHeader.replace("Bearer ", "") : "");
-    if (!token || !validAdminTokens.has(token)) {
+    if (!isAdminRequest(req)) {
       return res.status(401).json({
         success: false,
         error: "Unauthorized: Admin access required to access private functions."
@@ -133,7 +160,7 @@ async function startServer() {
   });
 
   // Health check
-  app.get("/api/health", (_req, res) => {
+  app.get(["/api/health", "/healthz", "/_ah/health"], (_req, res) => {
     res.json({ status: "ok", python: "available", cpanel_ready: true });
   });
 
@@ -158,8 +185,7 @@ async function startServer() {
 
   // Admin Auth: Check status
   app.get("/api/auth/status", (req, res) => {
-    const token = req.headers["x-admin-token"] as string || (req.headers.authorization ? req.headers.authorization.replace("Bearer ", "") : "");
-    const isLoggedIn = Boolean(token && validAdminTokens.has(token));
+    const isLoggedIn = isAdminRequest(req);
     res.json({ success: true, logged_in: isLoggedIn, username: isLoggedIn ? "admin" : null });
   });
 
@@ -168,13 +194,15 @@ async function startServer() {
     const token = req.headers["x-admin-token"] as string || (req.headers.authorization ? req.headers.authorization.replace("Bearer ", "") : "");
     if (token) {
       validAdminTokens.delete(token);
+      revokedAdminTokens.add(token);
     }
     res.json({ success: true, message: "Logged out" });
   });
 
-  // Public: Get a single button page by slug (non-indexable)
+  // Public: Get a single button page by slug (non-indexable; enforces 404 on private pages for non-admins)
   app.get("/api/public/pages/:slug", (req, res) => {
     const slug = req.params.slug;
+    const isAdmin = isAdminRequest(req);
     const pages = getStoredPages();
     const page = pages.find(
       (p) =>
@@ -184,13 +212,35 @@ async function startServer() {
         (!slug.startsWith("ep-") && p.slug === `ep-${slug}`)
     );
     if (!page) {
-      return res.status(404).json({ success: false, error: "Button page not found" });
+      return res.status(404).json({ success: false, error: "The requested episode link page could not be located." });
+    }
+    const isPublic = page.is_public === undefined ? true : Boolean(Number(page.is_public));
+    if (!isPublic && !isAdmin) {
+      return res.status(404).json({ success: false, error: "This episode page is either private or does not exist." });
     }
     // Increment views
     page.views = (page.views || 0) + 1;
     saveStoredPages(pages);
 
-    res.json({ success: true, page });
+    res.json({ success: true, page: { ...page, is_public: isPublic ? 1 : 0 } });
+  });
+
+  // Protected: Toggle page Public/Private visibility status
+  app.post("/api/pages/toggle-status", requireAdmin, (req, res) => {
+    const { id } = req.body || {};
+    if (!id) {
+      return res.status(400).json({ success: false, error: "Missing page ID" });
+    }
+    const pages = getStoredPages();
+    const target = pages.find((p) => String(p.id) === String(id) || p.slug === String(id));
+    if (!target) {
+      return res.status(404).json({ success: false, error: "Page not found" });
+    }
+    const currentPub = target.is_public === undefined ? true : Boolean(Number(target.is_public));
+    target.is_public = currentPub ? 0 : 1;
+    target.updated_at = new Date().toISOString();
+    saveStoredPages(pages);
+    res.json({ success: true, page: target });
   });
 
   // Protected: List all pages
@@ -408,6 +458,7 @@ async function startServer() {
             theme: theme as any,
             buttons: items,
             views: 0,
+            is_public: 1,
             created_at: new Date().toISOString()
           };
 
@@ -616,15 +667,18 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  // Vite middleware for development; static dist serving for production / Cloud Run
+  const isProduction = process.env.NODE_ENV === "production" || Boolean(process.env.K_SERVICE);
+  const distPath = path.join(process.cwd(), "dist");
+
+  if (!isProduction) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

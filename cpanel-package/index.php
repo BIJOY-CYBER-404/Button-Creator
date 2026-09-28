@@ -10,10 +10,28 @@ require_once __DIR__ . '/includes/class-db.php';
 require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 
+if (isset($_GET['maintenance_asset']) && $_GET['maintenance_asset'] === '1') {
+    $img_file = __DIR__ . '/assets/images/maintenance_illustration.jpg';
+    if (file_exists($img_file)) {
+        header('Content-Type: image/jpeg');
+        header('Cache-Control: public, max-age=86400');
+        readfile($img_file);
+        exit;
+    }
+}
+
 // Check if request is for /p/{slug} or ?p={slug} or ?slug={slug}
 $slug = isset($_GET['slug']) ? trim($_GET['slug']) : (isset($_GET['p']) ? trim($_GET['p']) : '');
+if (empty($slug)) {
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+    if (preg_match('#/p/([a-zA-Z0-9_-]+)#', $path, $m)) {
+        $slug = trim($m[1]);
+    }
+}
 
-if (!empty($slug)) {
+$maintenance = SLEA_Datastore::get_maintenance_settings();
+
+if (!empty($slug) || (!empty($maintenance['enabled']) && !SLEA_Auth::is_logged_in())) {
     require __DIR__ . '/view.php';
     exit;
 }

@@ -95,6 +95,7 @@ export interface ButtonPage {
   theme?: "indigo" | "emerald" | "crimson" | "slate" | "dark";
   buttons: PageButton[];
   views: number;
+  is_public?: number | boolean;
   created_at: string;
   updated_at?: string;
 }

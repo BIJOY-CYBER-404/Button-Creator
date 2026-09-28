@@ -81,26 +81,178 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
     );
   });
 
-  const [maintenanceSettings, setMaintenanceSettings] = useState(() => {
+  const getDefaultFutureMaintenanceTime = (minutes = 120) => {
+    const future = new Date(Date.now() + minutes * 60 * 1000);
+    const year = future.getFullYear();
+    const month = String(future.getMonth() + 1).padStart(2, "0");
+    const day = String(future.getDate()).padStart(2, "0");
+    const hours = String(future.getHours()).padStart(2, "0");
+    const mins = String(future.getMinutes()).padStart(2, "0");
+    return {
+      end_time: `${year}-${month}-${day}T${hours}:${mins}`,
+      end_timestamp: future.getTime(),
+    };
+  };
+
+  const [maintenanceSettings, setMaintenanceSettings] = useState<{
+    enabled: boolean;
+    message: string;
+    end_time?: string;
+    end_timestamp?: number;
+  }>(() => {
+    const defTime = getDefaultFutureMaintenanceTime(120);
     const saved = localStorage.getItem("slea_maintenance_settings");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        const hasValidFuture =
+          parsed.end_timestamp && Number(parsed.end_timestamp) > Date.now();
+        return {
+          enabled: false,
+          message: "The website is currently undergoing scheduled maintenance. We will be back shortly!",
+          ...parsed,
+          end_time: hasValidFuture ? parsed.end_time : defTime.end_time,
+          end_timestamp: hasValidFuture ? Number(parsed.end_timestamp) : defTime.end_timestamp,
+        };
       } catch {
         // fallback
       }
     }
     return {
       enabled: false,
-      message: "The website is currently undergoing scheduled maintenance. We will be back shortly!"
+      message: "The website is currently undergoing scheduled maintenance. We will be back shortly!",
+      end_time: defTime.end_time,
+      end_timestamp: defTime.end_timestamp,
     };
   });
+
+  const [countdownPreview, setCountdownPreview] = useState({
+    days: "00",
+    hours: "00",
+    mins: "00",
+    secs: "00",
+    targetLabel: "No countdown configured (Back online shortly)",
+  });
+
+  const parseLocalMaintenanceDate = (str?: string): Date | null => {
+    if (!str) return null;
+    const clean = str.trim();
+    if (!clean) return null;
+    const m = clean.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (m) {
+      const d = new Date(
+        Number(m[1]),
+        Number(m[2]) - 1,
+        Number(m[3]),
+        Number(m[4]),
+        Number(m[5]),
+        Number(m[6] || 0)
+      );
+      if (!isNaN(d.getTime())) return d;
+    }
+    const d2 = new Date(clean);
+    return isNaN(d2.getTime()) ? null : d2;
+  };
+
+  useEffect(() => {
+    const computeCountdown = () => {
+      const endStr = maintenanceSettings.end_time?.trim() || "";
+      if (!endStr) {
+        setCountdownPreview({
+          days: "00",
+          hours: "00",
+          mins: "00",
+          secs: "00",
+          targetLabel: "No countdown configured (Back online shortly)",
+        });
+        return;
+      }
+      const targetDate = parseLocalMaintenanceDate(endStr);
+      const diffMs = targetDate ? targetDate.getTime() - Date.now() : NaN;
+      if (!targetDate || isNaN(diffMs) || diffMs <= 0) {
+        setCountdownPreview({
+          days: "00",
+          hours: "00",
+          mins: "00",
+          secs: "00",
+          targetLabel: "Time reached / Wrapping up maintenance",
+        });
+        return;
+      }
+      const totalSecs = Math.floor(diffMs / 1000);
+      const days = Math.floor(totalSecs / 86400);
+      const hours = Math.floor((totalSecs % 86400) / 3600);
+      const mins = Math.floor((totalSecs % 3600) / 60);
+      const secs = totalSecs % 60;
+      let targetLabel = "Target: " + endStr.replace("T", " ");
+      try {
+        targetLabel =
+          "Target: " +
+          targetDate.toLocaleString([], {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+      } catch {
+        // ignore
+      }
+      setCountdownPreview({
+        days: String(days).padStart(2, "0"),
+        hours: String(hours).padStart(2, "0"),
+        mins: String(mins).padStart(2, "0"),
+        secs: String(secs).padStart(2, "0"),
+        targetLabel,
+      });
+    };
+
+    computeCountdown();
+    const timer = setInterval(computeCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [maintenanceSettings.end_time]);
+
+  const applyMaintenancePreset = (minutes: number) => {
+    const future = new Date(Date.now() + minutes * 60 * 1000);
+    const year = future.getFullYear();
+    const month = String(future.getMonth() + 1).padStart(2, "0");
+    const day = String(future.getDate()).padStart(2, "0");
+    const hours = String(future.getHours()).padStart(2, "0");
+    const mins = String(future.getMinutes()).padStart(2, "0");
+    const formatted = `${year}-${month}-${day}T${hours}:${mins}`;
+    setMaintenanceSettings((prev) => {
+      const next = {
+        ...prev,
+        end_time: formatted,
+        end_timestamp: future.getTime(),
+      };
+      localStorage.setItem("slea_maintenance_settings", JSON.stringify(next));
+      return next;
+    });
+    onNotify(
+      `Maintenance countdown set to +${minutes >= 60 ? minutes / 60 + " hour(s)" : minutes + " mins"}`,
+      "info"
+    );
+  };
+
+  const clearMaintenancePreset = () => {
+    setMaintenanceSettings((prev) => {
+      const next = {
+        ...prev,
+        end_time: "",
+        end_timestamp: 0,
+      };
+      localStorage.setItem("slea_maintenance_settings", JSON.stringify(next));
+      return next;
+    });
+    onNotify("Maintenance end time countdown cleared.", "info");
+  };
 
   const [newMenuTitle, setNewMenuTitle] = useState("");
   const [newMenuUrl, setNewMenuUrl] = useState("");
   const [newMenuBlank, setNewMenuBlank] = useState(false);
 
   // Backup & Restore State
+  const [downloadBackupScope, setDownloadBackupScope] = useState<"all" | "settings" | "pages" | "others">("all");
   const [restoreScope, setRestoreScope] = useState<"auto" | "settings" | "pages" | "others">("auto");
   const [restoreMode, setRestoreMode] = useState<"merge" | "overwrite">("merge");
   const [snapshotScope, setSnapshotScope] = useState<"all" | "settings" | "pages" | "others">("all");
@@ -313,8 +465,14 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
 
   const handleSaveMaintenance = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("slea_maintenance_settings", JSON.stringify(maintenanceSettings));
-    onNotify("Maintenance settings saved successfully!", "success");
+    const parsedDate = parseLocalMaintenanceDate(maintenanceSettings.end_time);
+    const nextSettings = {
+      ...maintenanceSettings,
+      end_timestamp: parsedDate ? parsedDate.getTime() : 0,
+    };
+    setMaintenanceSettings(nextSettings);
+    localStorage.setItem("slea_maintenance_settings", JSON.stringify(nextSettings));
+    onNotify("Maintenance settings & countdown timer saved successfully!", "success");
   };
 
   const handleAddMenuItem = (e: React.FormEvent) => {
@@ -391,73 +549,69 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
           </span>
         </div>
 
-        {/* 1. Download Portable JSON Backups */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[#444746]">
-              1. Download Backup (.json) — All or Separately
-            </h4>
-            <span className="text-[11px] text-[#5f6368]">Instant JSON export</span>
+        {/* 1. Download Portable JSON Backups (Drop-Down Selection) */}
+        <div className="p-5 rounded-2xl bg-[#f8fafd] border border-[#d3e3fd] space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2 flex-wrap">
+                <span>1. Download Backup (.json) — Drop-Down Selection</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-[#0b57d0] font-bold uppercase">
+                  {downloadBackupScope === "all"
+                    ? "ALL • FULL BACKUP"
+                    : `${downloadBackupScope.toUpperCase()} ONLY`}
+                </span>
+              </h4>
+              <p className="text-[11px] text-[#5f6368] mt-0.5">
+                {downloadBackupScope === "all" &&
+                  "Includes Website Settings + Generated Episode Pages + Admin Accounts & Monthly Analytics."}
+                {downloadBackupScope === "settings" &&
+                  "Includes Site Branding, Logo URL, Navigation Menu, Footer HTML, AdSense & Maintenance Settings."}
+                {downloadBackupScope === "pages" &&
+                  "Includes all generated Episode Button Pages, Slugs, Server Links & View Counts."}
+                {downloadBackupScope === "others" &&
+                  "Includes Admin Accounts, Permissions & Monthly View Analytics Statistics."}
+              </p>
+            </div>
+            <span className="text-[11px] text-[#5f6368] font-medium shrink-0">Instant JSON export</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <button
-              type="button"
-              onClick={() => handleExportBackup("all")}
-              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#d3e3fd] text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-[#0b57d0]">📦 Full Backup (All)</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">ALL</span>
-                </div>
-                <p className="text-[11px] text-[#5f6368]">Settings + Generated Pages + Accounts &amp; Analytics.</p>
-              </div>
-              <span className="text-[11px] font-bold text-[#0b57d0]">⬇ Download Full Backup</span>
-            </button>
 
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#e0e4eb]">
+            <div className="flex-1">
+              <label htmlFor="downloadBackupScopeSelect" className="sr-only">
+                Select Backup Type
+              </label>
+              <select
+                id="downloadBackupScopeSelect"
+                value={downloadBackupScope}
+                onChange={(e) => setDownloadBackupScope(e.target.value as any)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#f8fafd] border border-[#c4c7c5] focus:border-[#0b57d0] focus:ring-1 focus:ring-[#0b57d0] outline-none text-xs font-bold text-[#1f1f1f] cursor-pointer"
+              >
+                <option value="all">
+                  📦 Full Backup (All) — Settings + Generated Pages + Accounts &amp; Analytics
+                </option>
+                <option value="settings">
+                  ⚙️ Website Settings Only — Branding, Logo, Menu, Footer HTML, Ads &amp; Maintenance
+                </option>
+                <option value="pages">
+                  📄 Generated Pages Only — All Episode Button Pages, Slugs, Links &amp; Views
+                </option>
+                <option value="others">
+                  👤 Others Only — Admin Accounts, Permissions &amp; Monthly View Statistics
+                </option>
+              </select>
+            </div>
             <button
               type="button"
-              onClick={() => handleExportBackup("settings")}
-              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-purple-50 border border-purple-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
+              onClick={() => handleExportBackup(downloadBackupScope)}
+              className="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
             >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-purple-700">⚙️ Settings Only</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">SETTINGS</span>
-                </div>
-                <p className="text-[11px] text-[#5f6368]">Branding, Logo, Menu, Footer HTML, Ads &amp; Maintenance.</p>
-              </div>
-              <span className="text-[11px] font-bold text-purple-700">⬇ Download Settings Only</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleExportBackup("pages")}
-              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-emerald-50 border border-emerald-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-emerald-700">📄 Pages Only</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PAGES</span>
-                </div>
-                <p className="text-[11px] text-[#5f6368]">All generated episode button pages, slugs, links &amp; views.</p>
-              </div>
-              <span className="text-[11px] font-bold text-emerald-700">⬇ Download Pages Only</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleExportBackup("others")}
-              className="p-4 rounded-2xl bg-[#f8fafd] hover:bg-amber-50 border border-amber-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-800">👤 Others Only</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">OTHERS</span>
-                </div>
-                <p className="text-[11px] text-[#5f6368]">Admin accounts, permissions &amp; monthly view statistics.</p>
-              </div>
-              <span className="text-[11px] font-bold text-amber-800">⬇ Download Others Only</span>
+              <span>
+                ⬇ Download{" "}
+                {downloadBackupScope === "all"
+                  ? "Full"
+                  : downloadBackupScope.charAt(0).toUpperCase() + downloadBackupScope.slice(1)}{" "}
+                Backup (.json)
+              </span>
             </button>
           </div>
         </div>
@@ -728,11 +882,109 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
                   <input
                     type="checkbox"
                     checked={maintenanceSettings.enabled}
-                    onChange={(e) => setMaintenanceSettings({ ...maintenanceSettings, enabled: e.target.checked })}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      const parsed = parseLocalMaintenanceDate(maintenanceSettings.end_time);
+                      const hasFuture = parsed && parsed.getTime() > Date.now();
+                      const def = getDefaultFutureMaintenanceTime(120);
+                      const next = {
+                        ...maintenanceSettings,
+                        enabled: checked,
+                        end_time: checked && !hasFuture ? def.end_time : maintenanceSettings.end_time,
+                        end_timestamp: checked && !hasFuture ? def.end_timestamp : maintenanceSettings.end_timestamp,
+                      };
+                      setMaintenanceSettings(next);
+                      localStorage.setItem("slea_maintenance_settings", JSON.stringify(next));
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
+              </div>
+
+              {/* End Time Countdown Configuration */}
+              <div className="space-y-2 p-4 bg-[#f8fafd] rounded-2xl border border-[#e1e7f0]">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#1f1f1f] flex items-center gap-1.5">
+                    <span>⏱️ Maintenance End Time (Countdown Timer)</span>
+                  </label>
+                  <span className="text-[10px] text-[#0b57d0] font-semibold bg-[#e8f0fe] px-2 py-0.5 rounded-md">
+                    Live Countdown
+                  </span>
+                </div>
+                <input
+                  type="datetime-local"
+                  value={maintenanceSettings.end_time || ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const parsed = parseLocalMaintenanceDate(val);
+                    setMaintenanceSettings({
+                      ...maintenanceSettings,
+                      end_time: val,
+                      end_timestamp: parsed ? parsed.getTime() : 0,
+                    });
+                  }}
+                  className="w-full px-3.5 py-2 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] outline-none text-xs font-semibold bg-white"
+                />
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] font-bold text-[#5f6368] uppercase mr-1">Quick Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => applyMaintenancePreset(30)}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer"
+                  >
+                    +30 Mins
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyMaintenancePreset(60)}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer"
+                  >
+                    +1 Hour
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyMaintenancePreset(180)}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer"
+                  >
+                    +3 Hours
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyMaintenancePreset(360)}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer"
+                  >
+                    +6 Hours
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyMaintenancePreset(720)}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer"
+                  >
+                    +12 Hours
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyMaintenancePreset(1440)}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer"
+                  >
+                    +1 Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyMaintenancePreset(2880)}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer"
+                  >
+                    +2 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearMaintenancePreset}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#fce8e6] hover:bg-[#fce8e6] text-[11px] font-bold text-[#c5221f] transition-all cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -752,24 +1004,53 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
 
             {/* Preview Column */}
             <div className="md:col-span-5 space-y-2">
-              <span className="text-[11px] font-bold uppercase text-[#5f6368] block">Public Preview Mockup:</span>
-              <div className="border border-[#e0e4eb] rounded-3xl p-4 bg-[#f8fafd] space-y-3 relative overflow-hidden">
-                <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9] flex items-center justify-center">
-                  <div className="absolute inset-0 bg-[#0b57d0]/5 flex items-center justify-center text-[#0b57d0] font-mono text-[10px] text-center p-4">
-                    <div className="space-y-1">
-                      <div className="w-8 h-8 rounded-full border-2 border-[#0b57d0] border-t-transparent animate-spin mx-auto"></div>
-                      <span className="block font-bold">Optimization Engaged</span>
-                    </div>
-                  </div>
+              <span className="text-[11px] font-bold uppercase text-[#5f6368] block">Public Screen Preview:</span>
+              <div className="border border-[#e0e4eb] rounded-3xl p-4 bg-[#f8fafd] shadow-2xs space-y-3 relative overflow-hidden">
+                <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9]">
+                  <img
+                    src="/assets/images/maintenance_illustration.jpg"
+                    alt="Maintenance Illustration"
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
-                <div className="text-center space-y-1">
+                <div className="text-center space-y-2">
                   <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fef7e0] border border-[#feebc8] text-[#b06000] text-[9px] font-bold font-mono">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#b06000] animate-ping"></span>
                     <span>SYSTEM MAINTENANCE</span>
                   </div>
                   <h4 className="text-xs font-black text-[#111827]">We'll Be Right Back</h4>
                   <p className="text-[10px] text-[#5f6368] leading-normal line-clamp-2 px-2">
                     {maintenanceSettings.message || "The website is currently undergoing scheduled maintenance. We will be back shortly!"}
                   </p>
+
+                  {/* Live Countdown Badges Preview */}
+                  <div className="p-2.5 rounded-xl bg-white border border-[#e0e4eb] space-y-1.5 shadow-2xs">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-[#0b57d0] flex items-center justify-center gap-1">
+                      <span>⏱️ Estimated End Time Countdown</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 text-center font-mono">
+                      <div className="bg-[#f0f4f9] rounded-lg p-1">
+                        <div className="text-xs font-extrabold text-[#0b57d0]">{countdownPreview.days}</div>
+                        <div className="text-[8px] text-[#5f6368] font-sans uppercase">Days</div>
+                      </div>
+                      <div className="bg-[#f0f4f9] rounded-lg p-1">
+                        <div className="text-xs font-extrabold text-[#0b57d0]">{countdownPreview.hours}</div>
+                        <div className="text-[8px] text-[#5f6368] font-sans uppercase">Hours</div>
+                      </div>
+                      <div className="bg-[#f0f4f9] rounded-lg p-1">
+                        <div className="text-xs font-extrabold text-[#0b57d0]">{countdownPreview.mins}</div>
+                        <div className="text-[8px] text-[#5f6368] font-sans uppercase">Mins</div>
+                      </div>
+                      <div className="bg-[#f0f4f9] rounded-lg p-1">
+                        <div className="text-xs font-extrabold text-[#0b57d0]">{countdownPreview.secs}</div>
+                        <div className="text-[8px] text-[#5f6368] font-sans uppercase">Secs</div>
+                      </div>
+                    </div>
+                    <div className="text-[9px] text-[#747775] font-sans">
+                      {countdownPreview.targetLabel}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

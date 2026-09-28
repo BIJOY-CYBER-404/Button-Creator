@@ -10,6 +10,16 @@ require_once __DIR__ . '/includes/class-db.php';
 require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 
+if (isset($_GET['maintenance_asset']) && $_GET['maintenance_asset'] === '1') {
+    $img_file = __DIR__ . '/assets/images/maintenance_illustration.jpg';
+    if (file_exists($img_file)) {
+        header('Content-Type: image/jpeg');
+        header('Cache-Control: public, max-age=86400');
+        readfile($img_file);
+        exit;
+    }
+}
+
 SLEA_Auth::require_admin();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0');
 header('Pragma: no-cache');
@@ -220,57 +230,43 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                         </span>
                     </div>
 
-                    <!-- 1. Download Portable JSON Backups -->
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-[#444746]">
-                                1. Download Backup (.json) — All or Separately
-                            </h4>
-                            <span class="text-[11px] text-[#5f6368]">Instant JSON export</span>
+                    <!-- 1. Download Portable JSON Backups (Drop-Down Selection) -->
+                    <div class="p-5 rounded-2xl bg-[#f8fafd] border border-[#d3e3fd] space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2 flex-wrap">
+                                    <span>1. Download Backup (.json) — Drop-Down Selection</span>
+                                    <span id="downloadBackupScopeBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-[#0b57d0] font-bold uppercase">
+                                        ALL • FULL BACKUP
+                                    </span>
+                                </h4>
+                                <p id="downloadBackupScopeDesc" class="text-[11px] text-[#5f6368] mt-0.5">
+                                    Includes Website Settings + Generated Episode Pages + Admin Accounts &amp; Monthly Analytics.
+                                </p>
+                            </div>
+                            <span class="text-[11px] text-[#5f6368] font-medium shrink-0">Instant JSON export</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            <a href="api.php?action=export_backup&amp;scope=all&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#d3e3fd] text-left transition-all flex flex-col justify-between gap-3 cursor-pointer">
-                                <div class="space-y-1">
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-xs font-extrabold text-[#0b57d0]">📦 Full Backup (All)</span>
-                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">ALL</span>
-                                    </div>
-                                    <p class="text-[11px] text-[#5f6368]">Settings + Generated Pages + Accounts &amp; Analytics.</p>
-                                </div>
-                                <span class="text-[11px] font-bold text-[#0b57d0]">⬇ Download Full Backup</span>
-                            </a>
 
-                            <a href="api.php?action=export_backup&amp;scope=settings&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-purple-50 border border-purple-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer">
-                                <div class="space-y-1">
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-xs font-extrabold text-purple-700">⚙️ Settings Only</span>
-                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">SETTINGS</span>
-                                    </div>
-                                    <p class="text-[11px] text-[#5f6368]">Branding, Logo, Menu, Footer HTML, Ads &amp; Maintenance.</p>
-                                </div>
-                                <span class="text-[11px] font-bold text-purple-700">⬇ Download Settings Only</span>
-                            </a>
-
-                            <a href="api.php?action=export_backup&amp;scope=pages&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-emerald-50 border border-emerald-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer">
-                                <div class="space-y-1">
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-xs font-extrabold text-emerald-700">📄 Pages Only</span>
-                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PAGES</span>
-                                    </div>
-                                    <p class="text-[11px] text-[#5f6368]">All generated episode button pages, slugs, links &amp; views.</p>
-                                </div>
-                                <span class="text-[11px] font-bold text-emerald-700">⬇ Download Pages Only</span>
-                            </a>
-
-                            <a href="api.php?action=export_backup&amp;scope=others&amp;download=1" class="p-4 rounded-2xl bg-[#f8fafd] hover:bg-amber-50 border border-amber-200 text-left transition-all flex flex-col justify-between gap-3 cursor-pointer">
-                                <div class="space-y-1">
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-xs font-extrabold text-amber-800">👤 Others Only</span>
-                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">OTHERS</span>
-                                    </div>
-                                    <p class="text-[11px] text-[#5f6368]">Admin accounts, permissions &amp; monthly view statistics.</p>
-                                </div>
-                                <span class="text-[11px] font-bold text-amber-800">⬇ Download Others Only</span>
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#e0e4eb]">
+                            <div class="flex-1">
+                                <label for="downloadBackupScopeSelect" class="sr-only">Select Backup Type</label>
+                                <select
+                                    id="downloadBackupScopeSelect"
+                                    onchange="updateDownloadBackupSelection()"
+                                    class="w-full px-3.5 py-2.5 rounded-xl bg-[#f8fafd] border border-[#c4c7c5] focus:border-[#0b57d0] focus:ring-1 focus:ring-[#0b57d0] outline-none text-xs font-bold text-[#1f1f1f] cursor-pointer"
+                                >
+                                    <option value="all">📦 Full Backup (All) — Settings + Generated Pages + Accounts &amp; Analytics</option>
+                                    <option value="settings">⚙️ Website Settings Only — Branding, Logo, Menu, Footer HTML, Ads &amp; Maintenance</option>
+                                    <option value="pages">📄 Generated Pages Only — All Episode Button Pages, Slugs, Links &amp; Views</option>
+                                    <option value="others">👤 Others Only — Admin Accounts, Permissions &amp; Monthly View Statistics</option>
+                                </select>
+                            </div>
+                            <a
+                                id="downloadBackupActionLink"
+                                href="api.php?action=export_backup&amp;scope=all&amp;download=1"
+                                class="px-5 py-2.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                            >
+                                <span id="downloadBackupActionText">⬇ Download Full Backup (.json)</span>
                             </a>
                         </div>
                     </div>
@@ -528,7 +524,7 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                                             type="checkbox"
                                             id="maintenanceEnabledInput"
                                             <?= !empty($maintenance_settings['enabled']) ? 'checked' : '' ?>
-                                            onchange="updateMaintenanceLivePreview()"
+                                            onchange="onMaintenanceToggleChange()"
                                             class="sr-only peer"
                                         />
                                         <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -548,16 +544,20 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                                         type="datetime-local"
                                         id="maintenanceEndTimeInput"
                                         value="<?= htmlspecialchars($maintenance_settings['end_time'] ?? '') ?>"
-                                        onchange="updateMaintenanceLivePreview()"
+                                        oninput="updateMaintenanceLivePreview()"
+                                        onchange="updateMaintenanceLivePreview(); saveMaintenanceSettings(true);"
                                         class="w-full px-3.5 py-2 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] outline-none text-xs font-semibold bg-white"
                                     />
                                     <div class="flex items-center gap-1.5 flex-wrap pt-1">
                                         <span class="text-[10px] font-bold text-[#5f6368] uppercase mr-1">Quick Presets:</span>
-                                        <button type="button" onclick="setMaintenancePreset(30)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] text-[11px] font-bold text-[#444746] cursor-pointer">+30m</button>
-                                        <button type="button" onclick="setMaintenancePreset(60)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] text-[11px] font-bold text-[#444746] cursor-pointer">+1h</button>
-                                        <button type="button" onclick="setMaintenancePreset(180)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] text-[11px] font-bold text-[#444746] cursor-pointer">+3h</button>
-                                        <button type="button" onclick="setMaintenancePreset(1440)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] text-[11px] font-bold text-[#444746] cursor-pointer">+1d</button>
-                                        <button type="button" onclick="clearMaintenancePreset()" class="px-2 py-1 rounded-lg bg-white border border-[#fce8e6] hover:bg-[#fce8e6] text-[11px] font-bold text-[#c5221f] cursor-pointer">Clear</button>
+                                        <button type="button" onclick="setMaintenancePreset(30)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+30 Mins</button>
+                                        <button type="button" onclick="setMaintenancePreset(60)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+1 Hour</button>
+                                        <button type="button" onclick="setMaintenancePreset(180)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+3 Hours</button>
+                                        <button type="button" onclick="setMaintenancePreset(360)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+6 Hours</button>
+                                        <button type="button" onclick="setMaintenancePreset(720)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+12 Hours</button>
+                                        <button type="button" onclick="setMaintenancePreset(1440)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+1 Day</button>
+                                        <button type="button" onclick="setMaintenancePreset(2880)" class="px-2 py-1 rounded-lg bg-white border border-[#dadce0] hover:bg-[#e8f0fe] hover:border-[#0b57d0] text-[11px] font-bold text-[#444746] transition-all cursor-pointer">+2 Days</button>
+                                        <button type="button" onclick="clearMaintenancePreset()" class="px-2 py-1 rounded-lg bg-white border border-[#fce8e6] hover:bg-[#fce8e6] text-[11px] font-bold text-[#c5221f] transition-all cursor-pointer">Clear</button>
                                     </div>
                                 </div>
 
@@ -576,26 +576,71 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                                 </div>
                             </div>
 
-                            <!-- Preview Column (Matches React SettingsManager.tsx) -->
+                            <!-- Live Public Screen Preview Column -->
                             <div class="md:col-span-5 space-y-2">
-                                <span class="text-[11px] font-bold uppercase text-[#5f6368] block">Public Preview Mockup:</span>
-                                <div class="border border-[#e0e4eb] rounded-3xl p-4 bg-[#f8fafd] space-y-3 relative overflow-hidden">
-                                    <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9] flex items-center justify-center">
-                                        <div class="absolute inset-0 bg-[#0b57d0]/5 flex items-center justify-center text-[#0b57d0] font-mono text-[10px] text-center p-4">
-                                            <div class="space-y-1">
-                                                <div class="w-8 h-8 rounded-full border-2 border-[#0b57d0] border-t-transparent animate-spin mx-auto"></div>
-                                                <span class="block font-bold">Optimization Engaged</span>
-                                            </div>
-                                        </div>
+                                <span class="text-[11px] font-bold uppercase text-[#5f6368] block">Public Screen Preview:</span>
+                                <div class="border border-[#e0e4eb] rounded-3xl p-4 bg-[#f8fafd] shadow-2xs space-y-3 relative overflow-hidden">
+                                    <!-- Preview Illustration Thumbnail -->
+                                    <?php
+                                        $m_script_name = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ($_SERVER['PHP_SELF'] ?? '/settings.php'));
+                                        $m_script_dir = rtrim(dirname($m_script_name), '/');
+                                        if ($m_script_dir === '/' || $m_script_dir === '.' || $m_script_dir === '') {
+                                            $m_script_dir = '';
+                                        } elseif ($m_script_dir[0] !== '/') {
+                                            $m_script_dir = '/' . $m_script_dir;
+                                        }
+                                        $m_img_path = $m_script_dir . '/assets/images/maintenance_illustration.jpg';
+                                        $m_stream_path = $m_script_dir . '/settings.php?maintenance_asset=1';
+                                    ?>
+                                    <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9]">
+                                        <img
+                                            src="<?= htmlspecialchars($m_img_path) ?>"
+                                            onerror="if(!this.dataset.fb1){this.dataset.fb1='1';this.src='<?= htmlspecialchars($m_stream_path, ENT_QUOTES) ?>';}else if(!this.dataset.fb2){this.dataset.fb2='1';this.src='?maintenance_asset=1';}else{this.onerror=null;this.src='assets/images/maintenance_illustration.jpg';}"
+                                            alt="Maintenance Illustration"
+                                            class="w-full h-full object-cover bg-[#fafbfc]"
+                                            referrerPolicy="no-referrer"
+                                        />
                                     </div>
-                                    <div class="text-center space-y-1">
+
+                                    <!-- Preview Message & Live Countdown -->
+                                    <div class="text-center space-y-2">
                                         <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fef7e0] border border-[#feebc8] text-[#b06000] text-[9px] font-bold font-mono">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-[#b06000] animate-ping"></span>
                                             <span>SYSTEM MAINTENANCE</span>
                                         </div>
                                         <h4 class="text-xs font-black text-[#111827]">We'll Be Right Back</h4>
                                         <p id="maintenancePreviewMsg" class="text-[10px] text-[#5f6368] leading-normal line-clamp-2 px-2">
                                             <?= htmlspecialchars($maintenance_settings['message'] ?: 'The website is currently undergoing scheduled maintenance. We will be back shortly!') ?>
                                         </p>
+
+                                        <!-- Live Countdown Badges Preview -->
+                                        <div id="maintenancePreviewCountdownCard" class="p-2.5 rounded-xl bg-white border border-[#e0e4eb] space-y-1.5 shadow-2xs">
+                                            <div class="text-[9px] font-bold uppercase tracking-wider text-[#0b57d0] flex items-center justify-center gap-1">
+                                                <svg class="w-3 h-3 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
+                                                <span>Estimated End Time Countdown</span>
+                                            </div>
+                                            <div class="grid grid-cols-4 gap-1 text-center font-mono">
+                                                <div class="bg-[#f0f4f9] rounded-lg p-1">
+                                                    <div id="prevCountdownDays" class="text-xs font-extrabold text-[#0b57d0]">00</div>
+                                                    <div class="text-[8px] text-[#5f6368] font-sans uppercase">Days</div>
+                                                </div>
+                                                <div class="bg-[#f0f4f9] rounded-lg p-1">
+                                                    <div id="prevCountdownHours" class="text-xs font-extrabold text-[#0b57d0]">00</div>
+                                                    <div class="text-[8px] text-[#5f6368] font-sans uppercase">Hours</div>
+                                                </div>
+                                                <div class="bg-[#f0f4f9] rounded-lg p-1">
+                                                    <div id="prevCountdownMins" class="text-xs font-extrabold text-[#0b57d0]">00</div>
+                                                    <div class="text-[8px] text-[#5f6368] font-sans uppercase">Mins</div>
+                                                </div>
+                                                <div class="bg-[#f0f4f9] rounded-lg p-1">
+                                                    <div id="prevCountdownSecs" class="text-xs font-extrabold text-[#0b57d0]">00</div>
+                                                    <div class="text-[8px] text-[#5f6368] font-sans uppercase">Secs</div>
+                                                </div>
+                                            </div>
+                                            <div id="prevCountdownTargetText" class="text-[9px] text-[#747775] font-sans">
+                                                No countdown configured (Back online shortly)
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1104,7 +1149,29 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
             }
         }
 
-        function setMaintenancePreset(minutes) {
+        function parseMaintenanceDate(str) {
+            if (!str) return null;
+            const clean = String(str).trim();
+            if (!clean) return null;
+            const m = clean.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
+            if (m) {
+                return new Date(
+                    Number(m[1]),
+                    Number(m[2]) - 1,
+                    Number(m[3]),
+                    Number(m[4]),
+                    Number(m[5]),
+                    Number(m[6] || 0)
+                );
+            }
+            const d = new Date(clean);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        let maintenanceExplicitlyCleared = false;
+
+        function setMaintenancePreset(minutes, silent = false) {
+            maintenanceExplicitlyCleared = false;
             const now = new Date();
             const future = new Date(now.getTime() + minutes * 60 * 1000);
             const year = future.getFullYear();
@@ -1113,34 +1180,130 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
             const hours = String(future.getHours()).padStart(2, '0');
             const mins = String(future.getMinutes()).padStart(2, '0');
 
-            document.getElementById('maintenanceEndTimeInput').value = `${year}-${month}-${day}T${hours}:${mins}`;
+            const inputEl = document.getElementById('maintenanceEndTimeInput');
+            if (inputEl) {
+                inputEl.value = `${year}-${month}-${day}T${hours}:${mins}`;
+            }
             updateMaintenanceLivePreview();
-            showToast(`Maintenance countdown set to +${minutes >= 60 ? (minutes / 60) + ' hour(s)' : minutes + ' mins'}`, 'info');
-        }
-
-        function clearMaintenancePreset() {
-            document.getElementById('maintenanceEndTimeInput').value = '';
-            updateMaintenanceLivePreview();
-            showToast('Maintenance end time countdown cleared.', 'info');
-        }
-
-        function updateMaintenanceLivePreview() {
-            const msg = document.getElementById('maintenanceMessageInput').value.trim() || 'The website is currently undergoing scheduled maintenance. We will be back shortly!';
-            const enabled = document.getElementById('maintenanceEnabledInput').checked;
-            document.getElementById('maintenancePreviewMsg').innerText = msg;
-            const statusBadge = document.getElementById('maintenanceStatusBadge');
-            if (statusBadge) {
-                statusBadge.innerText = 'Status: ' + (enabled ? 'Active' : 'Inactive');
+            if (!silent) {
+                showToast(`Maintenance countdown set to +${minutes >= 60 ? (minutes / 60) + ' hour(s)' : minutes + ' mins'}`, 'info');
+                saveMaintenanceSettings(true);
             }
         }
 
-        async function saveMaintenanceSettings() {
+        function clearMaintenancePreset() {
+            maintenanceExplicitlyCleared = true;
+            document.getElementById('maintenanceEndTimeInput').value = '';
+            updateMaintenanceLivePreview();
+            showToast('Maintenance end time countdown cleared.', 'info');
+            saveMaintenanceSettings(true);
+        }
+
+        function onMaintenanceToggleChange() {
+            const enabledInput = document.getElementById('maintenanceEnabledInput');
+            const endTimeInput = document.getElementById('maintenanceEndTimeInput');
+            if (enabledInput && enabledInput.checked && endTimeInput) {
+                const currentVal = endTimeInput.value.trim();
+                const parsed = parseMaintenanceDate(currentVal);
+                if (!parsed || parsed.getTime() <= Date.now()) {
+                    setMaintenancePreset(120, true);
+                }
+            }
+            updateMaintenanceLivePreview();
+            saveMaintenanceSettings(true);
+        }
+
+        function updateMaintenanceLivePreview() {
+            const msgInput = document.getElementById('maintenanceMessageInput');
+            const enabledInput = document.getElementById('maintenanceEnabledInput');
+            const endTimeInput = document.getElementById('maintenanceEndTimeInput');
+            const previewMsgEl = document.getElementById('maintenancePreviewMsg');
+            const statusBadge = document.getElementById('maintenanceStatusBadge');
+
+            const msg = (msgInput ? msgInput.value.trim() : '') || 'The website is currently undergoing scheduled maintenance. We will be back shortly!';
+            const enabled = enabledInput ? enabledInput.checked : false;
+            if (previewMsgEl) previewMsgEl.innerText = msg;
+            if (statusBadge) {
+                statusBadge.innerText = 'Status: ' + (enabled ? 'Active' : 'Inactive');
+            }
+
+            const daysEl = document.getElementById('prevCountdownDays');
+            const hoursEl = document.getElementById('prevCountdownHours');
+            const minsEl = document.getElementById('prevCountdownMins');
+            const secsEl = document.getElementById('prevCountdownSecs');
+            const targetTextEl = document.getElementById('prevCountdownTargetText');
+
+            const endTimeVal = endTimeInput ? endTimeInput.value.trim() : '';
+            if (!endTimeVal) {
+                if (daysEl) daysEl.innerText = '00';
+                if (hoursEl) hoursEl.innerText = '00';
+                if (minsEl) minsEl.innerText = '00';
+                if (secsEl) secsEl.innerText = '00';
+                if (targetTextEl) targetTextEl.innerText = 'No countdown configured (Back online shortly)';
+                return;
+            }
+
+            const targetDate = parseMaintenanceDate(endTimeVal);
+            const now = new Date();
+            const diffMs = targetDate ? (targetDate.getTime() - now.getTime()) : NaN;
+
+            if (!targetDate || isNaN(diffMs) || diffMs <= 0) {
+                if (daysEl) daysEl.innerText = '00';
+                if (hoursEl) hoursEl.innerText = '00';
+                if (minsEl) minsEl.innerText = '00';
+                if (secsEl) secsEl.innerText = '00';
+                if (targetTextEl) targetTextEl.innerText = 'Time reached / Wrapping up maintenance';
+                return;
+            }
+
+            const totalSecs = Math.floor(diffMs / 1000);
+            const days = Math.floor(totalSecs / 86400);
+            const hours = Math.floor((totalSecs % 86400) / 3600);
+            const mins = Math.floor((totalSecs % 3600) / 60);
+            const secs = totalSecs % 60;
+
+            if (daysEl) daysEl.innerText = String(days).padStart(2, '0');
+            if (hoursEl) hoursEl.innerText = String(hours).padStart(2, '0');
+            if (minsEl) minsEl.innerText = String(mins).padStart(2, '0');
+            if (secsEl) secsEl.innerText = String(secs).padStart(2, '0');
+
+            if (targetTextEl) {
+                try {
+                    targetTextEl.innerText = 'Target: ' + targetDate.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                } catch (e) {
+                    targetTextEl.innerText = 'Target: ' + endTimeVal.replace('T', ' ');
+                }
+            }
+        }
+
+        // Initialize countdown preview immediately on load (defaulting to +2h if empty/expired)
+        (function initMaintenanceCountdownOnLoad() {
+            const endTimeInput = document.getElementById('maintenanceEndTimeInput');
+            if (endTimeInput) {
+                const currentVal = endTimeInput.value.trim();
+                const parsed = parseMaintenanceDate(currentVal);
+                if (!parsed || parsed.getTime() <= Date.now()) {
+                    setMaintenancePreset(120, true);
+                }
+            }
+            updateMaintenanceLivePreview();
+        })();
+
+        // Keep countdown preview ticking live every second
+        setInterval(updateMaintenanceLivePreview, 1000);
+
+        async function saveMaintenanceSettings(silent = false) {
             const btn = document.getElementById('saveMaintenanceBtn');
-            btn.disabled = true;
+            if (btn && !silent) btn.disabled = true;
+
+            const endTimeStr = document.getElementById('maintenanceEndTimeInput').value.trim();
+            const parsedDate = parseMaintenanceDate(endTimeStr);
 
             const payload = {
                 enabled: document.getElementById('maintenanceEnabledInput').checked,
-                end_time: document.getElementById('maintenanceEndTimeInput').value.trim(),
+                end_time: endTimeStr,
+                end_timestamp: parsedDate ? parsedDate.getTime() : 0,
+                clear_countdown: maintenanceExplicitlyCleared && !endTimeStr,
                 message: document.getElementById('maintenanceMessageInput').value.trim()
             };
 
@@ -1152,15 +1315,63 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast('Maintenance settings saved successfully!', 'success');
-                } else {
+                    if (data.maintenance_settings && data.maintenance_settings.end_time && !endTimeStr && !maintenanceExplicitlyCleared) {
+                        document.getElementById('maintenanceEndTimeInput').value = data.maintenance_settings.end_time;
+                        updateMaintenanceLivePreview();
+                    }
+                    if (!silent) {
+                        showToast('Maintenance settings & countdown timer saved successfully!', 'success');
+                    }
+                } else if (!silent) {
                     showToast('Error saving maintenance settings: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                showToast('Request failed: ' + e.message, 'error');
+                if (!silent) {
+                    showToast('Request failed: ' + e.message, 'error');
+                }
             } finally {
-                btn.disabled = false;
+                if (btn && !silent) btn.disabled = false;
             }
+        }
+
+        function updateDownloadBackupSelection() {
+            const selectEl = document.getElementById('downloadBackupScopeSelect');
+            const linkEl = document.getElementById('downloadBackupActionLink');
+            const textEl = document.getElementById('downloadBackupActionText');
+            const badgeEl = document.getElementById('downloadBackupScopeBadge');
+            const descEl = document.getElementById('downloadBackupScopeDesc');
+            if (!selectEl || !linkEl) return;
+
+            const scope = selectEl.value || 'all';
+            linkEl.href = `api.php?action=export_backup&scope=${encodeURIComponent(scope)}&download=1`;
+
+            const meta = {
+                all: {
+                    badge: 'ALL • FULL BACKUP',
+                    desc: 'Includes Website Settings + Generated Episode Pages + Admin Accounts & Monthly Analytics.',
+                    btn: '⬇ Download Full Backup (.json)'
+                },
+                settings: {
+                    badge: 'SETTINGS ONLY',
+                    desc: 'Includes Site Branding, Logo URL, Navigation Menu, Footer HTML, AdSense & Maintenance Settings.',
+                    btn: '⬇ Download Settings Backup (.json)'
+                },
+                pages: {
+                    badge: 'PAGES ONLY',
+                    desc: 'Includes all generated Episode Button Pages, Slugs, Server Links & View Counts.',
+                    btn: '⬇ Download Pages Backup (.json)'
+                },
+                others: {
+                    badge: 'OTHERS ONLY',
+                    desc: 'Includes Admin Accounts, Permissions & Monthly View Analytics Statistics.',
+                    btn: '⬇ Download Others Backup (.json)'
+                }
+            };
+
+            const info = meta[scope] || meta.all;
+            if (badgeEl) badgeEl.innerText = info.badge;
+            if (descEl) descEl.innerText = info.desc;
+            if (textEl) textEl.innerText = info.btn;
         }
 
         function inspectBackupPayloadClient(parsed) {

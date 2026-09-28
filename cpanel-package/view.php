@@ -10,8 +10,22 @@ require_once __DIR__ . '/includes/class-db.php';
 require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 
-// Force Search Engine Non-Indexation Headers (RFC 6305)
-header('Cache-Control: public, max-age=60');
+if (isset($_GET['maintenance_asset']) && $_GET['maintenance_asset'] === '1') {
+    $img_file = __DIR__ . '/assets/images/maintenance_illustration.jpg';
+    if (file_exists($img_file)) {
+        header('Content-Type: image/jpeg');
+        header('Cache-Control: public, max-age=86400');
+        readfile($img_file);
+        exit;
+    }
+}
+
+// Force Search Engine Non-Indexation Headers (RFC 6305) & Prevent Shared Cache Leaks on Private/Admin Views
+header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+header('X-LiteSpeed-Cache-Control: no-cache');
 
 $slug = isset($_GET['slug']) ? trim($_GET['slug']) : (isset($_GET['p']) ? trim($_GET['p']) : '');
 
@@ -21,11 +35,6 @@ if (empty($slug)) {
     if (preg_match('#/p/([a-zA-Z0-9_-]+)#', $path, $m)) {
         $slug = trim($m[1]);
     }
-}
-
-if (empty($slug)) {
-    http_response_code(404);
-    die('<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Page Not Found</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;"><div style="max-width:440px;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><h2 style="color:#d93025;margin:0 0 8px;">404 - Page Not Found</h2><p style="font-size:13px;color:#5f6368;margin:0;">The requested episode link page could not be located.</p></div></body></html>');
 }
 
 // Seamless 301 redirect if accessed via direct view.php?slug=... to modern /p/{slug} clean structure
@@ -44,11 +53,32 @@ if (strpos($request_uri, 'view.php') !== false && !empty($slug)) {
 $is_admin = SLEA_Auth::is_logged_in();
 
 $maintenance = SLEA_Datastore::get_maintenance_settings();
+
 if (!empty($maintenance['enabled']) && !$is_admin) {
     http_response_code(503);
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
     header('Retry-After: 3600');
     $custom_msg = htmlspecialchars($maintenance['message'] ?? 'The website is currently undergoing scheduled maintenance. We will be back shortly!');
     $end_time = !empty($maintenance['end_time']) ? trim($maintenance['end_time']) : '';
+    $end_timestamp = (isset($maintenance['end_timestamp']) && is_numeric($maintenance['end_timestamp']))
+        ? round((float)$maintenance['end_timestamp'])
+        : 0;
+
+    $m_proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+    $m_host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $m_script_name = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ($_SERVER['PHP_SELF'] ?? '/view.php'));
+    $m_script_dir = rtrim(dirname($m_script_name), '/');
+    $m_script_dir = preg_replace('#/(p|page)$#i', '', $m_script_dir);
+    if ($m_script_dir === '/' || $m_script_dir === '.' || $m_script_dir === '') {
+        $m_script_dir = '';
+    } elseif ($m_script_dir[0] !== '/') {
+        $m_script_dir = '/' . $m_script_dir;
+    }
+    $m_base_path = $m_script_dir;
+    $maintenance_img_url = $m_base_path . '/assets/images/maintenance_illustration.jpg';
+    $maintenance_stream_url = $m_base_path . '/view.php?maintenance_asset=1';
+    $maintenance_img_abs = $m_proto . $m_host . $maintenance_img_url;
     ?>
     <!DOCTYPE html>
     <html lang="en">
@@ -77,12 +107,13 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
         <div class="max-w-lg w-full bg-white rounded-3xl border border-[#e0e4eb] p-6 sm:p-8 shadow-xs text-center space-y-6 relative overflow-hidden">
             <!-- Top Illustration Banner -->
             <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9]">
-                <div class="absolute inset-0 flex items-center justify-center opacity-10">
-                    <svg class="w-48 h-48 text-[#0b57d0] spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    </svg>
-                </div>
-                <img src="assets/images/maintenance_illustration.jpg" alt="Under Maintenance" class="w-full h-full object-cover transition-transform hover:scale-105 duration-700" referrerPolicy="no-referrer" />
+                <img
+                    src="<?= htmlspecialchars($maintenance_img_url) ?>"
+                    onerror="if(!this.dataset.fb1){this.dataset.fb1='1';this.src='<?= htmlspecialchars($maintenance_stream_url, ENT_QUOTES) ?>';}else if(!this.dataset.fb2){this.dataset.fb2='1';this.src='?maintenance_asset=1';}else if(!this.dataset.fb3){this.dataset.fb3='1';this.src='<?= htmlspecialchars($maintenance_img_abs, ENT_QUOTES) ?>';}else{this.onerror=null;this.src='assets/images/maintenance_illustration.jpg';}"
+                    alt="Under Maintenance"
+                    class="relative z-10 w-full h-full object-cover bg-[#fafbfc] transition-transform hover:scale-105 duration-700"
+                    referrerPolicy="no-referrer"
+                />
             </div>
 
             <!-- Header Badge -->
@@ -102,14 +133,15 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
             </div>
 
             <!-- Maintenance End Time Countdown Component (Days, Hours, Minutes, Seconds) -->
-            <?php if (!empty($end_time)): ?>
             <div id="countdownWrapper" class="bg-[#f8fafd] rounded-2xl p-4 sm:p-5 border border-[#e1e7f0] space-y-3 shadow-2xs">
                 <div class="flex items-center justify-between text-xs font-semibold text-[#5f6368]">
                     <span class="flex items-center gap-1.5 text-[#0b57d0] font-bold">
                         <svg class="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
                         <span>Estimated Time Remaining</span>
                     </span>
-                    <span id="countdownStatusBadge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0]">COUNTDOWN</span>
+                    <span id="countdownStatusBadge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0]">
+                        LIVE COUNTDOWN
+                    </span>
                 </div>
 
                 <!-- 4 Real-Time Countdown Badges -->
@@ -133,33 +165,65 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
                 </div>
 
                 <div id="countdownNoticeBox" class="text-[11px] text-[#5f6368] font-medium text-center">
-                    Target End Time: <span id="countdownFormattedTime" class="font-bold text-[#1f1f1f]"></span>
+                    Target End Time: <span id="countdownFormattedTime" class="font-bold text-[#1f1f1f]"><?= !empty($end_time) ? htmlspecialchars(str_replace('T', ' ', $end_time)) : 'Scheduled Maintenance Window' ?></span>
                 </div>
             </div>
-            <?php else: ?>
-            <div class="bg-[#f8fafd] rounded-2xl p-4 border border-[#e1e7f0] text-center space-y-1">
-                <div class="inline-flex items-center gap-1.5 text-xs font-bold text-[#0b57d0]">
-                    <svg class="w-3.5 h-3.5 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
-                    <span>System Upgrades Underway</span>
-                </div>
-                <p class="text-[11px] text-[#5f6368]">
-                    We expect to be back online shortly. Page will refresh automatically.
-                </p>
-            </div>
-            <?php endif; ?>
 
             <script>
-                const targetIsoStr = <?= json_encode($end_time) ?>;
-                if (targetIsoStr) {
-                    const targetDate = new Date(targetIsoStr);
+                (function() {
+                    const targetIsoStr = <?= json_encode($end_time) ?>;
+                    const targetTimestampMs = <?= json_encode($end_timestamp) ?>;
+
+                    function parseMaintenanceDate(str, tsMs) {
+                        const nowMs = Date.now();
+                        if (tsMs && Number(tsMs) > nowMs) {
+                            const dTs = new Date(Number(tsMs));
+                            if (!isNaN(dTs.getTime())) return dTs;
+                        }
+                        if (str) {
+                            const clean = String(str).trim();
+                            const m = clean.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
+                            if (m) {
+                                const d = new Date(
+                                    Number(m[1]),
+                                    Number(m[2]) - 1,
+                                    Number(m[3]),
+                                    Number(m[4]),
+                                    Number(m[5]),
+                                    Number(m[6] || 0)
+                                );
+                                if (!isNaN(d.getTime()) && d.getTime() > nowMs) return d;
+                            }
+                            const d2 = new Date(clean);
+                            if (!isNaN(d2.getTime()) && d2.getTime() > nowMs) return d2;
+                        }
+                        // Fallback: ensure a live ticking 2-hour countdown window even if no future end_time was set yet
+                        try {
+                            const savedFallback = Number(localStorage.getItem('slea_maintenance_fallback_ts') || '0');
+                            if (savedFallback > nowMs) {
+                                return new Date(savedFallback);
+                            }
+                            const nextFallback = nowMs + (2 * 3600 * 1000);
+                            localStorage.setItem('slea_maintenance_fallback_ts', String(nextFallback));
+                            return new Date(nextFallback);
+                        } catch (e) {
+                            return new Date(nowMs + (2 * 3600 * 1000));
+                        }
+                    }
+
+                    let targetDate = parseMaintenanceDate(targetIsoStr, targetTimestampMs);
                     const formattedEl = document.getElementById('countdownFormattedTime');
-                    if (formattedEl && !isNaN(targetDate.getTime())) {
-                        formattedEl.innerText = targetDate.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+                    if (formattedEl && targetDate) {
+                        try {
+                            formattedEl.innerText = targetDate.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+                        } catch (e) {
+                            formattedEl.innerText = targetDate.toLocaleString();
+                        }
                     }
 
                     function tickCountdown() {
                         const now = new Date();
-                        const diff = targetDate.getTime() - now.getTime();
+                        const diff = targetDate ? (targetDate.getTime() - now.getTime()) : 0;
                         if (diff <= 0) {
                             document.getElementById('cDays').innerText = '00';
                             document.getElementById('cHours').innerText = '00';
@@ -192,18 +256,23 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
 
                     tickCountdown();
                     setInterval(tickCountdown, 1000);
-                }
 
-                // Auto reload periodically to detect when maintenance is finished
-                setTimeout(() => {
-                    window.location.reload();
-                }, 30000);
+                    // Auto reload periodically to detect when maintenance is finished
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 30000);
+                })();
             </script>
         </div>
     </body>
     </html>
     <?php
     exit;
+}
+
+if (empty($slug)) {
+    http_response_code(404);
+    die('<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Page Not Found</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;"><div style="max-width:440px;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><h2 style="color:#d93025;margin:0 0 8px;">404 - Page Not Found</h2><p style="font-size:13px;color:#5f6368;margin:0;">The requested episode link page could not be located.</p></div></body></html>');
 }
 
 // Lookup page by slug with bi-directional fallback (supports both clean slug and legacy ep- prefix)
@@ -218,7 +287,7 @@ if (!$page) {
     }
 }
 
-if (!$page) {
+if (!$page || (!$is_admin && isset($page['is_public']) && intval($page['is_public']) === 0)) {
     http_response_code(404);
     die('<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Page Not Available</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;"><div style="max-width:440px;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><h2 style="color:#d93025;margin:0 0 8px;">404 - Page Not Available</h2><p style="font-size:13px;color:#5f6368;margin:0;">This episode page is either private or does not exist.</p></div></body></html>');
 }

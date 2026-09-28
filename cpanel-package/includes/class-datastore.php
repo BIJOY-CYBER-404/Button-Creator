@@ -45,27 +45,29 @@ class SLEA_Datastore {
     public static function get_page_by_slug($slug, $public_only = false) {
         try {
             $pdo = SLEA_DB::get_connection();
-            $sql = "SELECT * FROM pages WHERE slug = :slug";
-            if ($public_only) {
-                $sql .= " AND is_public = 1";
-            }
-            $sql .= " LIMIT 1";
-
-            $stmt = $pdo->prepare($sql);
+            $stmt = $pdo->prepare("SELECT * FROM pages WHERE slug = :slug LIMIT 1");
             $stmt->execute([':slug' => $slug]);
             $row = $stmt->fetch();
 
             if ($row) {
-                return self::format_page_row($row);
+                $formatted = self::format_page_row($row);
+                if ($public_only && empty($formatted['is_public'])) {
+                    return null;
+                }
+                return $formatted;
             }
         } catch (Exception $e) {
             error_log('Error finding page: ' . $e->getMessage());
         }
 
-        // Check fallback from file backup if database has missing row
+        // Check fallback from file backup only if database does not have this slug at all
         $file_pages = self::get_pages_from_file();
         foreach ($file_pages as $p) {
-            if ($p['slug'] === $slug && (!$public_only || !empty($p['is_public']))) {
+            if (($p['slug'] ?? '') === $slug) {
+                $is_pub = isset($p['is_public']) ? !empty($p['is_public']) : true;
+                if ($public_only && !$is_pub) {
+                    return null;
+                }
                 return $p;
             }
         }
@@ -459,16 +461,27 @@ class SLEA_Datastore {
 
     public static function get_maintenance_settings() {
         $defaults = [
-            'enabled'  => false,
-            'message'  => 'The website is currently undergoing scheduled maintenance. We will be back shortly!',
-            'end_time' => ''
+            'enabled'       => false,
+            'message'       => 'The website is currently undergoing scheduled maintenance. We will be back shortly!',
+            'end_time'      => '',
+            'end_timestamp' => 0
         ];
 
         $raw = self::get_raw_setting('maintenance_settings');
         if (!empty($raw)) {
             $decoded = json_decode($raw, true);
             if (is_array($decoded)) {
-                return array_merge($defaults, $decoded);
+                $merged = array_merge($defaults, $decoded);
+                $merged['end_timestamp'] = (isset($merged['end_timestamp']) && is_numeric($merged['end_timestamp']))
+                    ? round((float)$merged['end_timestamp'])
+                    : 0;
+                if ($merged['end_timestamp'] <= 0 && !empty($merged['end_time'])) {
+                    $ts = strtotime(str_replace('T', ' ', $merged['end_time']));
+                    if ($ts !== false && $ts > 0) {
+                        $merged['end_timestamp'] = round((float)$ts * 1000);
+                    }
+                }
+                return $merged;
             }
         }
 
@@ -476,10 +489,35 @@ class SLEA_Datastore {
     }
 
     public static function save_maintenance_settings($data) {
+        $enabled = !empty($data['enabled']);
+        $end_time = trim($data['end_time'] ?? '');
+        $end_timestamp = (isset($data['end_timestamp']) && is_numeric($data['end_timestamp']))
+            ? round((float)$data['end_timestamp'])
+            : 0;
+
+        if (empty($end_time) && $end_timestamp <= 0) {
+            $end_timestamp = 0;
+        } elseif ($end_timestamp <= 0 && !empty($end_time)) {
+            $ts = strtotime(str_replace('T', ' ', $end_time));
+            if ($ts !== false && $ts > 0) {
+                $end_timestamp = round((float)$ts * 1000);
+            }
+        }
+
+        $explicitly_cleared = !empty($data['clear_countdown']);
+        if ($enabled && !$explicitly_cleared && $end_timestamp <= round(microtime(true) * 1000)) {
+            $future_sec = time() + (2 * 3600);
+            $end_timestamp = round((float)$future_sec * 1000);
+            if (empty($end_time)) {
+                $end_time = date('Y-m-d\TH:i', $future_sec);
+            }
+        }
+
         $clean = [
-            'enabled'  => !empty($data['enabled']),
-            'message'  => !empty($data['message']) ? trim($data['message']) : 'The website is currently undergoing scheduled maintenance. We will be back shortly!',
-            'end_time' => trim($data['end_time'] ?? '')
+            'enabled'       => $enabled,
+            'message'       => !empty($data['message']) ? trim($data['message']) : 'The website is currently undergoing scheduled maintenance. We will be back shortly!',
+            'end_time'      => $end_time,
+            'end_timestamp' => $end_timestamp
         ];
 
         self::save_raw_setting('maintenance_settings', $clean);

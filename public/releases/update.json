@@ -1,15 +1,13 @@
 {
-  "name": "Movie Hub HQ Drive",
-  "version": "v-8.0.0",
+  "version": "12.0.0",
   "release_date": "2026-09-28",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "sha256": "751f7722260471cbc658532d312887659a328958a7208f2db4b3c83884168efc",
-  "checksum": "751f7722260471cbc658532d312887659a328958a7208f2db4b3c83884168efc",
-  "minimum_php": "7.4",
   "release_notes": [
-    "Fixed critical staging directory exclusion bug in One-Click Updater that prevented new PHP files from overwriting live files during remote updates",
-    "Added automated staging deployment migration (2026_09_28_004_force_deploy_staging_files.php) so older installations immediately apply all updated files on remote update",
-    "Removed One-Click Application Update System card from settings.php (exclusively in update.php)",
-    "Enabled full Backup & Restore Center at the top of settings.php with automatic backup format detection (Full, Settings Only, Pages Only, Others Only)"
-  ]
+    "Restored cPanel Episode Page UI design across public episode pages (/p/{slug}) with full-width sticky header, SVG social share bar, resolved server badges, and clean Watch Now pill buttons",
+    "Enforced strict authentication redirect to login.php when visiting admin pages without an admin account logged in",
+    "Enforced 404 Page Not Available response when visiting private episode pages or invalid routes without an admin account logged in",
+    "Disabled public caching on private/admin views and prevented file-backup fallback leaks on private pages"
+  ],
+  "minimum_php": "7.4",
+  "checksum": "53fd79ba32a0c154aaa12a91085e9fbcfecabc92e6fed36ea868ce4e1a0f2bf4"
 }

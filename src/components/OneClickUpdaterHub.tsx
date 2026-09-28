@@ -60,19 +60,19 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "8.0.0",
-    remote_version: "8.0.0",
+    current_version: "12.0.0",
+    remote_version: "12.0.0",
     update_available: false,
     release_date: "2026-09-28",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Removed legacy One-Click Application Update System card from Settings page (settings.php)",
-      "Enabled full Backup & Restore Center in cPanel shared hosting (settings.php & api.php) with Full, Settings Only, Pages Only, and Others Only exports",
-      "Automatic backup format detection on restore (auto-detects Full Backup, Settings, Pages, or Accounts/Analytics without data loss)",
-      "Unified cPanel Admin Panel design with React Website Design across all pages and removed stale nested package archives"
+      "Restored cPanel Episode Page UI design across public episode pages (/p/{slug}) with full-width sticky header, SVG social share bar, resolved server badges, and clean Watch Now pill buttons",
+      "Enforced strict authentication redirect to login.php when visiting admin pages without an admin account logged in",
+      "Enforced 404 Page Not Available response when visiting private episode pages or invalid routes without an admin account logged in",
+      "Disabled public caching on private/admin views and prevented file-backup fallback leaks on private pages"
     ],
     minimum_php: "7.4",
-    checksum: "751f7722260471cbc658532d312887659a328958a7208f2db4b3c83884168efc"
+    checksum: "53fd79ba32a0c154aaa12a91085e9fbcfecabc92e6fed36ea868ce4e1a0f2bf4"
   });
 
   const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json");

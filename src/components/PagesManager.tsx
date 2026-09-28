@@ -141,6 +141,35 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
     onNotify?.("Button page link copied to clipboard!", "success");
   };
 
+  const handleToggleStatus = async (id: string) => {
+    try {
+      const res = await fetch("/api/pages/toggle-status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`,
+          "x-admin-token": adminToken,
+        },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (data.success && data.page) {
+        const isPub = Number(data.page.is_public) === 1;
+        setPages((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, is_public: isPub ? 1 : 0 } : p))
+        );
+        onNotify?.(
+          isPub ? "Page visibility changed to Public" : "Page visibility changed to Private",
+          isPub ? "success" : "info"
+        );
+      } else {
+        onNotify?.(data.error || "Could not update page visibility", "error");
+      }
+    } catch (err: any) {
+      onNotify?.("Toggle visibility failed: " + err.message, "error");
+    }
+  };
+
   return (
     <div className="w-full space-y-4">
       <div className="bg-white rounded-2xl p-5 sm:p-6 border border-[#e0e4eb] shadow-xs space-y-4">
@@ -259,6 +288,19 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
                         <span className="px-2 py-0.5 rounded-full bg-[#f0f4f9] text-[#444746] text-[10px] font-mono shrink-0">
                           {btnCount} buttons
                         </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(p.id)}
+                          title="Click to toggle Public / Private visibility"
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors shrink-0 ${
+                            p.is_public === undefined || Boolean(Number(p.is_public))
+                              ? "bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]"
+                              : "bg-[#fff0d4] text-[#b06000] border border-[#feebc8]"
+                          }`}
+                        >
+                          {p.is_public === undefined || Boolean(Number(p.is_public)) ? "● Public" : "○ Private"}
+                        </button>
                       </div>
 
                       <div className="flex items-center gap-2 text-[11px] text-[#747775] flex-wrap">
