@@ -522,7 +522,7 @@ class SLEA_Updater {
 
             $skip = false;
             foreach ($exclude as $ex) {
-                if (strpos($dst_path, $ex) === 0 || strpos($src_path, $ex) === 0) {
+                if (strpos($dst_path, $ex) === 0) {
                     $skip = true;
                     break;
                 }

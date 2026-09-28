@@ -60,8 +60,8 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "5.9.0",
-    remote_version: "5.9.0",
+    current_version: "8.0.0",
+    remote_version: "8.0.0",
     update_available: false,
     release_date: "2026-09-28",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
@@ -72,7 +72,7 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       "Unified cPanel Admin Panel design with React Website Design across all pages and removed stale nested package archives"
     ],
     minimum_php: "7.4",
-    checksum: "349fe4046a84f250a97f483a2417295ec7ac56656d3eef0b4415476dc5a04269"
+    checksum: "751f7722260471cbc658532d312887659a328958a7208f2db4b3c83884168efc"
   });
 
   const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json");
