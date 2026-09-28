@@ -2,7 +2,7 @@
   "version": "13.0.0",
   "release_date": "2026-09-28",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "sha256:8e9a555271cb43227e3ba5d86bc86f7b1210f5e50a8617adf0da5ce893042a10",
+  "checksum": "8714f91671d07b9077d39cacd59f631a84eb3cc9c95a98c558aa0f341b960d69",
   "changelog": [
     "Editable Menu Items: Public navigation menu items can now be edited inline (Title, Destination URL, Open in new tab) and reordered directly from Admin Panel Settings",
     "Strict 404 Protection on Admin & Private Pages: Visiting any admin page or private page without an active admin login strictly returns a 404 Not Found page instead of redirecting to the login screen",
@@ -11,5 +11,6 @@
   ],
   "migrations": true,
   "min_php_version": "7.4",
-  "backup_required": true
+  "backup_required": true,
+  "sha256": "8714f91671d07b9077d39cacd59f631a84eb3cc9c95a98c558aa0f341b960d69"
 }

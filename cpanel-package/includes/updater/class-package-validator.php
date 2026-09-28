@@ -21,8 +21,9 @@ class SLEA_PackageValidator {
         // 1. Checksum verification
         if (!empty($expected_checksum)) {
             $actual_checksum = hash_file('sha256', $zip_file);
-            if (strtolower($actual_checksum) !== strtolower($expected_checksum)) {
-                throw new Exception("SHA-256 checksum mismatch! Expected: " . $expected_checksum . ", Got: " . $actual_checksum);
+            $clean_expected = preg_replace('/^sha256:/i', '', trim($expected_checksum));
+            if (strtolower($actual_checksum) !== strtolower($clean_expected)) {
+                throw new Exception("SHA-256 checksum mismatch! Expected: " . $clean_expected . ", Got: " . $actual_checksum);
             }
             $this->logger->log("Verifying package", "SHA-256 checksum verified successfully.");
         }
