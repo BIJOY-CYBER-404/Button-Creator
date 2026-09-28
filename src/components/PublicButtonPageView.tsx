@@ -617,15 +617,15 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     >
       {/* Admin Quick Controls Bar (Only shown when active admin account logged-in state is found) */}
       {isAdmin && (
-        <div className="w-full bg-[#111827] text-white border-b border-slate-800 px-4 py-2 text-xs z-50">
-          <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0b57d0] text-white uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <div className="w-full bg-white text-[#1f1f1f] border-b border-[#e0e4eb] px-3 sm:px-4 py-2 text-xs z-50 shadow-xs">
+          <div className="max-w-4xl mx-auto flex flex-row flex-nowrap items-center justify-between gap-3 overflow-x-auto whitespace-nowrap">
+            <div className="flex flex-row flex-nowrap items-center gap-2.5 sm:gap-3 shrink-0">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] uppercase tracking-wider shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
                 Admin View
               </span>
-              <div className="flex items-center gap-2 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700">
-                <span className="text-[11px] text-slate-300 font-medium">Visibility:</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 bg-[#f8fafd] px-2.5 py-1 rounded-xl border border-[#e0e4eb] shrink-0">
+                <span className="text-[11px] text-[#444746] font-semibold">Visibility:</span>
                 <button
                   type="button"
                   onClick={toggleAdminStatus}
@@ -633,7 +633,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
                   aria-checked={isPublic}
                   title="Click to toggle Public / Private visibility"
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    isPublic ? "bg-[#137333]" : "bg-slate-500"
+                    isPublic ? "bg-[#137333]" : "bg-slate-300"
                   }`}
                 >
                   <span
@@ -652,23 +652,23 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
                   {isPublic ? "Public" : "Private"}
                 </span>
               </div>
-              <span className="text-slate-400 hidden sm:inline">•</span>
-              <span className="text-slate-300 font-mono text-[11px] hidden sm:inline">
+              <span className="text-[#c4c7c5]">•</span>
+              <span className="text-[#444746] font-mono text-[11px] font-medium shrink-0">
                 👁️ {Number(page.views || 0).toLocaleString()} views
               </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-row flex-nowrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => (onEditPage ? onEditPage(page.id) : onBackToAdmin?.())}
-                className="px-3 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold text-xs transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
               >
                 <span>✏️ Edit Page</span>
               </button>
               <button
                 type="button"
                 onClick={() => (onBackToAdmin ? onBackToAdmin() : (window.location.href = "/"))}
-                className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold transition-colors border border-slate-700 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#1f1f1f] hover:text-[#0b57d0] font-semibold text-xs transition-colors border border-[#e0e4eb] cursor-pointer shadow-2xs"
               >
                 Pages Manager
               </button>
@@ -994,14 +994,6 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
                           {btn.text && !btn.text.toLowerCase().includes("episode") && (
                             <span className="text-xs text-[#747775] font-normal truncate hidden sm:inline">
                               ({btn.text})
-                            </span>
-                          )}
-                          {isAdmin && (
-                            <span
-                              className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-mono font-bold text-[10px]"
-                              title="Admin Only: Total Clicks"
-                            >
-                              👆 {Number(btn.clicks || 0).toLocaleString()} clicks
                             </span>
                           )}
                         </div>

@@ -443,15 +443,15 @@ function resolve_server_info($provider, $url, $btn_text) {
 <body class="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
         <?php if ($is_admin): ?>
         <!-- Admin Quick Controls Bar (Only shown when active admin account logged-in state is found) -->
-        <div class="w-full bg-[#111827] text-white border-b border-slate-800 px-4 py-2 text-xs z-50">
-            <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-2">
-                <div class="flex items-center gap-2.5 flex-wrap">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0b57d0] text-white uppercase tracking-wider">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <div class="w-full bg-white text-[#1f1f1f] border-b border-[#e0e4eb] px-3 sm:px-4 py-2 text-xs z-50 shadow-xs">
+            <div class="max-w-4xl mx-auto flex flex-row flex-nowrap items-center justify-between gap-3 overflow-x-auto whitespace-nowrap">
+                <div class="flex flex-row flex-nowrap items-center gap-2.5 sm:gap-3 shrink-0">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] uppercase tracking-wider shrink-0">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse"></span>
                         Admin View
                     </span>
-                    <div class="flex items-center gap-2 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700">
-                        <span class="text-[11px] text-slate-300 font-medium">Visibility:</span>
+                    <div class="flex items-center gap-1.5 sm:gap-2 bg-[#f8fafd] px-2.5 py-1 rounded-xl border border-[#e0e4eb] shrink-0">
+                        <span class="text-[11px] text-[#444746] font-semibold">Visibility:</span>
                         <button
                             type="button"
                             id="adminViewToggleBtn"
@@ -459,7 +459,7 @@ function resolve_server_info($provider, $url, $btn_text) {
                             role="switch"
                             aria-checked="<?= $is_public ? 'true' : 'false' ?>"
                             title="Click to toggle Public / Private visibility"
-                            class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none <?= $is_public ? 'bg-[#137333]' : 'bg-slate-500' ?>"
+                            class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none <?= $is_public ? 'bg-[#137333]' : 'bg-slate-300' ?>"
                         >
                             <span
                                 id="adminViewToggleThumb"
@@ -473,16 +473,16 @@ function resolve_server_info($provider, $url, $btn_text) {
                             <?= $is_public ? 'Public' : 'Private' ?>
                         </span>
                     </div>
-                    <span class="text-slate-400 hidden sm:inline">•</span>
-                    <span class="text-slate-300 font-mono text-[11px] hidden sm:inline">
+                    <span class="text-[#c4c7c5]">•</span>
+                    <span class="text-[#444746] font-mono text-[11px] font-medium shrink-0">
                         👁️ <?= number_format(intval($page['views'] ?? 0)) ?> views
                     </span>
                 </div>
-                <div class="flex items-center gap-2">
-                    <a href="<?= htmlspecialchars($app_base_path . '/admin.php?edit=' . $page_id) ?>" class="px-3 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold transition-colors flex items-center gap-1">
+                <div class="flex flex-row flex-nowrap items-center gap-2 shrink-0">
+                    <a href="<?= htmlspecialchars($app_base_path . '/pages.php?edit=' . $page_id) ?>" class="px-3 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold text-xs transition-colors flex items-center gap-1 shadow-2xs">
                         <span>✏️ Edit Page</span>
                     </a>
-                    <a href="<?= htmlspecialchars($app_base_path . '/pages.php') ?>" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold transition-colors border border-slate-700">
+                    <a href="<?= htmlspecialchars($app_base_path . '/pages.php') ?>" class="px-3 py-1.5 rounded-xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#1f1f1f] hover:text-[#0b57d0] font-semibold text-xs transition-colors border border-[#e0e4eb] shadow-2xs">
                         Pages Manager
                     </a>
                 </div>
@@ -723,7 +723,6 @@ function resolve_server_info($provider, $url, $btn_text) {
                     $btn_quality = htmlspecialchars($btn['quality'] ?? 'HD');
                     $raw_provider = $btn['provider'] ?? '';
                     $raw_ep = $btn['episode'] ?? ($idx + 1);
-                    $click_count = intval($btn['clicks'] ?? 0);
 
                     // Episode 01, Episode 02... formatting (padded to 2 digits)
                     $ep_num_padded = is_numeric($raw_ep) ? str_pad(intval($raw_ep), 2, '0', STR_PAD_LEFT) : $raw_ep;
@@ -747,11 +746,6 @@ function resolve_server_info($provider, $url, $btn_text) {
                                 <span><?= $ep_label ?></span>
                                 <?php if (!empty($btn['text']) && stripos($btn['text'], 'Episode') === false): ?>
                                     <span class="text-xs text-[#747775] font-normal truncate hidden sm:inline">(<?= $btn_text ?>)</span>
-                                <?php endif; ?>
-                                <?php if ($is_admin): ?>
-                                    <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-mono font-bold text-[10px]" title="Admin Only: Total Clicks">
-                                        👆 <?= number_format($click_count) ?> clicks
-                                    </span>
                                 <?php endif; ?>
                             </div>
 

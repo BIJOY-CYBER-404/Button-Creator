@@ -1,15 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { Copy, Eye, Trash2, ExternalLink, RefreshCw, FileText, Globe, Layers, ShieldCheck, CheckSquare, Square } from "lucide-react";
-import { ButtonPage } from "../types";
+import { Copy, Eye, Trash2, Edit, RefreshCw, FileText, Layers, Plus, X } from "lucide-react";
+import { ButtonPage, PageButton } from "../types";
 
 interface PagesManagerProps {
   adminToken: string;
+  initialEditPageId?: string | null;
+  onClearEditPageId?: () => void;
   onViewPage: (slug: string) => void;
   onNotify?: (text: string, type: "success" | "error" | "info") => void;
 }
 
 export const PagesManager: React.FC<PagesManagerProps> = ({
   adminToken,
+  initialEditPageId,
+  onClearEditPageId,
   onViewPage,
   onNotify,
 }) => {
@@ -18,6 +22,27 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
   const [search, setSearch] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState<boolean>(false);
+
+  // Edit Modal State
+  const [editingPage, setEditingPage] = useState<ButtonPage | null>(null);
+  const [editForm, setEditForm] = useState<{
+    id: string;
+    title: string;
+    slug: string;
+    description: string;
+    is_public: number;
+    theme: string;
+    buttons: PageButton[];
+  }>({
+    id: "",
+    title: "",
+    slug: "",
+    description: "",
+    is_public: 1,
+    theme: "indigo",
+    buttons: [],
+  });
+  const [savingEdit, setSavingEdit] = useState<boolean>(false);
 
   const fetchPages = async () => {
     setLoading(true);
@@ -42,6 +67,102 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
   useEffect(() => {
     fetchPages();
   }, [adminToken]);
+
+  // Handle initialEditPageId if navigated with specific page ID
+  useEffect(() => {
+    if (initialEditPageId && pages.length > 0) {
+      const target = pages.find((p) => String(p.id) === String(initialEditPageId) || p.slug === String(initialEditPageId));
+      if (target) {
+        openEditModal(target);
+      }
+      onClearEditPageId?.();
+    }
+  }, [initialEditPageId, pages]);
+
+  const openEditModal = (page: ButtonPage) => {
+    setEditingPage(page);
+    setEditForm({
+      id: page.id,
+      title: page.title || "",
+      slug: page.slug || "",
+      description: page.description || "",
+      is_public: page.is_public === undefined || Boolean(Number(page.is_public)) ? 1 : 0,
+      theme: page.theme || "indigo",
+      buttons: Array.isArray(page.buttons) && page.buttons.length > 0
+        ? [...page.buttons.map(b => ({ ...b }))]
+        : [{ text: "Episode 1", url: "", quality: "720p" }],
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditingPage(null);
+  };
+
+  const handleAddButtonRow = () => {
+    const nextIdx = editForm.buttons.length + 1;
+    setEditForm(prev => ({
+      ...prev,
+      buttons: [
+        ...prev.buttons,
+        { text: `Episode ${nextIdx}`, url: "", quality: "720p" }
+      ]
+    }));
+  };
+
+  const handleRemoveButtonRow = (index: number) => {
+    setEditForm(prev => ({
+      ...prev,
+      buttons: prev.buttons.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleButtonChange = (index: number, field: keyof PageButton, value: string) => {
+    setEditForm(prev => {
+      const updated = [...prev.buttons];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, buttons: updated };
+    });
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.id) return;
+    setSavingEdit(true);
+
+    try {
+      const validButtons = editForm.buttons.filter(b => b.text && b.url);
+      const res = await fetch("/api/pages/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`,
+          "x-admin-token": adminToken,
+        },
+        body: JSON.stringify({
+          id: editForm.id,
+          title: editForm.title,
+          slug: editForm.slug,
+          description: editForm.description,
+          is_public: editForm.is_public,
+          theme: editForm.theme,
+          buttons: validButtons,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.page) {
+        setPages(prev => prev.map(p => (p.id === data.page.id ? data.page : p)));
+        onNotify?.("Page updated successfully!", "success");
+        closeEditModal();
+      } else {
+        onNotify?.(data.error || "Failed to update page", "error");
+      }
+    } catch (err: any) {
+      onNotify?.("Request failed: " + err.message, "error");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const handleDelete = async (id: string, title: string) => {
     if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
@@ -180,7 +301,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
               <span>Active Button Pages ({pages.length})</span>
             </h2>
             <p className="text-xs text-[#5f6368]">
-              Manage, preview, and bulk delete generated episode button pages.
+              Manage, edit, preview, and delete generated episode button pages.
             </p>
           </div>
 
@@ -257,7 +378,6 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
         ) : (
           <div className="space-y-3">
             {filtered.map((p) => {
-              const fullUrl = `${window.location.origin}/p/${p.slug}`;
               const btnCount = p.buttons?.length || 0;
               const isSelected = selectedIds.has(p.id);
 
@@ -321,6 +441,14 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
 
                   <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto pl-7 sm:pl-0">
                     <button
+                      onClick={() => openEditModal(p)}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#0b57d0] text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors border border-[#e0e4eb]"
+                      title="Edit Page Details & Buttons"
+                    >
+                      <Edit className="w-3.5 h-3.5" /> Edit
+                    </button>
+
+                    <button
                       onClick={() => copyPageLink(p.slug)}
                       className="px-2.5 py-1.5 rounded-lg bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
                       title="Copy Public URL"
@@ -349,6 +477,175 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
           </div>
         )}
       </div>
+
+      {/* Edit Page Modal */}
+      {editingPage && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-[#e0e4eb] shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-[#f0f4f9] flex items-center justify-between shrink-0 bg-[#f8fafd]">
+              <div>
+                <h3 className="text-base font-bold text-[#111827] flex items-center gap-2">
+                  <span>✏️ Edit Button Page</span>
+                  <span className="text-xs font-mono font-normal text-[#0b57d0]">/p/{editForm.slug}</span>
+                </h3>
+                <p className="text-xs text-[#5f6368]">
+                  Update page title, slug, visibility status, and download button links.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditModal}
+                className="p-1.5 rounded-xl text-[#5f6368] hover:text-[#111827] hover:bg-[#e0e4eb] transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form Content */}
+            <form onSubmit={handleSaveEdit} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#444746]">Page Title</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] text-xs font-medium focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#444746]">URL Slug</label>
+                  <input
+                    type="text"
+                    value={editForm.slug}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, slug: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#444746]">Visibility Status</label>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditForm(prev => ({ ...prev, is_public: prev.is_public === 1 ? 0 : 1 }))}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                        editForm.is_public === 1 ? "bg-[#137333]" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          editForm.is_public === 1 ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    <span className={`text-xs font-bold ${editForm.is_public === 1 ? "text-[#137333]" : "text-[#b06000]"}`}>
+                      {editForm.is_public === 1 ? "Public (Live)" : "Private (404 for Public)"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#444746]">Description / Notice (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={editForm.description}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] text-xs focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 outline-none resize-none"
+                />
+              </div>
+
+              {/* Episode Buttons Manager */}
+              <div className="space-y-2 pt-2 border-t border-[#f0f4f9]">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#111827]">
+                    Episode Download Buttons ({editForm.buttons.length})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddButtonRow}
+                    className="px-2.5 py-1 rounded-lg bg-[#e8f0fe] text-[#0b57d0] hover:bg-[#c2e7ff] text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Add Button
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {editForm.buttons.map((btn, idx) => (
+                    <div
+                      key={`btn-edit-${idx}`}
+                      className="grid grid-cols-12 gap-2 bg-[#f8fafd] p-2.5 rounded-xl border border-[#e0e4eb] items-center"
+                    >
+                      <div className="col-span-5">
+                        <input
+                          type="text"
+                          placeholder="Button Label (Episode 1)"
+                          value={btn.text}
+                          onChange={(e) => handleButtonChange(idx, "text", e.target.value)}
+                          required
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-[#c4c7c5] text-xs font-medium focus:border-[#0b57d0] outline-none"
+                        />
+                      </div>
+                      <div className="col-span-5">
+                        <input
+                          type="url"
+                          placeholder="Destination URL"
+                          value={btn.url}
+                          onChange={(e) => handleButtonChange(idx, "url", e.target.value)}
+                          required
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-[#c4c7c5] text-xs font-mono focus:border-[#0b57d0] outline-none"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          placeholder="HD"
+                          value={btn.quality || ""}
+                          onChange={(e) => handleButtonChange(idx, "quality", e.target.value)}
+                          className="w-full px-1.5 py-1.5 rounded-lg border border-[#c4c7c5] text-[11px] text-center focus:border-[#0b57d0] outline-none"
+                        />
+                      </div>
+                      <div className="col-span-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveButtonRow(idx)}
+                          className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                          title="Remove Button"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="pt-4 border-t border-[#f0f4f9] flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[#444746] hover:bg-[#f0f4f9] border border-[#e0e4eb] cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-5 py-2 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] disabled:bg-[#a8c7fa] text-white text-xs font-bold cursor-pointer transition-all shadow-xs"
+                >
+                  {savingEdit ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

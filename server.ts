@@ -433,6 +433,35 @@ async function startServer() {
       .trim();
   }
 
+  // Protected: Update page (Edit Page Flow)
+  app.post("/api/pages/update", requireAdmin, (req, res) => {
+    const { id, title, slug, description, is_public, theme, buttons } = req.body || {};
+    if (!id) {
+      return res.status(400).json({ success: false, error: "Page ID is required." });
+    }
+    const pages = getStoredPages();
+    const idx = pages.findIndex((p) => String(p.id) === String(id) || p.slug === String(id));
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: "Page not found." });
+    }
+
+    const current = pages[idx];
+    const updated: ButtonPage = {
+      ...current,
+      title: title !== undefined ? sanitizePageTitle(title) : current.title,
+      slug: slug !== undefined ? slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") : current.slug,
+      description: description !== undefined ? description : current.description,
+      is_public: is_public !== undefined ? (Boolean(Number(is_public)) ? 1 : 0) : current.is_public,
+      theme: theme || current.theme || "indigo",
+      buttons: Array.isArray(buttons) ? buttons : current.buttons,
+      updated_at: new Date().toISOString(),
+    };
+
+    pages[idx] = updated;
+    saveStoredPages(pages);
+    res.json({ success: true, page: updated });
+  });
+
   // Protected: Bulk delete pages
   app.post("/api/pages/bulk-delete", requireAdmin, (req, res) => {
     const { ids } = req.body;

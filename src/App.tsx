@@ -43,6 +43,7 @@ export default function App() {
   });
   const [currentTab, setCurrentTab] = useState<ViewTab>("admin_flow");
   const [activeSlugView, setActiveSlugView] = useState<string | null>(null);
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [pages, setPages] = useState<ButtonPage[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -122,8 +123,17 @@ export default function App() {
           slug={activeSlugView}
           adminToken={adminToken}
           isAdmin={isAdmin}
+          onEditPage={(pageId) => {
+            setActiveSlugView(null);
+            setEditingPageId(pageId);
+            setCurrentTab("pages_list");
+            if (window.history.pushState) {
+              window.history.pushState({}, "", "/");
+            }
+          }}
           onBackToAdmin={() => {
             setActiveSlugView(null);
+            setEditingPageId(null);
             setCurrentTab("pages_list");
             if (window.history.pushState) {
               window.history.pushState({}, "", "/");
@@ -204,6 +214,8 @@ export default function App() {
                 >
                   <PagesManager
                     adminToken={adminToken}
+                    initialEditPageId={editingPageId}
+                    onClearEditPageId={() => setEditingPageId(null)}
                     onViewPage={(slug: string) => {
                       setActiveSlugView(slug);
                     }}

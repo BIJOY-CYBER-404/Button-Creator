@@ -18,6 +18,12 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+if (isset($_GET['edit']) || isset($_GET['id'])) {
+    $edit_id = trim((string)($_GET['edit'] ?? $_GET['id']));
+    header('Location: pages.php?edit=' . urlencode($edit_id));
+    exit;
+}
+
 // Check and abort any interrupted updates if page was refreshed / navigated away
 SLEA_Updater::check_and_abort_interrupted_updates();
 $current_user = SLEA_Auth::get_current_user();
