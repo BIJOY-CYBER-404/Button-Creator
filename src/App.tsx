@@ -256,7 +256,7 @@ export default function App() {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <AnalyticsDashboard pages={pages} onNotify={addToast} />
+                  <AnalyticsDashboard pages={pages} onRefresh={fetchPages} onNotify={addToast} />
                 </motion.div>
               )}
 

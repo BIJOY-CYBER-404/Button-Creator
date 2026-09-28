@@ -4,17 +4,23 @@ import { ButtonPage } from "../types";
 
 interface AnalyticsDashboardProps {
   pages: ButtonPage[];
-  onRefresh: () => void;
+  onRefresh?: () => void;
+  onNotify?: (msg: string, type?: "success" | "error" | "info") => void;
 }
 
-export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, onRefresh }) => {
+export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, onRefresh, onNotify }) => {
   const [timeRange, setTimeRange] = useState<"current_month" | "prev_month" | "ytd" | "all">("current_month");
   const [chartMode, setChartMode] = useState<"daily" | "monthly_compare">("daily");
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    onRefresh();
+    if (onRefresh) {
+      onRefresh();
+    }
+    if (onNotify) {
+      onNotify("Analytics refreshed from database", "info");
+    }
     setTimeout(() => setRefreshing(false), 600);
   };
 
@@ -97,29 +103,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
     displayedViewsLabel = `${currentYearNum} YTD Visits`;
   }
 
-  // Real data only: telemetry metrics that are not tracked in database must show N/A or —
-  const estimatedSessions = null; // Telemetry not logged in DB
-  const estimatedVisitors = null; // Telemetry not logged in DB
-  const avgVisitTimeFormatted = "—"; // Telemetry not logged in DB
-  const bounceRate = "—"; // Telemetry not logged in DB
-  const conversionRate = totalViews > 0 ? "100%" : "—";
-
   // Top 10 most viewed pages (100% real database records)
   const topPages = [...pages].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 10);
-
-  // Daily traffic distribution for current month (30 days) weighted by total views
-  const currentMonthDays = 30;
-  const dailyData = Array.from({ length: currentMonthDays }, (_, i) => {
-    const day = i + 1;
-    const base = Math.floor(Math.max(10, totalViews) / currentMonthDays);
-    const variance = Math.sin(i * 0.7) * (base * 0.4) + (i % 5 === 0 ? base * 0.6 : 0);
-    return {
-      day: `Day ${day}`,
-      views: Math.max(2, Math.round(base + variance))
-    };
-  });
-
-  const maxDailyViews = Math.max(...dailyData.map(d => d.views), 10);
 
   const handleExportCSV = () => {
     const headers = ["Rank", "Title", "Slug", "Views", "Created At"];
