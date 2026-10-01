@@ -43,16 +43,34 @@ $_SESSION['slea_login_form_token'] = true;
 
 $site_identity = SLEA_Datastore::get_site_identity();
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive');
+header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: no-referrer');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+@header_remove('X-Powered-By');
+
+if (empty($_SESSION['slea_csrf_token'])) {
+    try {
+        $_SESSION['slea_csrf_token'] = bin2hex(random_bytes(32));
+    } catch (Exception $e) {
+        $_SESSION['slea_csrf_token'] = sha1(uniqid((string)mt_rand(), true));
+    }
+}
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $csrf_token = $_POST['csrf_token'] ?? '';
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
-    if (empty($username) || empty($password)) {
+    if (empty($csrf_token) || !hash_equals($_SESSION['slea_csrf_token'], $csrf_token)) {
+        $error = 'Invalid request session. Please refresh and try again.';
+    } elseif (SLEA_Auth::is_rate_limited()) {
+        $error = 'Too many failed login attempts. Please wait a few minutes before trying again.';
+    } elseif (empty($username) || empty($password)) {
         $error = 'Please enter your username and password.';
     } else {
         if (SLEA_Auth::login($username, $password)) {
@@ -69,7 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Access Required - <?= htmlspecialchars($site_name) ?></title>
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <title>Sign In - <?= htmlspecialchars($site_name) ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -82,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
 
     <div class="min-h-screen flex flex-col flex-1">
-        <!-- Navigation Bar (Matches React AppHeader.tsx when logged out) -->
+        <!-- Navigation Bar -->
         <header id="app-header" class="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors">
             <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
                 <div class="flex items-center gap-2.5 min-w-0 flex-1">
@@ -92,24 +111,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <?= htmlspecialchars($site_name) ?>
                             </h1>
                         </div>
-                        <p class="text-[11px] text-[#5f6368] truncate hidden sm:block">
-                            Shortlink Bypass • Episode Button Pages
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Right Status Pill -->
-                <div class="flex items-center gap-3 shrink-0">
-                    <div class="flex items-center gap-2 text-xs text-[#444746]">
-                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span class="hidden sm:inline font-medium">System Online</span>
                     </div>
                 </div>
             </div>
         </header>
 
-        <!-- Main Workspace (Matches React AdminLoginCard.tsx) -->
-        <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7">
+        <!-- Main Workspace -->
+        <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7 flex items-center justify-center">
             <div class="w-full max-w-md mx-auto py-8 px-4">
                 <div class="bg-white rounded-2xl p-7 border border-[#d3e3fd] shadow-md space-y-6">
                     <!-- Header -->
@@ -119,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <h2 class="text-lg font-bold text-[#1f1f1f]">Admin Access Required</h2>
                         <p class="text-xs text-[#5f6368] max-w-xs mx-auto">
-                            The link extractor, resolver, and page generator are private. Sign in as administrator to proceed.
+                            Sign in with your administrator credentials to continue.
                         </p>
                     </div>
 
@@ -133,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <!-- Form -->
                     <form method="POST" action="" class="space-y-4">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['slea_csrf_token']) ?>" />
                         <div class="space-y-1">
                             <label class="text-xs font-semibold text-[#444746] block">
                                 Username
@@ -143,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"
                                 required
                                 autocomplete="username"
-                                placeholder="admin"
+                                placeholder="Enter username"
                                 class="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 outline-none text-sm font-medium transition-all"
                             />
                         </div>
@@ -166,21 +175,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             type="submit"
                             class="w-full py-3 px-4 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all"
                         >
-                            <span>Sign In to Admin Dashboard</span>
+                            <span>Sign In</span>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                         </button>
                     </form>
-
-                    <!-- cPanel Notice -->
-                    <div class="bg-[#f8fafd] border border-[#e1e7f0] rounded-xl p-3 text-[11px] text-[#444746] flex items-center justify-between">
-                        <div class="flex items-center gap-1.5 font-medium">
-                            <svg class="w-3.5 h-3.5 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
-                            <span>Authentication Mode:</span>
-                        </div>
-                        <span class="font-mono bg-[#e8f0fe] text-[#0b57d0] px-2 py-0.5 rounded font-bold">
-                            MySQL Protected
-                        </span>
-                    </div>
                 </div>
             </div>
         </main>

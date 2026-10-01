@@ -4,6 +4,11 @@
  * Handles step logging, error formatting, and sensitive credential redaction.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_UpdateLogger {
     private $update_id;
     private $logs = [];

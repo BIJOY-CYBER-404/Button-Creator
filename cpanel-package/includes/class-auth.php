@@ -3,14 +3,41 @@
  * Authentication and Admin Session Protection with MySQL Database
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 require_once __DIR__ . '/class-db.php';
 
 class SLEA_Auth {
     public static function start_session() {
+        @header_remove('X-Powered-By');
         if (session_status() === PHP_SESSION_NONE) {
+            @ini_set('session.cookie_httponly', '1');
+            @ini_set('session.use_only_cookies', '1');
+            @ini_set('session.use_strict_mode', '1');
+            @ini_set('session.cookie_samesite', 'Lax');
             @ini_set('session.cookie_path', '/');
+            if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+                @ini_set('session.cookie_secure', '1');
+            }
             session_start();
         }
+    }
+
+    public static function is_rate_limited() {
+        self::start_session();
+        $attempts = $_SESSION['slea_login_attempts'] ?? 0;
+        $lock_until = $_SESSION['slea_login_lock_until'] ?? 0;
+        if ($lock_until > time()) {
+            return true;
+        }
+        if ($lock_until > 0 && $lock_until <= time()) {
+            $_SESSION['slea_login_attempts'] = 0;
+            $_SESSION['slea_login_lock_until'] = 0;
+        }
+        return $attempts >= 5;
     }
 
     public static function has_users() {
@@ -114,6 +141,7 @@ class SLEA_Auth {
 
             // Automatically log in
             self::start_session();
+            @session_regenerate_id(true);
             $_SESSION['slea_admin_logged_in'] = true;
             $_SESSION['slea_admin_id']        = $id;
             $_SESSION['slea_admin_user']      = $username;
@@ -123,12 +151,16 @@ class SLEA_Auth {
 
             return ['success' => true];
         } catch (Exception $e) {
-            return ['success' => false, 'error' => 'Database error: ' . $e->getMessage()];
+            error_log('Account setup error: ' . $e->getMessage());
+            return ['success' => false, 'error' => 'Unable to complete account setup. Please try again.'];
         }
     }
 
     public static function login($username_or_email, $password) {
         self::start_session();
+        if (self::is_rate_limited()) {
+            return false;
+        }
         $input = trim($username_or_email);
 
         try {
@@ -141,6 +173,9 @@ class SLEA_Auth {
             $user = $stmt->fetch();
 
             if ($user && password_verify($password, $user['password_hash'])) {
+                @session_regenerate_id(true);
+                $_SESSION['slea_login_attempts']  = 0;
+                $_SESSION['slea_login_lock_until']= 0;
                 $_SESSION['slea_admin_logged_in'] = true;
                 $_SESSION['slea_admin_id']        = $user['id'];
                 $_SESSION['slea_admin_user']      = $user['username'];
@@ -152,6 +187,11 @@ class SLEA_Auth {
             }
         } catch (Exception $e) {
             error_log('Login error: ' . $e->getMessage());
+        }
+
+        $_SESSION['slea_login_attempts'] = ($_SESSION['slea_login_attempts'] ?? 0) + 1;
+        if ($_SESSION['slea_login_attempts'] >= 5) {
+            $_SESSION['slea_login_lock_until'] = time() + 600;
         }
 
         return false;

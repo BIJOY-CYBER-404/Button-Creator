@@ -4,6 +4,11 @@
  * Creates full file and database backups before file deployment.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_BackupManager {
     private $logger;
     private $update_id;

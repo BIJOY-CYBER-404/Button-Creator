@@ -4,6 +4,11 @@
  * Automatically restores previous working application files and database backup upon update failure.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_RollbackManager {
     private $logger;
     private $backup_dir;

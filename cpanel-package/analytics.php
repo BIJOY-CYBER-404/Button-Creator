@@ -97,6 +97,15 @@ if ($range === 'current_month') {
 $has_historical_comparison = ($has_prev_month && $prev_month_views > 0);
 $growth_rate = $has_historical_comparison ? round((($current_month_views - $prev_month_views) / $prev_month_views) * 100) : null;
 $active_pages_count = count($pages);
+$visit_telemetry = SLEA_Datastore::get_visit_telemetry_stats();
+$total_tracked_visits = intval($visit_telemetry['total_tracked'] ?? 0);
+$dev_mobile = $visit_telemetry['devices']['mobile'] ?? ['count' => 0, 'percent' => 0];
+$dev_desktop = $visit_telemetry['devices']['desktop'] ?? ['count' => 0, 'percent' => 0];
+$dev_tablet = $visit_telemetry['devices']['tablet'] ?? ['count' => 0, 'percent' => 0];
+$chan_direct = $visit_telemetry['channels']['direct'] ?? ['count' => 0, 'percent' => 0];
+$chan_social = $visit_telemetry['channels']['social'] ?? ['count' => 0, 'percent' => 0];
+$chan_organic = $visit_telemetry['channels']['organic'] ?? ['count' => 0, 'percent' => 0];
+$top_countries = $visit_telemetry['countries'] ?? [];
 
 // Sort pages by views descending for top 10
 usort($pages, function($a, $b) {
@@ -195,8 +204,8 @@ $top_pages = array_slice($pages, 0, 10);
                 </svg>
             </a>
 
-            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version <?= htmlspecialchars(APP_VERSION) ?>">
-                <?= htmlspecialchars(APP_VERSION) ?>
+            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version v-<?= htmlspecialchars(preg_replace('/^(\d+\.\d+)\.\d+$/', '$1', ltrim(APP_VERSION, 'vV-'))) ?>">
+                v-<?= htmlspecialchars(preg_replace('/^(\d+\.\d+)\.\d+$/', '$1', ltrim(APP_VERSION, 'vV-'))) ?>
             </span>
         </div>
     </aside>
@@ -564,7 +573,7 @@ $top_pages = array_slice($pages, 0, 10);
                                 <svg class="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
                                 <span>Device Breakdown</span>
                             </h4>
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">N/A</span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">100% Real</span>
                         </div>
                         <div class="space-y-3 text-xs">
                             <div>
@@ -573,10 +582,10 @@ $top_pages = array_slice($pages, 0, 10);
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
                                         Mobile Smartphone
                                     </span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
+                                    <span class="font-mono font-bold text-[#111827]"><?= intval($dev_mobile['count']) ?> (<?= intval($dev_mobile['percent']) ?>%)</span>
                                 </div>
                                 <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
+                                    <div class="bg-[#0b57d0] h-full rounded-full transition-all" style="width: <?= max(0, min(100, intval($dev_mobile['percent']))) ?>%"></div>
                                 </div>
                             </div>
                             <div>
@@ -585,24 +594,24 @@ $top_pages = array_slice($pages, 0, 10);
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
                                         Desktop PC / Mac
                                     </span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
+                                    <span class="font-mono font-bold text-[#111827]"><?= intval($dev_desktop['count']) ?> (<?= intval($dev_desktop['percent']) ?>%)</span>
                                 </div>
                                 <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
+                                    <div class="bg-[#0b57d0] h-full rounded-full transition-all" style="width: <?= max(0, min(100, intval($dev_desktop['percent']))) ?>%"></div>
                                 </div>
                             </div>
                             <div>
                                 <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
                                     <span>Tablet / iPad</span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
+                                    <span class="font-mono font-bold text-[#111827]"><?= intval($dev_tablet['count']) ?> (<?= intval($dev_tablet['percent']) ?>%)</span>
                                 </div>
                                 <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
+                                    <div class="bg-[#0b57d0] h-full rounded-full transition-all" style="width: <?= max(0, min(100, intval($dev_tablet['percent']))) ?>%"></div>
                                 </div>
                             </div>
                         </div>
                         <p class="text-[10px] text-[#747775] leading-relaxed pt-1">
-                            Device user-agent telemetry is not logged. No simulated/fake data is shown.
+                            Aggregated from <?= number_format($total_tracked_visits) ?> real logged HTTP User-Agent request<?= $total_tracked_visits === 1 ? '' : 's' ?>.
                         </p>
                     </div>
 
@@ -613,39 +622,39 @@ $top_pages = array_slice($pages, 0, 10);
                                 <svg class="w-4 h-4 text-[#137333]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                                 <span>Top Traffic Channels</span>
                             </h4>
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">N/A</span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-[#e6f4ea] text-[#137333] border border-[#ceead6]">100% Real</span>
                         </div>
                         <div class="space-y-3 text-xs">
                             <div>
                                 <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
                                     <span>Direct &amp; Bookmark Links</span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
+                                    <span class="font-mono font-bold text-[#111827]"><?= intval($chan_direct['count']) ?> (<?= intval($chan_direct['percent']) ?>%)</span>
                                 </div>
                                 <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
+                                    <div class="bg-[#137333] h-full rounded-full transition-all" style="width: <?= max(0, min(100, intval($chan_direct['percent']))) ?>%"></div>
                                 </div>
                             </div>
                             <div>
                                 <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
                                     <span>Social Media (Telegram / WhatsApp)</span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
+                                    <span class="font-mono font-bold text-[#111827]"><?= intval($chan_social['count']) ?> (<?= intval($chan_social['percent']) ?>%)</span>
                                 </div>
                                 <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
+                                    <div class="bg-[#137333] h-full rounded-full transition-all" style="width: <?= max(0, min(100, intval($chan_social['percent']))) ?>%"></div>
                                 </div>
                             </div>
                             <div>
                                 <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
                                     <span>Organic Search &amp; Referrals</span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
+                                    <span class="font-mono font-bold text-[#111827]"><?= intval($chan_organic['count']) ?> (<?= intval($chan_organic['percent']) ?>%)</span>
                                 </div>
                                 <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
+                                    <div class="bg-[#137333] h-full rounded-full transition-all" style="width: <?= max(0, min(100, intval($chan_organic['percent']))) ?>%"></div>
                                 </div>
                             </div>
                         </div>
                         <p class="text-[10px] text-[#747775] leading-relaxed pt-1">
-                            HTTP Referrer channel tracking is not logged. No simulated/fake data is shown.
+                            Classified from <?= number_format($total_tracked_visits) ?> real HTTP Referer header<?= $total_tracked_visits === 1 ? '' : 's' ?>.
                         </p>
                     </div>
 
@@ -656,39 +665,29 @@ $top_pages = array_slice($pages, 0, 10);
                                 <svg class="w-4 h-4 text-[#b06000]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
                                 <span>Top Traffic Country</span>
                             </h4>
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">N/A</span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-[#fef7e0] text-[#b06000] border border-[#fde293]">100% Real</span>
                         </div>
                         <div class="space-y-3 text-xs">
-                            <div>
-                                <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
-                                    <span>Primary Location</span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
+                            <?php if (empty($top_countries)): ?>
+                                <div class="py-6 text-center text-[#747775]">
+                                    No country data recorded yet.
                                 </div>
-                                <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
-                                </div>
-                            </div>
-                            <div>
-                                <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
-                                    <span>Secondary Location</span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
-                                </div>
-                                <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
-                                </div>
-                            </div>
-                            <div>
-                                <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
-                                    <span>Other Regions</span>
-                                    <span class="font-mono font-bold text-slate-400">—</span>
-                                </div>
-                                <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
-                                    <div class="bg-slate-300 h-full rounded-full" style="width: 0%"></div>
-                                </div>
-                            </div>
+                            <?php else: ?>
+                                <?php foreach (array_slice($top_countries, 0, 3) as $c_item): ?>
+                                    <div>
+                                        <div class="flex justify-between font-medium mb-1 text-[#5f6368]">
+                                            <span><?= htmlspecialchars($c_item['name'] ?? 'Unknown') ?> <span class="text-[10px] font-mono text-slate-400">(<?= htmlspecialchars($c_item['code'] ?? 'UN') ?>)</span></span>
+                                            <span class="font-mono font-bold text-[#111827]"><?= intval($c_item['count'] ?? 0) ?> (<?= intval($c_item['percent'] ?? 0) ?>%)</span>
+                                        </div>
+                                        <div class="w-full bg-[#f1f3f4] h-2 rounded-full overflow-hidden">
+                                            <div class="bg-[#b06000] h-full rounded-full transition-all" style="width: <?= max(0, min(100, intval($c_item['percent'] ?? 0))) ?>%"></div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </div>
                         <p class="text-[10px] text-[#747775] leading-relaxed pt-1">
-                            Visitor GeoIP country tracking is not enabled. No simulated/fake data is shown.
+                            Resolved from real visitor GeoIP &amp; locale request headers.
                         </p>
                     </div>
                 </div>

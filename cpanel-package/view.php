@@ -303,12 +303,19 @@ if (!$page || (!$is_admin && isset($page['is_public']) && intval($page['is_publi
 
 // Increment view counter
 if (defined('AUTO_INCREMENT_VIEWS') && AUTO_INCREMENT_VIEWS) {
-    SLEA_Datastore::increment_views($slug);
+    SLEA_Datastore::increment_views($page['slug'] ?? $slug);
 }
 
 $title = htmlspecialchars($page['title'] ?? 'Episode Downloads');
 $description = htmlspecialchars($page['description'] ?? '');
-$buttons = $page['buttons'] ?? [];
+$raw_buttons = is_array($page['buttons'] ?? null) ? $page['buttons'] : [];
+$buttons = array_map(function($b) {
+    $u = trim((string)($b['url'] ?? ''));
+    if ($u === '' || preg_match('/^\s*(?:javascript|data|vbscript):/i', $u)) {
+        $b['url'] = '#';
+    }
+    return $b;
+}, $raw_buttons);
 $theme = $page['theme'] ?? 'indigo';
 $resolved_url = htmlspecialchars($page['resolved_url'] ?? '');
 $is_public = !empty($page['is_public']);
@@ -317,10 +324,14 @@ $page_id = intval($page['id'] ?? 0);
 // Load site branding, navigation menu, footer copyright, and ad settings
 $site_identity = SLEA_Datastore::get_site_identity();
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive');
-$site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_logo_url'] : '';
+$site_logo_url = !empty($site_identity['site_logo_url']) ? trim((string)$site_identity['site_logo_url']) : '';
+if ($site_logo_url !== '' && preg_match('/^\s*(?:javascript|data|vbscript):/i', $site_logo_url)) {
+    $site_logo_url = '';
+}
 
 $menu_items = array_values(array_filter(SLEA_Datastore::get_menu_items(), function($item) use ($configured_login_slug) {
     $u = strtolower(trim($item['url'] ?? ''));
+    if (preg_match('/^\s*(?:javascript|data|vbscript):/i', $u)) return false;
     if ($u === '' || $u === '#') return true;
     $path = trim(parse_url($u, PHP_URL_PATH) ?: '', '/');
     $base = preg_replace('/\.php$/i', '', basename($path));

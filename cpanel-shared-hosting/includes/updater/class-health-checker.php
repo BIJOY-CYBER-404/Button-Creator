@@ -4,6 +4,11 @@
  * Performs post-installation integrity and health verification.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_HealthChecker {
     private $logger;
 

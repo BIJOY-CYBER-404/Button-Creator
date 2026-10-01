@@ -22,7 +22,7 @@ $current_user = SLEA_Auth::get_current_user();
 // Check and abort any interrupted updates if page was refreshed / navigated away
 SLEA_Updater::check_and_abort_interrupted_updates();
 
-$current_version = defined('APP_VERSION') ? ltrim(APP_VERSION, 'v-') : '5.9.0';
+$current_version = defined('APP_VERSION') ? SLEA_Updater::normalize_version(APP_VERSION) : '18.0';
 $updater_config = SLEA_Updater::get_config();
 $update_check = SLEA_Updater::check_for_updates();
 $update_history = SLEA_Updater::get_update_history();
@@ -46,6 +46,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     @ini_set('display_errors', '0');
     error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
+    // Same-Origin CSRF Verification
+    $origin_hdr = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? '';
+    $req_host = strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? ''));
+    if ($origin_hdr !== '' && $req_host !== '') {
+        $origin_host = strtolower((string)parse_url($origin_hdr, PHP_URL_HOST));
+        if ($origin_host !== '' && $origin_host !== $req_host) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Cross-origin request forbidden.']);
+            exit;
+        }
+    }
+
     $action = $_POST['action'] ?? ($_GET['action'] ?? '');
     
     try {
@@ -58,8 +70,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode($res);
             exit;
         } elseif ($action === 'save_config') {
+            $raw_manifest_url = trim($_POST['manifest_url'] ?? '');
+            if ($raw_manifest_url !== '' && !preg_match('/^https:\/\//i', $raw_manifest_url)) {
+                throw new Exception('Manifest URL must use a valid HTTPS URL.');
+            }
             $saved = SLEA_Updater::save_config([
-                'manifest_url'     => trim($_POST['manifest_url'] ?? ''),
+                'manifest_url'     => $raw_manifest_url,
                 'backup_retention' => intval($_POST['backup_retention'] ?? 3),
                 'verify_checksum'  => isset($_POST['verify_checksum']) ? true : false,
                 'maintenance_mode' => isset($_POST['maintenance_mode']) ? true : false
@@ -182,8 +198,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </svg>
             </a>
 
-            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version <?= htmlspecialchars(APP_VERSION) ?>">
-                <?= htmlspecialchars(APP_VERSION) ?>
+            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version v-<?= htmlspecialchars(preg_replace('/^(\d+\.\d+)\.\d+$/', '$1', ltrim(APP_VERSION, 'vV-'))) ?>">
+                v-<?= htmlspecialchars(preg_replace('/^(\d+\.\d+)\.\d+$/', '$1', ltrim(APP_VERSION, 'vV-'))) ?>
             </span>
         </div>
     </aside>
@@ -245,7 +261,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             One-Click Application Update System
                                         </h2>
                                         <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
-                                            v<?= htmlspecialchars($current_version) ?>
+                                            v-<?= htmlspecialchars($current_version) ?>
                                         </span>
                                     </div>
                                     <p class="text-xs text-[#5f6368] mt-0.5 leading-relaxed break-words">
@@ -272,12 +288,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#0b57d0] hover:bg-[#0842a0] transition shadow-xs flex items-center space-x-2 cursor-pointer disabled:opacity-50"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>
-                                    <span>Install Update (v<?= htmlspecialchars($update_check['remote_version']) ?>)</span>
+                                    <span>Install Update (v-<?= htmlspecialchars($update_check['remote_version']) ?>)</span>
                                 </button>
                             <?php else: ?>
                                 <span class="px-4 py-2.5 rounded-xl text-xs font-bold text-[#137333] bg-[#e6f4ea] border border-[#ceedd5] flex items-center space-x-1.5 select-none">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
-                                    <span>Up to Date (v<?= htmlspecialchars($current_version) ?>)</span>
+                                    <span>Up to Date (v-<?= htmlspecialchars($current_version) ?>)</span>
                                 </span>
                             <?php endif; ?>
                         </div>
@@ -287,11 +303,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-[#f1f3f4]">
                         <div class="bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb]">
                             <span class="text-[11px] font-bold text-[#5f6368] uppercase tracking-wider block mb-1">Installed Version</span>
-                            <span class="text-lg font-extrabold text-[#1f1f1f]">v<?= htmlspecialchars($current_version) ?></span>
+                            <span class="text-lg font-extrabold text-[#1f1f1f]">v-<?= htmlspecialchars($current_version) ?></span>
                         </div>
                         <div class="bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb]">
                             <span class="text-[11px] font-bold text-[#5f6368] uppercase tracking-wider block mb-1">Latest Version</span>
-                            <span class="text-lg font-extrabold text-[#0052cc]">v<?= htmlspecialchars($update_check['remote_version'] ?? $current_version) ?></span>
+                            <span class="text-lg font-extrabold text-[#0052cc]">v-<?= htmlspecialchars($update_check['remote_version'] ?? $current_version) ?></span>
                         </div>
                         <div class="bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb]">
                             <span class="text-[11px] font-bold text-[#5f6368] uppercase tracking-wider block mb-1">Release Date</span>
@@ -312,7 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm space-y-4">
                         <h3 class="text-base font-bold text-[#1f1f1f] flex items-center space-x-2">
                             <svg class="w-5 h-5 text-[#0052cc]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>
-                            <span>Release Notes &amp; Version Highlights (v<?= htmlspecialchars($update_check['remote_version'] ?? $current_version) ?>)</span>
+                            <span>Release Notes &amp; Version Highlights (v-<?= htmlspecialchars($update_check['remote_version'] ?? $current_version) ?>)</span>
                         </h3>
                         <ul class="space-y-2 text-xs text-[#3c4043] list-disc list-inside bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb] font-medium leading-relaxed">
                             <?php foreach ($update_check['release_notes'] as $note): ?>
@@ -417,8 +433,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <?php foreach ($update_history as $item): ?>
                                         <tr class="hover:bg-[#f8fafd]">
                                             <td class="p-3 font-mono font-medium text-[#1f1f1f]"><?= htmlspecialchars($item['update_id']) ?></td>
-                                            <td class="p-3">v<?= htmlspecialchars($item['old_version']) ?></td>
-                                            <td class="p-3 font-bold text-[#0052cc]">v<?= htmlspecialchars($item['new_version']) ?></td>
+                                            <td class="p-3">v-<?= htmlspecialchars(SLEA_Updater::normalize_version($item['old_version'] ?? '')) ?></td>
+                                            <td class="p-3 font-bold text-[#0052cc]">v-<?= htmlspecialchars(SLEA_Updater::normalize_version($item['new_version'] ?? '')) ?></td>
                                             <td class="p-3">
                                                 <?php if ($item['status'] === 'success'): ?>
                                                     <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#e6f4ea] text-[#137333]">Success</span>
@@ -456,7 +472,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <div class="absolute top-3 right-3">
                     <span id="modalVersionBadge" class="px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-white/20 text-white backdrop-blur-sm border border-white/30">
-                        v<?= htmlspecialchars($update_check['remote_version'] ?? $current_version) ?>
+                        v-<?= htmlspecialchars($update_check['remote_version'] ?? $current_version) ?>
                     </span>
                 </div>
             </div>
@@ -620,7 +636,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 spin.classList.remove('animate-spin');
                 btn.disabled = false;
                 if (data.success) {
-                    showToast('Update check complete! Remote: v' + data.remote_version + (data.update_available ? ' (Update Available)' : ' (Up to date)'), data.update_available ? 'info' : 'success');
+                    showToast('Update check complete! Remote: v-' + String(data.remote_version || '').replace(/^[vV]-?/, '') + (data.update_available ? ' (Update Available)' : ' (Up to date)'), data.update_available ? 'info' : 'success');
                     setTimeout(() => { window.location.href = 'update.php?_cb=' + Date.now(); }, 1500);
                 } else {
                     showToast('Check failed: ' + (data.error || 'Unknown error'), 'error');

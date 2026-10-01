@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Lock, KeyRound, ShieldAlert, ArrowRight, Server } from "lucide-react";
+import { Lock, ShieldAlert, ArrowRight } from "lucide-react";
 
 interface AdminLoginCardProps {
   onLoginSuccess: (token: string, username: string) => void;
@@ -10,8 +10,8 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({
   onLoginSuccess,
   onNotify,
 }) => {
-  const [username, setUsername] = useState<string>("admin");
-  const [password, setPassword] = useState<string>("admin123");
+  const [username, setUsername] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +54,7 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({
           </div>
           <h2 className="text-lg font-bold text-[#1f1f1f]">Admin Access Required</h2>
           <p className="text-xs text-[#5f6368] max-w-xs mx-auto">
-            The link extractor, resolver, and page generator are private. Sign in as administrator to proceed.
+            Sign in with your administrator credentials to continue.
           </p>
         </div>
 
@@ -76,6 +76,8 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter username"
+              autoComplete="username"
               required
               className="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 outline-none text-sm font-medium transition-all"
             />
@@ -89,6 +91,8 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
               required
               className="w-full px-3.5 py-2.5 rounded-xl border border-[#c4c7c5] focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 outline-none text-sm font-medium transition-all font-mono"
             />
@@ -103,23 +107,12 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             ) : (
               <>
-                <span>Sign In to Admin Dashboard</span>
+                <span>Sign In</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
-
-        {/* cPanel Notice */}
-        <div className="bg-[#f8fafd] border border-[#e1e7f0] rounded-xl p-3 text-[11px] text-[#444746] flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-medium">
-            <Server className="w-3.5 h-3.5 text-[#0b57d0]" />
-            <span>Default Credentials:</span>
-          </div>
-          <span className="font-mono bg-[#e8f0fe] text-[#0b57d0] px-2 py-0.5 rounded font-bold">
-            admin / admin123
-          </span>
-        </div>
       </div>
     </div>
   );

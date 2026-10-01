@@ -4,6 +4,11 @@
  * Runs versioned database migrations once, maintaining execution history.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_MigrationManager {
     private $logger;
 
@@ -92,7 +97,10 @@ class SLEA_MigrationManager {
                     }
                 } elseif ($ext === 'php') {
                     try {
-                        require_once $mpath;
+                        $mig_ret = require_once $mpath;
+                        if (is_callable($mig_ret)) {
+                            $mig_ret($pdo);
+                        }
                     } catch (Exception $php_ex) {
                         $this->logger->log("Running database migrations", "[NOTICE] Non-critical PHP migration notice in {$mname}: " . $php_ex->getMessage());
                     }

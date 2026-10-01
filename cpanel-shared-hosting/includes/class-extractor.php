@@ -3,7 +3,30 @@
  * Standalone cPanel Episode Button & Link Extractor
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_Extractor {
+    public static function is_safe_public_url($url) {
+        if (empty($url) || !is_string($url)) return false;
+        if (!preg_match('/^https?:\/\//i', $url)) return false;
+        $host = parse_url($url, PHP_URL_HOST);
+        if (empty($host)) return false;
+        $host_clean = trim($host, '[]');
+        if (in_array(strtolower($host_clean), ['localhost', '127.0.0.1', '0.0.0.0', '::1'], true)) {
+            return false;
+        }
+        $ip = @gethostbyname($host_clean);
+        if ($ip && filter_var($ip, FILTER_VALIDATE_IP)) {
+            if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static $button_indicators = [
         'btn', 'button', 'download-btn', 'dl-btn', 'action-btn', 'epgdrive', 'epitem',
         'eplist', 'dlink', 'download-button', 'post-button', 'server-btn', 'drive-btn',
@@ -323,10 +346,17 @@ class SLEA_Extractor {
             if (empty($current_url) || in_array($current_url, $visited, true)) {
                 break;
             }
+            if (!self::is_safe_public_url($current_url)) {
+                break;
+            }
             $visited[] = $current_url;
 
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $current_url);
+            if (defined('CURLPROTO_HTTP') && defined('CURLPROTO_HTTPS')) {
+                @curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+                @curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+            }
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_HEADER, true);
             $open_basedir = ini_get('open_basedir');

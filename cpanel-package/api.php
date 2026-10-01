@@ -21,6 +21,20 @@ $data = json_decode($raw_input, true) ?: [];
 // Strict Admin Authorization Check
 SLEA_Auth::require_admin();
 
+// Same-Origin CSRF Verification for state-changing POST requests
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $origin_hdr = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? '';
+    $req_host = strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? ''));
+    if ($origin_hdr !== '' && $req_host !== '') {
+        $origin_host = strtolower((string)parse_url($origin_hdr, PHP_URL_HOST));
+        if ($origin_host !== '' && $origin_host !== $req_host) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Cross-origin request forbidden.']);
+            exit;
+        }
+    }
+}
+
 // Ensure script execution time doesn't exceed 40 seconds on shared hosting
 @set_time_limit(40);
 
@@ -428,11 +442,18 @@ try {
             echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
             exit;
 
+        case 'analytics_telemetry':
+            echo json_encode([
+                'success'   => true,
+                'telemetry' => SLEA_Datastore::get_visit_telemetry_stats()
+            ]);
+            break;
+
         case 'health':
             $logger = new SLEA_UpdateLogger('health_check');
             $checker = new SLEA_HealthChecker($logger);
             $ok = $checker->verify_health();
-            echo json_encode(['success' => $ok, 'version' => defined('APP_VERSION') ? APP_VERSION : 'v-3.8.0', 'time' => date('Y-m-d H:i:s')]);
+            echo json_encode(['success' => $ok, 'version' => defined('APP_VERSION') ? APP_VERSION : 'v-18.0', 'time' => date('Y-m-d H:i:s')]);
             break;
 
         default:

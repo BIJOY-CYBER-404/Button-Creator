@@ -4,6 +4,11 @@
  * Securely fetches remote release manifest and downloads ZIP packages.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_Downloader {
     private $logger;
 
@@ -11,10 +16,33 @@ class SLEA_Downloader {
         $this->logger = $logger;
     }
 
+    private function assert_safe_remote_url($url) {
+        $url = trim((string)$url);
+        if (!preg_match('/^https:\/\//i', $url)) {
+            throw new Exception("Security policy requires HTTPS URLs for remote update resources.");
+        }
+        $host = parse_url($url, PHP_URL_HOST);
+        if (empty($host)) {
+            throw new Exception("Invalid remote URL host.");
+        }
+        $host_clean = trim($host, '[]');
+        if (in_array(strtolower($host_clean), ['localhost', '127.0.0.1', '0.0.0.0', '::1'], true)) {
+            throw new Exception("Loopback update URLs are forbidden.");
+        }
+        $ip = @gethostbyname($host_clean);
+        if ($ip && filter_var($ip, FILTER_VALIDATE_IP)) {
+            if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                throw new Exception("Private or reserved network IP addresses are forbidden.");
+            }
+        }
+        return true;
+    }
+
     public function fetch_manifest($manifest_url) {
         if (empty($manifest_url)) {
             throw new Exception("Update manifest URL is empty.");
         }
+        $this->assert_safe_remote_url($manifest_url);
 
         // Add dynamic random cache buster to remote HTTP URLs to bypass CDN caches like raw.githubusercontent.com Fastly/Varnish caches
         $fetch_url = $manifest_url;
@@ -77,6 +105,11 @@ class SLEA_Downloader {
         ]));
 
         foreach ($candidate_urls as $cand_url) {
+            try {
+                $this->assert_safe_remote_url($cand_url);
+            } catch (Exception $e) {
+                continue;
+            }
             $fetch_package_url = $cand_url;
             if (strpos($cand_url, 'http://') === 0 || strpos($cand_url, 'https://') === 0) {
                 $separator = (strpos($cand_url, '?') === false) ? '?' : '&';
@@ -89,12 +122,16 @@ class SLEA_Downloader {
                 $fp = fopen($target_file, 'wb');
                 curl_setopt($ch, CURLOPT_FILE, $fp);
                 curl_setopt($ch, CURLOPT_HEADER, 0);
+                if (defined('CURLPROTO_HTTPS')) {
+                    @curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+                    @curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
+                }
                 if (!ini_get('open_basedir')) {
                     @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
                 }
                 curl_setopt($ch, CURLOPT_TIMEOUT, 180);
                 curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);
-                curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/5.9');
+                curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/18.0');
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
                 curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
@@ -125,7 +162,7 @@ class SLEA_Downloader {
                     'method'          => 'GET',
                     'timeout'         => 180,
                     'follow_location' => 1,
-                    'header'          => "User-Agent: MovieHubHQ-Updater/5.9\r\n" .
+                    'header'          => "User-Agent: MovieHubHQ-Updater/18.0\r\n" .
                                          "Cache-Control: no-cache, no-store, must-revalidate, max-age=0\r\n" .
                                          "Pragma: no-cache\r\n" .
                                          "Expires: 0\r\n" .
@@ -150,17 +187,15 @@ class SLEA_Downloader {
     }
 
     private function http_get($url) {
-        // Local disk file fallback
-        if (@file_exists($url) && @is_file($url)) {
-            $local_content = @file_get_contents($url);
-            if ($local_content !== false && strlen(trim($local_content)) > 10) {
-                return $local_content;
-            }
-        }
+        $this->assert_safe_remote_url($url);
 
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            if (defined('CURLPROTO_HTTPS')) {
+                @curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+                @curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
+            }
             $has_open_basedir = !empty(ini_get('open_basedir'));
             if (!$has_open_basedir) {
                 @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
@@ -168,7 +203,7 @@ class SLEA_Downloader {
             }
             curl_setopt($ch, CURLOPT_TIMEOUT, 25);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 12);
-            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/3.9');
+            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/18.0');
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);

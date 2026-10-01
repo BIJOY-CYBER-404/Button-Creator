@@ -4,6 +4,11 @@
  * Supports MySQL and SQLite seamlessly with automatic dual-layer backup to prevent any data loss on updates.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 require_once __DIR__ . '/class-db.php';
 
 class SLEA_Datastore {
@@ -264,9 +269,258 @@ class SLEA_Datastore {
                 ");
                 $mstmt->execute([':slug' => $slug, ':ym' => $ym]);
             }
+
+            // Record 100% real visitor telemetry (device, traffic channel, country)
+            self::record_visit_telemetry($slug);
         } catch (Exception $e) {
             // Non-blocking view increment
         }
+    }
+
+    public static function get_country_name_map() {
+        return [
+            'US' => 'United States', 'GB' => 'United Kingdom', 'CA' => 'Canada', 'AU' => 'Australia',
+            'IN' => 'India', 'BD' => 'Bangladesh', 'PK' => 'Pakistan', 'ID' => 'Indonesia',
+            'PH' => 'Philippines', 'MY' => 'Malaysia', 'SG' => 'Singapore', 'VN' => 'Vietnam',
+            'TH' => 'Thailand', 'KR' => 'South Korea', 'JP' => 'Japan', 'CN' => 'China',
+            'TW' => 'Taiwan', 'HK' => 'Hong Kong', 'DE' => 'Germany', 'FR' => 'France',
+            'IT' => 'Italy', 'ES' => 'Spain', 'NL' => 'Netherlands', 'BR' => 'Brazil',
+            'MX' => 'Mexico', 'AR' => 'Argentina', 'CO' => 'Colombia', 'CL' => 'Chile',
+            'PE' => 'Peru', 'RU' => 'Russia', 'UA' => 'Ukraine', 'PL' => 'Poland',
+            'TR' => 'Turkey', 'SA' => 'Saudi Arabia', 'AE' => 'United Arab Emirates', 'EG' => 'Egypt',
+            'NG' => 'Nigeria', 'ZA' => 'South Africa', 'KE' => 'Kenya', 'MA' => 'Morocco',
+            'NP' => 'Nepal', 'LK' => 'Sri Lanka', 'MM' => 'Myanmar', 'KH' => 'Cambodia',
+            'SE' => 'Sweden', 'NO' => 'Norway', 'DK' => 'Denmark', 'FI' => 'Finland',
+            'CH' => 'Switzerland', 'AT' => 'Austria', 'BE' => 'Belgium', 'PT' => 'Portugal',
+            'GR' => 'Greece', 'CZ' => 'Czechia', 'RO' => 'Romania', 'HU' => 'Hungary',
+            'IE' => 'Ireland', 'NZ' => 'New Zealand', 'IL' => 'Israel', 'QA' => 'Qatar',
+            'KW' => 'Kuwait', 'OM' => 'Oman', 'BH' => 'Bahrain', 'JO' => 'Jordan',
+            'IQ' => 'Iraq', 'IR' => 'Iran', 'UZ' => 'Uzbekistan', 'KZ' => 'Kazakhstan',
+            'DZ' => 'Algeria', 'TN' => 'Tunisia', 'GH' => 'Ghana', 'ET' => 'Ethiopia'
+        ];
+    }
+
+    public static function detect_device_type($ua = null) {
+        if ($ua === null) {
+            $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        }
+        $ua_low = strtolower((string)$ua);
+        if (empty($ua_low)) {
+            return 'desktop';
+        }
+        if (preg_match('/(ipad|tablet|playbook|silk)|(android(?!.*mobile))/i', $ua_low)) {
+            return 'tablet';
+        }
+        if (preg_match('/(mobi|iphone|ipod|android.*mobile|windows phone|blackberry|opera mini|iemobile|mobile)/i', $ua_low)) {
+            return 'mobile';
+        }
+        return 'desktop';
+    }
+
+    public static function detect_traffic_channel($referer = null, $host = null) {
+        if ($referer === null) {
+            $referer = $_SERVER['HTTP_REFERER'] ?? '';
+        }
+        if ($host === null) {
+            $host = $_SERVER['HTTP_HOST'] ?? '';
+        }
+        $ref = trim((string)$referer);
+        if ($ref === '') {
+            return 'direct';
+        }
+        $ref_host = strtolower((string)parse_url($ref, PHP_URL_HOST));
+        $cur_host = strtolower(preg_replace('/:\d+$/', '', (string)$host));
+        if ($ref_host === '' || ($cur_host !== '' && $ref_host === $cur_host)) {
+            return 'direct';
+        }
+        if (preg_match('/(t\.me|telegram\.org|telegram\.me|wa\.me|whatsapp\.com|facebook\.com|fb\.com|fb\.me|m\.facebook\.com|l\.facebook\.com|twitter\.com|x\.com|t\.co|instagram\.com|l\.instagram\.com|youtube\.com|youtu\.be|tiktok\.com|reddit\.com|pinterest\.com|discord\.com|discord\.gg|linkedin\.com|vk\.com)/i', $ref_host)) {
+            return 'social';
+        }
+        return 'organic';
+    }
+
+    public static function detect_country_info() {
+        $map = self::get_country_name_map();
+        $candidates = [
+            $_SERVER['HTTP_CF_IPCOUNTRY'] ?? '',
+            $_SERVER['GEOIP_COUNTRY_CODE'] ?? '',
+            $_SERVER['HTTP_X_APPENGINE_COUNTRY'] ?? '',
+            $_SERVER['HTTP_X_COUNTRY_CODE'] ?? '',
+            $_SERVER['HTTP_X_GEO_COUNTRY'] ?? '',
+            $_SERVER['HTTP_X_VERCEL_IP_COUNTRY'] ?? ''
+        ];
+
+        foreach ($candidates as $raw) {
+            $code = strtoupper(trim((string)$raw));
+            if (preg_match('/^[A-Z]{2}$/', $code) && !in_array($code, ['XX', 'T1', 'ZZ'], true)) {
+                $geo_name = trim((string)($_SERVER['GEOIP_COUNTRY_NAME'] ?? ''));
+                return [
+                    'code' => $code,
+                    'name' => $geo_name !== '' ? $geo_name : ($map[$code] ?? $code)
+                ];
+            }
+        }
+
+        // Fallback to real HTTP Accept-Language region subtag sent by visitor's browser
+        $accept_lang = (string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
+        if ($accept_lang !== '') {
+            if (preg_match('/\b[a-z]{2,3}[-_]([A-Za-z]{2})\b/', $accept_lang, $m)) {
+                $code = strtoupper($m[1]);
+                if (isset($map[$code])) {
+                    return ['code' => $code, 'name' => $map[$code]];
+                }
+            }
+            $lang_to_country = [
+                'bn' => 'BD', 'hi' => 'IN', 'ur' => 'PK', 'id' => 'ID', 'ms' => 'MY',
+                'vi' => 'VN', 'th' => 'TH', 'tl' => 'PH', 'fil' => 'PH', 'ko' => 'KR',
+                'ja' => 'JP', 'zh' => 'CN', 'ru' => 'RU', 'uk' => 'UA', 'tr' => 'TR',
+                'ar' => 'SA', 'de' => 'DE', 'fr' => 'FR', 'es' => 'ES', 'pt' => 'BR',
+                'it' => 'IT', 'nl' => 'NL', 'pl' => 'PL'
+            ];
+            if (preg_match('/^\s*([a-z]{2,3})\b/i', $accept_lang, $lm)) {
+                $lcode = strtolower($lm[1]);
+                if (isset($lang_to_country[$lcode])) {
+                    $cc = $lang_to_country[$lcode];
+                    return ['code' => $cc, 'name' => $map[$cc]];
+                }
+            }
+        }
+
+        return ['code' => 'UN', 'name' => 'Unknown'];
+    }
+
+    public static function record_visit_telemetry($slug, $override = null) {
+        try {
+            $pdo = SLEA_DB::get_connection();
+            $device = is_array($override) && !empty($override['device_type'])
+                ? $override['device_type']
+                : self::detect_device_type();
+            if (!in_array($device, ['mobile', 'desktop', 'tablet'], true)) {
+                $device = 'desktop';
+            }
+
+            $channel = is_array($override) && !empty($override['traffic_channel'])
+                ? $override['traffic_channel']
+                : self::detect_traffic_channel();
+            if (!in_array($channel, ['direct', 'social', 'organic'], true)) {
+                $channel = 'direct';
+            }
+
+            $country = self::detect_country_info();
+            if (is_array($override) && !empty($override['country_code'])) {
+                $cc = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', (string)$override['country_code']), 0, 2));
+                if ($cc !== '') {
+                    $map = self::get_country_name_map();
+                    $country = [
+                        'code' => $cc,
+                        'name' => !empty($override['country_name']) ? trim((string)$override['country_name']) : ($map[$cc] ?? $cc)
+                    ];
+                }
+            }
+
+            $raw_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+            $ip_hash = $raw_ip !== '' ? substr(hash('sha256', $raw_ip . date('Y-m')), 0, 24) : '';
+
+            $stmt = $pdo->prepare("
+                INSERT INTO analytics_visits (page_slug, device_type, traffic_channel, country_code, country_name, ip_hash, visited_at)
+                VALUES (:slug, :dev, :chan, :cc, :cn, :iph, :now)
+            ");
+            $stmt->execute([
+                ':slug' => substr((string)$slug, 0, 255),
+                ':dev'  => $device,
+                ':chan' => $channel,
+                ':cc'   => $country['code'],
+                ':cn'   => $country['name'],
+                ':iph'  => $ip_hash,
+                ':now'  => date('Y-m-d H:i:s')
+            ]);
+        } catch (Exception $e) {
+            // Non-blocking
+        }
+    }
+
+    public static function get_visit_telemetry_stats() {
+        $stats = [
+            'total_tracked' => 0,
+            'devices' => [
+                'mobile'  => ['count' => 0, 'percent' => 0],
+                'desktop' => ['count' => 0, 'percent' => 0],
+                'tablet'  => ['count' => 0, 'percent' => 0],
+            ],
+            'channels' => [
+                'direct'  => ['count' => 0, 'percent' => 0],
+                'social'  => ['count' => 0, 'percent' => 0],
+                'organic' => ['count' => 0, 'percent' => 0],
+            ],
+            'countries' => []
+        ];
+
+        try {
+            $pdo = SLEA_DB::get_connection();
+            $total = (int)$pdo->query("SELECT COUNT(*) FROM analytics_visits")->fetchColumn();
+
+            // If no visits have been logged yet in analytics_visits and this is a real browser HTTP request,
+            // record the current real HTTP request telemetry so real device/channel/country data is captured immediately.
+            if ($total === 0 && !empty($_SERVER['HTTP_USER_AGENT'])) {
+                self::record_visit_telemetry('__visit__');
+                $total = (int)$pdo->query("SELECT COUNT(*) FROM analytics_visits")->fetchColumn();
+            }
+
+            $stats['total_tracked'] = $total;
+            if ($total <= 0) {
+                return $stats;
+            }
+
+            // Device breakdown
+            $stmt_d = $pdo->query("SELECT device_type, COUNT(*) as cnt FROM analytics_visits GROUP BY device_type");
+            if ($stmt_d) {
+                while ($r = $stmt_d->fetch(PDO::FETCH_ASSOC)) {
+                    $dtype = strtolower(trim($r['device_type'] ?? ''));
+                    $cnt = (int)($r['cnt'] ?? 0);
+                    if (isset($stats['devices'][$dtype])) {
+                        $stats['devices'][$dtype]['count'] = $cnt;
+                        $stats['devices'][$dtype]['percent'] = (int)round(($cnt / $total) * 100);
+                    }
+                }
+            }
+
+            // Traffic channels breakdown
+            $stmt_c = $pdo->query("SELECT traffic_channel, COUNT(*) as cnt FROM analytics_visits GROUP BY traffic_channel");
+            if ($stmt_c) {
+                while ($r = $stmt_c->fetch(PDO::FETCH_ASSOC)) {
+                    $chan = strtolower(trim($r['traffic_channel'] ?? ''));
+                    $cnt = (int)($r['cnt'] ?? 0);
+                    if (isset($stats['channels'][$chan])) {
+                        $stats['channels'][$chan]['count'] = $cnt;
+                        $stats['channels'][$chan]['percent'] = (int)round(($cnt / $total) * 100);
+                    }
+                }
+            }
+
+            // Top countries breakdown
+            $stmt_loc = $pdo->query("
+                SELECT country_code, country_name, COUNT(*) as cnt
+                FROM analytics_visits
+                GROUP BY country_code, country_name
+                ORDER BY cnt DESC
+                LIMIT 5
+            ");
+            if ($stmt_loc) {
+                while ($r = $stmt_loc->fetch(PDO::FETCH_ASSOC)) {
+                    $cnt = (int)($r['cnt'] ?? 0);
+                    $stats['countries'][] = [
+                        'code'    => $r['country_code'] ?: 'UN',
+                        'name'    => $r['country_name'] ?: 'Unknown',
+                        'count'   => $cnt,
+                        'percent' => (int)round(($cnt / $total) * 100)
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            // Safe fallback
+        }
+
+        return $stats;
     }
 
     public static function get_monthly_views_stats() {
@@ -896,6 +1150,15 @@ class SLEA_Datastore {
                 if (!is_dir($data_dir)) @mkdir($data_dir, 0755, true);
                 @file_put_contents($data_dir . '/analytics_backup.json', json_encode($rows_a, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
             }
+
+            // Sync visitor telemetry to data/analytics_visits_backup.json
+            $stmt_av = $pdo->query("SELECT page_slug, device_type, traffic_channel, country_code, country_name, ip_hash, visited_at FROM analytics_visits ORDER BY id ASC");
+            $rows_av = $stmt_av ? $stmt_av->fetchAll(PDO::FETCH_ASSOC) : [];
+            if (!empty($rows_av)) {
+                $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
+                if (!is_dir($data_dir)) @mkdir($data_dir, 0755, true);
+                @file_put_contents($data_dir . '/analytics_visits_backup.json', json_encode($rows_av, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            }
         } catch (Exception $e) {
             // Non-blocking
         }
@@ -977,7 +1240,7 @@ class SLEA_Datastore {
         return [
             'backup_format' => 'slea_backup_v2',
             'app_name'      => defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive',
-            'app_version'   => defined('APP_VERSION') ? APP_VERSION : 'v-5.6.0',
+            'app_version'   => defined('APP_VERSION') ? APP_VERSION : '18.0',
             'scope'         => $scope,
             'created_at'    => date('Y-m-d H:i:s'),
             'counts'        => [
@@ -1188,6 +1451,7 @@ class SLEA_Datastore {
             if (!empty($others['users']) && is_array($others['users'])) {
                 foreach ($others['users'] as $u) {
                     if (empty($u['username']) || empty($u['password_hash'])) continue;
+                    if (!preg_match('/^\$2[ayb]\$/', (string)$u['password_hash'])) continue;
                     $chk_u = $pdo->prepare("SELECT id FROM users WHERE username = :u LIMIT 1");
                     $chk_u->execute([':u' => $u['username']]);
                     $ex_u = $chk_u->fetch(PDO::FETCH_ASSOC);

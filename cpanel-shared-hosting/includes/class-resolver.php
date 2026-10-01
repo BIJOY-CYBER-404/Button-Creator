@@ -6,8 +6,31 @@
  * Optimized for shared hosting without requiring external Python binaries or CLI dependencies.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_Resolver {
     private static $user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+    public static function is_safe_public_url($url) {
+        if (empty($url) || !is_string($url)) return false;
+        if (!preg_match('/^https?:\/\//i', $url)) return false;
+        $host = parse_url($url, PHP_URL_HOST);
+        if (empty($host)) return false;
+        $host_clean = trim($host, '[]');
+        if (in_array(strtolower($host_clean), ['localhost', '127.0.0.1', '0.0.0.0', '::1'], true)) {
+            return false;
+        }
+        $ip = @gethostbyname($host_clean);
+        if ($ip && filter_var($ip, FILTER_VALIDATE_IP)) {
+            if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     /**
      * Check if a URL matches the target Blogspot episode page structure:
@@ -760,8 +783,20 @@ class SLEA_Resolver {
     }
 
     private static function fetch_url_curl($url, $timeout = 8, $cookie_file = null) {
+        if (!self::is_safe_public_url($url)) {
+            return [
+                'status'       => 0,
+                'body'         => '',
+                'error'        => 'Forbidden non-public or non-HTTP URL blocked by SSRF guard.',
+                'redirect_url' => null
+            ];
+        }
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
+        if (defined('CURLPROTO_HTTP') && defined('CURLPROTO_HTTPS')) {
+            @curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+            @curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+        }
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
         curl_setopt($ch, CURLOPT_HEADER, true);
@@ -837,8 +872,15 @@ class SLEA_Resolver {
     }
 
     private static function post_curl_json($url, $post_data, $referer, $origin, $cookie_file) {
+        if (!self::is_safe_public_url($url)) {
+            return null;
+        }
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
+        if (defined('CURLPROTO_HTTP') && defined('CURLPROTO_HTTPS')) {
+            @curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+            @curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+        }
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, is_array($post_data) ? http_build_query($post_data) : $post_data);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

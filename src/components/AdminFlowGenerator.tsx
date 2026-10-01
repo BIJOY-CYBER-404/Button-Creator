@@ -103,6 +103,8 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
 
       setStep("done");
       setCreatedResult(data.data);
+      setShortenUrl("");
+      setCustomTitle("");
       onPageCreated(data.data.page);
       onNotify?.("✓ Episode Button Page created successfully!", "success");
     } catch (err: any) {

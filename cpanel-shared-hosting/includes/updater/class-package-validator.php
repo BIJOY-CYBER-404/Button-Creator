@@ -4,6 +4,11 @@
  * Validates ZIP integrity, SHA256 checksums, PHP compatibility, and Zip Slip vulnerabilities.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_PackageValidator {
     private $logger;
 

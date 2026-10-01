@@ -4,6 +4,11 @@
  * Integrates Downloader, Validator, BackupManager, MigrationManager, RollbackManager, and HealthChecker.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 require_once __DIR__ . '/class-db.php';
 require_once __DIR__ . '/class-datastore.php';
 require_once __DIR__ . '/updater/class-update-logger.php';
@@ -16,6 +21,14 @@ require_once __DIR__ . '/updater/class-health-checker.php';
 
 class SLEA_Updater {
     private static $lock_file;
+
+    public static function normalize_version($ver) {
+        $v = trim(ltrim((string)$ver, "vV- \t\n\r\0\x0B"));
+        if (preg_match('/^(\d+)\.(\d+)\.0$/', $v, $m)) {
+            return $m[1] . '.' . $m[2];
+        }
+        return $v !== '' ? $v : '18.0';
+    }
 
     public static function init() {
         if (!defined('APP_ROOT')) {
@@ -81,7 +94,7 @@ class SLEA_Updater {
     public static function check_for_updates($force = false) {
         self::init();
         $config = self::get_config();
-        $current_version = defined('APP_VERSION') ? ltrim(APP_VERSION, 'v-') : '3.8.0';
+        $current_version = defined('APP_VERSION') ? self::normalize_version(APP_VERSION) : '18.0';
 
         // Filter out non-http local file paths from saved manifest_url if present
         $saved_manifest = $config['manifest_url'] ?? '';
@@ -112,7 +125,7 @@ class SLEA_Updater {
                 $is_remote_url = preg_match('/^https?:\/\//i', $url);
                 $fetched = $downloader->fetch_manifest($url);
                 if ($fetched && !empty($fetched['version'])) {
-                    $candidate_ver = ltrim($fetched['version'], 'v-');
+                    $candidate_ver = self::normalize_version($fetched['version']);
                     $diagnostics[$url] = [
                         'status' => 'success',
                         'version' => $candidate_ver,
@@ -154,7 +167,7 @@ class SLEA_Updater {
             ];
         }
 
-        $remote_version = ltrim($manifest['version'], 'v-');
+        $remote_version = self::normalize_version($manifest['version']);
         $update_available = version_compare($current_version, $remote_version, '<');
 
         return [
@@ -206,7 +219,7 @@ class SLEA_Updater {
 
         $update_id = 'update_' . date('Ymd_His') . '_' . substr(md5(uniqid()), 0, 4);
         $logger = new SLEA_UpdateLogger($update_id);
-        $current_version = defined('APP_VERSION') ? ltrim(APP_VERSION, 'v-') : '3.8.0';
+        $current_version = defined('APP_VERSION') ? self::normalize_version(APP_VERSION) : '18.0';
 
         $backup_manager = new SLEA_BackupManager($logger, $update_id);
         $rollback_manager = null;
@@ -533,7 +546,7 @@ class SLEA_Updater {
                 self::copy_staging_files($src_path, $dst_path, $exclude);
             } else {
                 if (file_exists($dst_path)) {
-                    @chmod($dst_path, 0777);
+                    @chmod($dst_path, 0644);
                     @unlink($dst_path);
                 }
                 $copied = @copy($src_path, $dst_path);
@@ -563,7 +576,7 @@ class SLEA_Updater {
         $cfg_file = APP_ROOT . '/config.php';
         if (file_exists($cfg_file)) {
             $content = file_get_contents($cfg_file);
-            $clean_v = 'v-' . ltrim($new_version, 'v-');
+            $clean_v = 'v-' . self::normalize_version($new_version);
             $updated = preg_replace("/define\('APP_VERSION',\s*'[^']+'\);/", "define('APP_VERSION', '{$clean_v}');", $content);
             if ($updated && $updated !== $content) {
                 file_put_contents($cfg_file, $updated);

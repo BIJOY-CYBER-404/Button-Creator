@@ -31,6 +31,99 @@ interface ButtonPage {
 let activeDataDir = path.join(process.cwd(), "data");
 let activePagesFile = path.join(activeDataDir, "pages.json");
 let activeSettingsFile = path.join(activeDataDir, "settings.json");
+let activeVisitsFile = path.join(activeDataDir, "visits.json");
+
+interface VisitTelemetryRecord {
+  session_id: string;
+  page_slug: string;
+  device_type: "desktop" | "mobile" | "tablet";
+  channel: "direct" | "search" | "social" | "referral";
+  referrer_host: string;
+  country: string;
+  country_code: string;
+  duration_sec: number;
+  visit_date: string;
+  year_month: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const COUNTRY_CODE_NAMES: Record<string, string> = {
+  US: "United States", IN: "India", BD: "Bangladesh", PK: "Pakistan", GB: "United Kingdom",
+  CA: "Canada", AU: "Australia", DE: "Germany", FR: "France", ID: "Indonesia",
+  PH: "Philippines", MY: "Malaysia", SG: "Singapore", AE: "United Arab Emirates", SA: "Saudi Arabia",
+  NP: "Nepal", LK: "Sri Lanka", BR: "Brazil", MX: "Mexico", NG: "Nigeria",
+  ZA: "South Africa", KR: "South Korea", JP: "Japan", CN: "China", VN: "Vietnam",
+  TH: "Thailand", TR: "Turkey", IT: "Italy", ES: "Spain", NL: "Netherlands", RU: "Russia"
+};
+
+function isSafePublicUrl(rawUrl: string): boolean {
+  if (!rawUrl || typeof rawUrl !== "string") return false;
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    if (!host || ["localhost", "127.0.0.1", "0.0.0.0", "::1", "169.254.169.254"].includes(host)) {
+      return false;
+    }
+    if (/^(10\.|192\.168\.|127\.|169\.254\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host)) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function detectDeviceFromUA(ua: string): "desktop" | "mobile" | "tablet" {
+  const lower = (ua || "").toLowerCase();
+  if (/ipad|tablet|playbook|silk|(android(?!.*mobile))/i.test(lower)) {
+    return "tablet";
+  }
+  if (/mobile|iphone|ipod|android.*mobile|windows phone|iemobile|opera mini|opera mobi|blackberry/i.test(lower)) {
+    return "mobile";
+  }
+  return "desktop";
+}
+
+function detectTrafficChannelFromReq(req: express.Request): { channel: "direct" | "search" | "social" | "referral"; referrer_host: string } {
+  const ref = String(req.headers["referer"] || req.headers["referrer"] || "").trim();
+  if (!ref) return { channel: "direct", referrer_host: "" };
+  try {
+    const refUrl = new URL(ref);
+    const refHost = refUrl.hostname.toLowerCase();
+    const curHost = String(req.headers.host || "").toLowerCase().replace(/:\d+$/, "");
+    if (!refHost || (curHost && refHost === curHost)) {
+      return { channel: "direct", referrer_host: "" };
+    }
+    if (["google.", "bing.com", "yahoo.", "duckduckgo.com", "baidu.com", "yandex."].some((s) => refHost.includes(s))) {
+      return { channel: "search", referrer_host: refHost };
+    }
+    if (["facebook.com", "fb.com", "t.co", "twitter.com", "x.com", "instagram.com", "t.me", "telegram.", "youtube.com", "youtu.be", "reddit.com", "whatsapp.com", "tiktok.com", "pinterest."].some((s) => refHost.includes(s))) {
+      return { channel: "social", referrer_host: refHost };
+    }
+    return { channel: "referral", referrer_host: refHost };
+  } catch {
+    return { channel: "direct", referrer_host: "" };
+  }
+}
+
+function detectCountryFromReq(req: express.Request): { code: string; name: string } {
+  const headerKeys = ["cf-ipcountry", "x-country-code", "x-appengine-country", "x-vercel-ip-country", "x-geo-country"];
+  for (const k of headerKeys) {
+    const val = String(req.headers[k] || "").trim().toUpperCase();
+    if (val && val !== "XX" && val !== "T1" && val !== "ZZ" && val.length === 2) {
+      return { code: val, name: COUNTRY_CODE_NAMES[val] || val };
+    }
+  }
+  const acceptLang = String(req.headers["accept-language"] || "");
+  const m = acceptLang.match(/[a-z]{2}[_-]([A-Z]{2})/);
+  if (m && m[1]) {
+    const cc = m[1].toUpperCase();
+    return { code: cc, name: COUNTRY_CODE_NAMES[cc] || cc };
+  }
+  return { code: "UN", name: "Direct Network" };
+}
 
 const defaultServerSettings: Record<string, any> = {
   login_slug: "login",
@@ -90,11 +183,16 @@ function initDatastore() {
     if (!fs.existsSync(activeSettingsFile)) {
       fs.writeFileSync(activeSettingsFile, JSON.stringify(defaultServerSettings, null, 2));
     }
+    activeVisitsFile = path.join(activeDataDir, "visits.json");
+    if (!fs.existsSync(activeVisitsFile)) {
+      fs.writeFileSync(activeVisitsFile, JSON.stringify([], null, 2));
+    }
   } catch {
     try {
       activeDataDir = path.join(os.tmpdir(), "slea-data");
       activePagesFile = path.join(activeDataDir, "pages.json");
       activeSettingsFile = path.join(activeDataDir, "settings.json");
+      activeVisitsFile = path.join(activeDataDir, "visits.json");
       if (!fs.existsSync(activeDataDir)) {
         fs.mkdirSync(activeDataDir, { recursive: true });
       }
@@ -104,10 +202,156 @@ function initDatastore() {
       if (!fs.existsSync(activeSettingsFile)) {
         fs.writeFileSync(activeSettingsFile, JSON.stringify(defaultServerSettings, null, 2));
       }
+      if (!fs.existsSync(activeVisitsFile)) {
+        fs.writeFileSync(activeVisitsFile, JSON.stringify([], null, 2));
+      }
     } catch {
       // Ignore write errors in strictly read-only environments
     }
   }
+}
+
+function getStoredVisits(): VisitTelemetryRecord[] {
+  initDatastore();
+  try {
+    const raw = fs.readFileSync(activeVisitsFile, "utf-8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredVisits(visits: VisitTelemetryRecord[]) {
+  initDatastore();
+  try {
+    fs.writeFileSync(activeVisitsFile, JSON.stringify(visits, null, 2));
+  } catch {
+    // Ignore write errors if read-only
+  }
+}
+
+function recordVisitTelemetry(req: express.Request, pageSlug = "") {
+  try {
+    const ua = String(req.headers["user-agent"] || "");
+    const ip = String(req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0");
+    const today = new Date().toISOString().slice(0, 10);
+    const ym = today.slice(0, 7);
+    const nowIso = new Date().toISOString();
+    const sessionId = Buffer.from(`${ip}|${ua}|${today}`).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+
+    const deviceType = detectDeviceFromUA(ua);
+    const { channel, referrer_host } = detectTrafficChannelFromReq(req);
+    const { code: country_code, name: country } = detectCountryFromReq(req);
+
+    const visits = getStoredVisits();
+    let durationSec = 0;
+    const sameSession = visits.filter((v) => v.session_id === sessionId);
+    if (sameSession.length > 0) {
+      const firstTs = new Date(sameSession[0].created_at).getTime();
+      const diffSec = Math.max(0, Math.min(7200, Math.round((Date.now() - firstTs) / 1000)));
+      durationSec = diffSec;
+      for (const v of visits) {
+        if (v.session_id === sessionId) {
+          v.duration_sec = diffSec;
+          v.updated_at = nowIso;
+        }
+      }
+    }
+
+    visits.push({
+      session_id: sessionId,
+      page_slug: pageSlug,
+      device_type: deviceType,
+      channel,
+      referrer_host,
+      country,
+      country_code,
+      duration_sec: durationSec,
+      visit_date: today,
+      year_month: ym,
+      created_at: nowIso,
+      updated_at: nowIso,
+    });
+
+    // Keep most recent 5000 real visit records
+    if (visits.length > 5000) {
+      visits.splice(0, visits.length - 5000);
+    }
+    saveStoredVisits(visits);
+  } catch {
+    // Non-blocking
+  }
+}
+
+function getVisitTelemetryStats(req: express.Request) {
+  let visits = getStoredVisits();
+  if (visits.length === 0) {
+    recordVisitTelemetry(req, "");
+    visits = getStoredVisits();
+  }
+
+  const totalVisits = visits.length;
+  const uniqueSessions = new Set(visits.map((v) => v.session_id)).size;
+
+  const sessionMaxDur = new Map<string, number>();
+  for (const v of visits) {
+    if ((v.duration_sec || 0) > 0) {
+      sessionMaxDur.set(v.session_id, Math.max(sessionMaxDur.get(v.session_id) || 0, v.duration_sec));
+    }
+  }
+  const durValues = Array.from(sessionMaxDur.values());
+  const avgDurationSec = durValues.length > 0
+    ? Math.round(durValues.reduce((a, b) => a + b, 0) / durValues.length)
+    : 0;
+
+  const devCounts = { desktop: 0, mobile: 0, tablet: 0 };
+  const chanCounts = { direct: 0, search: 0, social: 0, referral: 0 };
+  const countryMap = new Map<string, { country: string; country_code: string; count: number }>();
+
+  for (const v of visits) {
+    const dt = v.device_type in devCounts ? v.device_type : "desktop";
+    devCounts[dt]++;
+    const ch = v.channel in chanCounts ? v.channel : "direct";
+    chanCounts[ch]++;
+    const cKey = `${v.country}|${v.country_code}`;
+    const prev = countryMap.get(cKey);
+    if (prev) {
+      prev.count++;
+    } else {
+      countryMap.set(cKey, { country: v.country, country_code: v.country_code, count: 1 });
+    }
+  }
+
+  const pct = (c: number) => (totalVisits > 0 ? Math.round((c / totalVisits) * 1000) / 10 : 0);
+
+  const countries = Array.from(countryMap.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6)
+    .map((c) => ({
+      country: c.country,
+      country_code: c.country_code,
+      count: c.count,
+      pct: pct(c.count),
+    }));
+
+  return {
+    total_tracked_visits: totalVisits,
+    active_sessions: uniqueSessions,
+    avg_duration_sec: avgDurationSec,
+    devices: {
+      desktop: { count: devCounts.desktop, pct: pct(devCounts.desktop) },
+      mobile: { count: devCounts.mobile, pct: pct(devCounts.mobile) },
+      tablet: { count: devCounts.tablet, pct: pct(devCounts.tablet) },
+    },
+    channels: {
+      direct: { count: chanCounts.direct, pct: pct(chanCounts.direct) },
+      search: { count: chanCounts.search, pct: pct(chanCounts.search) },
+      social: { count: chanCounts.social, pct: pct(chanCounts.social) },
+      referral: { count: chanCounts.referral, pct: pct(chanCounts.referral) },
+    },
+    countries,
+  };
 }
 
 function getStoredSettings(): Record<string, any> {
@@ -154,11 +398,20 @@ function saveStoredPages(pages: ButtonPage[]) {
 
 async function startServer() {
   const app = express();
+  app.disable("x-powered-by");
   const PORT = Number(process.env.PORT) || 3000;
 
   initDatastore();
 
   app.use(express.json({ limit: "10mb" }));
+
+  // Security Headers Middleware
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
 
   // CORS Middleware for remote update checks from cPanel/shared hosting sites
   app.use((req, res, next) => {
@@ -223,10 +476,27 @@ async function startServer() {
     res.json({ status: "ok", python: "available", cpanel_ready: true });
   });
 
+  // Brute-force login rate limiter (max 5 failed attempts per 10 mins per IP)
+  const loginAttemptsByIp = new Map<string, { count: number; lockUntil: number }>();
+
   // Admin Auth: Login
   app.post("/api/auth/login", (req, res) => {
+    const clientIp = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "local");
+    const entry = loginAttemptsByIp.get(clientIp) || { count: 0, lockUntil: 0 };
+    if (entry.lockUntil > Date.now()) {
+      return res.status(429).json({
+        success: false,
+        error: "Too many failed login attempts. Please wait 10 minutes before trying again."
+      });
+    }
+    if (entry.lockUntil > 0 && entry.lockUntil <= Date.now()) {
+      entry.count = 0;
+      entry.lockUntil = 0;
+    }
+
     const { username, password } = req.body;
     if ((username === "admin" || !username) && password === "admin123") {
+      loginAttemptsByIp.delete(clientIp);
       const token = `adm_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
       validAdminTokens.add(token);
       return res.json({
@@ -236,13 +506,20 @@ async function startServer() {
         message: "Admin authentication successful"
       });
     }
+
+    entry.count += 1;
+    if (entry.count >= 5) {
+      entry.lockUntil = Date.now() + 10 * 60 * 1000;
+    }
+    loginAttemptsByIp.set(clientIp, entry);
+
     return res.status(401).json({
       success: false,
-      error: "Invalid username or password. Default is admin / admin123"
+      error: "Invalid administrator credentials."
     });
   });
 
-  // Admin Auth: Check status (includes configured login_slug)
+  // Admin Auth: Check status (includes configured login_slug only when authenticated)
   app.get("/api/auth/status", (req, res) => {
     const isLoggedIn = isAdminRequest(req);
     const settings = getStoredSettings();
@@ -250,16 +527,17 @@ async function startServer() {
       success: true,
       logged_in: isLoggedIn,
       username: isLoggedIn ? "admin" : null,
-      login_slug: settings.login_slug || "login",
+      ...(isLoggedIn ? { login_slug: settings.login_slug || "login" } : {}),
     });
   });
 
-  // Public: Get site settings (menu_items, site_identity, footer_text, ad_settings, maintenance_settings, share_settings, login_slug)
-  app.get("/api/settings/public", (_req, res) => {
-    const settings = getStoredSettings();
+  // Public: Get site settings (menu_items, site_identity, footer_text, ad_settings, maintenance_settings, share_settings)
+  app.get("/api/settings/public", (req, res) => {
+    const isLoggedIn = isAdminRequest(req);
+    const { login_slug, ...publicSettings } = getStoredSettings();
     res.json({
       success: true,
-      settings,
+      settings: isLoggedIn ? { ...publicSettings, login_slug } : publicSettings,
     });
   });
 
@@ -307,11 +585,20 @@ async function startServer() {
       return res.status(404).json({ success: false, error: "The requested episode link page could not be located." });
     }
     const isPublic = page.is_public === undefined ? true : Boolean(Number(page.is_public));
-    // Increment views
+    // Increment views & record real visitor telemetry
     page.views = (page.views || 0) + 1;
     saveStoredPages(pages);
+    recordVisitTelemetry(req, page.slug);
 
     res.json({ success: true, page: { ...page, is_public: isPublic ? 1 : 0 } });
+  });
+
+  // Protected: Get 100% Real Visitor Telemetry (Device Breakdown, Traffic Channels, Country, Sessions, Duration)
+  app.get("/api/analytics/telemetry", requireAdmin, (req, res) => {
+    res.json({
+      success: true,
+      telemetry: getVisitTelemetryStats(req),
+    });
   });
 
   // Protected: Toggle page Public/Private visibility status
@@ -349,7 +636,7 @@ async function startServer() {
     const payload = {
       backup_format: "slea_backup_v2",
       app_name: "Movie Hub HQ Drive",
-      app_version: "v-5.6.0",
+      app_version: "v-18.0",
       scope,
       created_at: new Date().toISOString(),
       counts: {
@@ -488,8 +775,8 @@ async function startServer() {
   // Protected: Create page from Shortlink (The Main Requested Admin Flow!)
   app.post("/api/pages/create-from-shortlink", requireAdmin, async (req, res) => {
     const { url, title_override, description_override, theme = "indigo" } = req.body;
-    if (!url || typeof url !== "string") {
-      return res.status(400).json({ success: false, error: "Enter a valid shortened URL." });
+    if (!url || typeof url !== "string" || !isSafePublicUrl(url)) {
+      return res.status(400).json({ success: false, error: "Enter a valid public HTTP/HTTPS shortened URL." });
     }
 
     try {
@@ -634,6 +921,9 @@ async function startServer() {
     if (!url && !html) {
       return res.status(400).json({ success: false, error: "Please provide a valid URL or HTML content." });
     }
+    if (url && !isSafePublicUrl(url)) {
+      return res.status(400).json({ success: false, error: "Unsafe or private network URL rejected." });
+    }
 
     try {
       const pythonProcess = spawn("python3", ["extractor.py", "--json"]);
@@ -662,8 +952,8 @@ async function startServer() {
   // Protected: Python URL Resolver endpoint
   app.post("/api/resolve", requireAdmin, async (req, res) => {
     const { url } = req.body;
-    if (!url || typeof url !== "string") {
-      return res.status(400).json({ success: false, error: "Enter a shortened URL." });
+    if (!url || typeof url !== "string" || !isSafePublicUrl(url)) {
+      return res.status(400).json({ success: false, error: "Enter a valid public HTTP/HTTPS shortened URL." });
     }
 
     try {
@@ -695,6 +985,9 @@ async function startServer() {
     const { url, html, base_url, button_only = true, auto_resolve = true } = req.body;
     if (!url && !html) {
       return res.status(400).json({ success: false, error: "Please provide a valid URL or HTML content." });
+    }
+    if (url && !isSafePublicUrl(url)) {
+      return res.status(400).json({ success: false, error: "Unsafe or private network URL rejected." });
     }
 
     try {
@@ -741,16 +1034,16 @@ async function startServer() {
       return res.sendFile(updatePath);
     }
     return res.json({
-      name: "Movie Hub HQ Drive",
-      version: "v-7.0.0",
-      release_date: "2026-09-28",
+      version: "18.0",
+      release_date: "2026-10-01",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
+      checksum: "be4e888a009832be1bde5547a17bc1db69fd93c26b74333f775955082a181aa1",
+      sha256: "be4e888a009832be1bde5547a17bc1db69fd93c26b74333f775955082a181aa1",
       minimum_php: "7.4",
       release_notes: [
-        "Clean Settings: Removed One-Click Application Update System card entirely from settings.php (exclusively located in update.php)",
-        "Mounted Backup & Restore Center at the very top of settings.php with Full, Settings Only, Pages Only, and Others Only JSON exports",
-        "Auto-Detecting JSON restore mechanism (automatically identifies and restores Full, Settings, Pages, or Accounts/Analytics payloads without data loss)",
-        "Hardened update deployment lifecycle with write-lock overrides, automatic unlinking, and direct OPcache resets"
+        "Standardized version number format to v-x.x (v-18.0) across all pages and updater manifests",
+        "Comprehensive website & cPanel security hardening: SSRF protection, CSRF verification, brute-force rate limiting, and direct PHP access guards",
+        "100% Real Visitor Telemetry: Live tracking and aggregation of Device Breakdown, Top Traffic Channels, and Top Traffic Country"
       ]
     });
   });
@@ -785,11 +1078,12 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development; static dist serving for production / Cloud Run
-  const isProduction = process.env.NODE_ENV === "production" || Boolean(process.env.K_SERVICE);
+  // Vite middleware for development; static dist serving for production when dist/index.html is built
   const distPath = path.join(process.cwd(), "dist");
+  const distIndexHtml = path.join(distPath, "index.html");
+  const useStaticDist = process.env.NODE_ENV === "production" && fs.existsSync(distIndexHtml);
 
-  if (!isProduction) {
+  if (!useStaticDist) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -799,7 +1093,7 @@ async function startServer() {
   } else {
     app.use(express.static(distPath));
     app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(distIndexHtml);
     });
   }
 

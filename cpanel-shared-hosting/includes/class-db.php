@@ -3,6 +3,11 @@
  * Database abstraction layer supporting MySQL (and graceful SQLite fallback)
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 class SLEA_DB {
     private static $pdo = null;
     private static $driver = null;
@@ -60,6 +65,7 @@ class SLEA_DB {
             if (!is_dir(DATA_DIR)) {
                 @mkdir(DATA_DIR, 0755, true);
             }
+            self::protect_data_directory(DATA_DIR);
             $sqlite_file = defined('SQLITE_STORAGE_FILE') ? SQLITE_STORAGE_FILE : DATA_DIR . '/database.sqlite';
             self::$pdo = new PDO('sqlite:' . $sqlite_file);
             self::$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -68,7 +74,21 @@ class SLEA_DB {
             self::ensure_schema();
             return self::$pdo;
         } catch (PDOException $ex) {
-            die('Fatal Database Error: ' . htmlspecialchars($ex->getMessage()));
+            error_log('Database connection error: ' . $ex->getMessage());
+            http_response_code(503);
+            die('Service temporarily unavailable.');
+        }
+    }
+
+    public static function protect_data_directory($dir) {
+        if (!is_dir($dir)) return;
+        $ht = $dir . '/.htaccess';
+        if (!file_exists($ht)) {
+            @file_put_contents($ht, "Order deny,allow\nDeny from all\n<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n");
+        }
+        $idx = $dir . '/index.php';
+        if (!file_exists($idx)) {
+            @file_put_contents($idx, "<?php http_response_code(404); exit;\n");
         }
     }
 
@@ -188,6 +208,25 @@ class SLEA_DB {
             ) {$table_engine}
         ");
 
+        // 7. Real Visitor Telemetry Table (Device Breakdown, Traffic Channels, Country, Sessions, Duration)
+        self::$pdo->exec("
+            CREATE TABLE IF NOT EXISTS analytics_visits (
+                id {$auto_inc},
+                session_id VARCHAR(64) NOT NULL,
+                page_slug VARCHAR(120) DEFAULT '',
+                device_type VARCHAR(30) NOT NULL,
+                channel VARCHAR(40) NOT NULL,
+                referrer_host VARCHAR(190) DEFAULT '',
+                country VARCHAR(100) NOT NULL,
+                country_code VARCHAR(10) DEFAULT '',
+                duration_sec INT DEFAULT 0,
+                visit_date VARCHAR(10) NOT NULL,
+                year_month VARCHAR(7) NOT NULL,
+                created_at DATETIME,
+                updated_at DATETIME
+            ) {$table_engine}
+        ");
+
         // Self-Heal Settings, Users, Pages, and Analytics from persistent JSON backups in /data before seeding defaults
         self::auto_heal_from_data_backups();
 
@@ -285,6 +324,7 @@ class SLEA_DB {
                     if (is_array($saved_users) && !empty($saved_users)) {
                         foreach ($saved_users as $u) {
                             if (empty($u['username']) || empty($u['password_hash'])) continue;
+                            if (!preg_match('/^\$2[ayb]\$/', (string)$u['password_hash'])) continue;
                             $ins = self::$pdo->prepare("
                                 INSERT INTO users (username, email, password_hash, role, permissions, created_at, updated_at)
                                 VALUES (:u, :e, :p, :r, :perms, :c, :up)
@@ -329,6 +369,41 @@ class SLEA_DB {
                 }
             } catch (Exception $e) { /* non-blocking */ }
         }
+
+        // 4. Auto-heal visitor telemetry from data/analytics_visits_backup.json if analytics_visits is empty
+        $visits_file = $data_dir . '/analytics_visits_backup.json';
+        if (file_exists($visits_file)) {
+            try {
+                $cnt_stmt = self::$pdo->query("SELECT COUNT(*) AS cnt FROM analytics_visits");
+                $cnt_row = $cnt_stmt ? $cnt_stmt->fetch() : null;
+                if (empty($cnt_row) || intval($cnt_row['cnt']) === 0) {
+                    $saved_visits = json_decode(@file_get_contents($visits_file), true);
+                    if (is_array($saved_visits) && !empty($saved_visits)) {
+                        foreach ($saved_visits as $v) {
+                            if (empty($v['session_id']) || empty($v['device_type'])) continue;
+                            $ins = self::$pdo->prepare("
+                                INSERT INTO analytics_visits (session_id, page_slug, device_type, channel, referrer_host, country, country_code, duration_sec, visit_date, year_month, created_at, updated_at)
+                                VALUES (:sid, :slug, :dev, :ch, :ref, :cnt, :cc, :dur, :vd, :ym, :ca, :ua)
+                            ");
+                            $ins->execute([
+                                ':sid'  => $v['session_id'],
+                                ':slug' => $v['page_slug'] ?? '',
+                                ':dev'  => $v['device_type'],
+                                ':ch'   => $v['channel'] ?? 'direct',
+                                ':ref'  => $v['referrer_host'] ?? '',
+                                ':cnt'  => $v['country'] ?? 'Local Network',
+                                ':cc'   => $v['country_code'] ?? '',
+                                ':dur'  => intval($v['duration_sec'] ?? 0),
+                                ':vd'   => $v['visit_date'] ?? date('Y-m-d'),
+                                ':ym'   => $v['year_month'] ?? date('Y-m'),
+                                ':ca'   => $v['created_at'] ?? $now,
+                                ':ua'   => $v['updated_at'] ?? $now
+                            ]);
+                        }
+                    }
+                }
+            } catch (Exception $e) { /* non-blocking */ }
+        }
     }
 
     public static function persist_verified_credentials() {
@@ -337,6 +412,7 @@ class SLEA_DB {
             if (!is_dir($data_dir)) {
                 @mkdir($data_dir, 0755, true);
             }
+            self::protect_data_directory($data_dir);
             $creds_file = $data_dir . '/db_credentials.json';
             $creds = [
                 'db_type'    => defined('DB_TYPE') ? DB_TYPE : 'mysql',

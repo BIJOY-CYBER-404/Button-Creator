@@ -4,6 +4,11 @@
  * Place this in public_html or your deployment directory.
  */
 
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 if (!defined('APP_ROOT')) {
     define('APP_ROOT', __DIR__);
 }
@@ -64,18 +69,30 @@ if (!defined('DB_CHARSET')) {
 // Application & Security Configuration
 // -------------------------------------------------------------
 define('APP_NAME', 'Movie Hub HQ Drive');
-define('APP_VERSION', 'v-16.0.0');
+define('APP_VERSION', 'v-18.0');
 define('DEFAULT_PAGE_THEME', 'indigo');
 define('AUTO_INCREMENT_VIEWS', true);
 define('ROBOTS_NOINDEX', true); // Enforce noindex, nofollow on all button pages
 
+// Prevent PHP version and stack trace disclosure in production responses
+@ini_set('display_errors', '0');
+@ini_set('display_startup_errors', '0');
+@header_remove('X-Powered-By');
+if (!headers_sent()) {
+    @header('X-Content-Type-Options: nosniff');
+    @header('X-Frame-Options: SAMEORIGIN');
+    @header('Referrer-Policy: strict-origin-when-cross-origin');
+}
+
 // Session Security Configuration
 if (session_status() === PHP_SESSION_NONE) {
-    ini_set('session.cookie_httponly', 1);
-    ini_set('session.use_only_cookies', 1);
-    ini_set('session.cookie_path', '/');
+    @ini_set('session.cookie_httponly', '1');
+    @ini_set('session.use_only_cookies', '1');
+    @ini_set('session.use_strict_mode', '1');
+    @ini_set('session.cookie_samesite', 'Lax');
+    @ini_set('session.cookie_path', '/');
     if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
-        ini_set('session.cookie_secure', 1);
+        @ini_set('session.cookie_secure', '1');
     }
 }
 

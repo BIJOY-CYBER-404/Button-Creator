@@ -129,8 +129,8 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 </svg>
             </a>
 
-            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version <?= htmlspecialchars(APP_VERSION) ?>">
-                <?= htmlspecialchars(APP_VERSION) ?>
+            <span class="text-[10px] font-bold font-mono text-[#5f6368] bg-[#f0f4f9] px-1.5 py-0.5 rounded border border-[#e1e7f0] select-none" title="Movie Hub HQ Drive Version v-<?= htmlspecialchars(preg_replace('/^(\d+\.\d+)\.\d+$/', '$1', ltrim(APP_VERSION, 'vV-'))) ?>">
+                v-<?= htmlspecialchars(preg_replace('/^(\d+\.\d+)\.\d+$/', '$1', ltrim(APP_VERSION, 'vV-'))) ?>
             </span>
         </div>
     </aside>
@@ -593,6 +593,8 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
 
                 loadingBox.classList.add('hidden');
                 successBox.classList.remove('hidden');
+                input.value = '';
+                document.getElementById('customTitleInput').value = '';
                 showNotification('✓ Episode Button Page created successfully!', 'success');
             } catch (err) {
                 clearTimeout(timeoutId);

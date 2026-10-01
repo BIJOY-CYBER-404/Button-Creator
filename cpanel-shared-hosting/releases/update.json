@@ -1,18 +1,18 @@
 {
-  "version": "16.0.0",
-  "release_date": "2026-09-28",
+  "version": "18.0",
+  "release_date": "2026-10-01",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "be4e888a009832be1bde5547a17bc1db69fd93c26b74333f775955082a181aa1",
-  "sha256": "be4e888a009832be1bde5547a17bc1db69fd93c26b74333f775955082a181aa1",
+  "checksum": "6798d2ba0e85ad9987fecb24c9e8236445f57be4b853ff6f822acd66793debfc",
+  "sha256": "6798d2ba0e85ad9987fecb24c9e8236445f57be4b853ff6f822acd66793debfc",
   "changelog": [
-    "100% Real Database Analytics: Zero mock, fake, or synthetic data across all analytics metrics and charts",
-    "Verified Database Metrics: Range visits, top 10 most viewed pages, monthly comparisons, and real database traffic percentages",
-    "Transparent Telemetry Status: Direct N/A indicators for non-logged device, referrer, and geo-location tracking"
+    "Standardized version number format from v-x.x.x to v-x.x (v-18.0) across all pages and updater manifests",
+    "Comprehensive website & cPanel security hardening: SSRF protection, Same-Origin CSRF validation, brute-force login rate limiting, bcrypt hash validation on backup restore, HTTP security headers, and direct PHP access guards",
+    "100% Real Visitor Telemetry: Live database tracking and aggregation of Device Breakdown, Top Traffic Channels, and Top Traffic Country from real visitor requests"
   ],
   "release_notes": [
-    "100% Real Database Analytics: Zero mock, fake, or synthetic data across all analytics metrics and charts",
-    "Verified Database Metrics: Range visits, top 10 most viewed pages, monthly comparisons, and real database traffic percentages",
-    "Transparent Telemetry Status: Direct N/A indicators for non-logged device, referrer, and geo-location tracking"
+    "Standardized version number format from v-x.x.x to v-x.x (v-18.0) across all pages and updater manifests",
+    "Comprehensive website & cPanel security hardening: SSRF protection, Same-Origin CSRF validation, brute-force login rate limiting, bcrypt hash validation on backup restore, HTTP security headers, and direct PHP access guards",
+    "100% Real Visitor Telemetry: Live database tracking and aggregation of Device Breakdown, Top Traffic Channels, and Top Traffic Country from real visitor requests"
   ],
   "migrations": true,
   "min_php_version": "7.4",

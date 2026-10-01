@@ -65,7 +65,7 @@ export const WordPressPluginHub: React.FC<WordPressPluginHubProps> = ({
                   Source Link & Episode Button Automator
                 </h2>
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#e8def8] text-[#4a4458]">
-                  WordPress Plugin v2.2.0
+                  WordPress Plugin v-2.2
                 </span>
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#14532d]">
                   "Ready" Status Support

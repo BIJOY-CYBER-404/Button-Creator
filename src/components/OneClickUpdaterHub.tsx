@@ -58,17 +58,22 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [logs, setLogs] = useState<string[]>([]);
 
+  const formatVer = (v: string) => {
+    const clean = String(v || "18.0").replace(/^[vV-]+/, "");
+    return clean.replace(/^(\d+\.\d+)\.0$/, "$1");
+  };
+
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "15.0.0",
-    remote_version: "15.0.0",
+    current_version: "18.0",
+    remote_version: "18.0",
     update_available: false,
-    release_date: "2026-09-28",
+    release_date: "2026-10-01",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Fixed Admin View toolbar Edit Page button action to open the page editor directly",
-      "Admin View toolbar styled in a single clean horizontal line on pure white background",
-      "Completely removed episode button click counts"
+      "Standardized application version format to v-x.x (v-18.0) across all pages and updater manifests",
+      "Comprehensive security hardening: SSRF protection, CSRF origin verification, brute-force rate limiting, and direct PHP access guards",
+      "100% Real Visitor Telemetry: Live tracking and aggregation of Device Breakdown, Top Traffic Channels, and Top Traffic Country"
     ],
     minimum_php: "7.4",
     checksum: "3832fc7b1fa5aeec8afa2dc55330935d785652c084313ae1c7989c0745efd87f"
@@ -82,14 +87,14 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [history, setHistory] = useState<UpdateHistoryItem[]>([
     {
       id: 1,
-      update_id: "update_20260920_183000_a81f",
-      old_version: "3.7.0",
-      new_version: "3.8.0",
+      update_id: "update_20261001_020000_a81f",
+      old_version: "17.0",
+      new_version: "18.0",
       status: "success",
       step: "Finalizing update",
       rollback_status: "not_needed",
-      started_at: "2026-09-20 18:30:00",
-      completed_at: "2026-09-20 18:30:12"
+      started_at: "2026-10-01 02:00:00",
+      completed_at: "2026-10-01 02:00:12"
     }
   ]);
 
@@ -125,11 +130,17 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       if (res.ok) {
         const data = await res.json();
         if (data.current_version) {
-          setCheckInfo(data);
+          const normCurr = formatVer(data.current_version);
+          const normRem = formatVer(data.remote_version);
+          setCheckInfo({
+            ...data,
+            current_version: normCurr,
+            remote_version: normRem
+          });
           if (data.update_available) {
-            onNotify(`New update available! Remote version: v${data.remote_version}`, "success");
+            onNotify(`New update available! Remote version: v-${normRem}`, "success");
           } else {
-            onNotify(`Update Check Complete! Remote version: v${data.remote_version} (Up to date)`, "info");
+            onNotify(`Update Check Complete! Remote version: v-${normRem} (Up to date)`, "info");
           }
           return;
         }
@@ -146,18 +157,19 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       });
       if (mRes.ok) {
         const mData = await mRes.json();
-        const remVer = mData.version ? mData.version.replace(/^v-?/, "") : "5.7.0";
-        const currVer = checkInfo.current_version || "5.7.0";
+        const remVer = mData.version ? formatVer(mData.version) : "18.0";
+        const currVer = formatVer(checkInfo.current_version || "18.0");
         setCheckInfo((prev) => ({
           ...prev,
+          current_version: currVer,
           remote_version: remVer,
           update_available: remVer !== currVer,
           release_notes: mData.release_notes || prev.release_notes
         }));
         if (remVer !== currVer) {
-          onNotify(`New update available! Remote version: v${remVer}`, "success");
+          onNotify(`New update available! Remote version: v-${remVer}`, "success");
         } else {
-          onNotify(`Update Check Complete! Remote version: v${remVer} (Up to date)`, "info");
+          onNotify(`Update Check Complete! Remote version: v-${remVer} (Up to date)`, "info");
         }
       } else {
         onNotify("Update check completed. System is up to date.", "info");
@@ -254,7 +266,7 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
     ]);
 
     setUpdating(false);
-    onNotify(`Successfully updated to version v${checkInfo.remote_version}!`, "success");
+    onNotify(`Successfully updated to version v-${formatVer(checkInfo.remote_version)}!`, "success");
   };
 
   const handleSimulateRollback = () => {
@@ -264,7 +276,7 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       `[${new Date().toLocaleTimeString()}] [ROLLBACK] Initiating automatic rollback engine...`,
       `[${new Date().toLocaleTimeString()}] [ROLLBACK] Restoring previous working application files from backup...`,
       `[${new Date().toLocaleTimeString()}] [ROLLBACK] Restoring database backup...`,
-      `[${new Date().toLocaleTimeString()}] [ROLLBACK SUCCESS] System restored to working version v${checkInfo.current_version}.`
+      `[${new Date().toLocaleTimeString()}] [ROLLBACK SUCCESS] System restored to working version v-${formatVer(checkInfo.current_version)}.`
     ]);
     onNotify("Simulated rollback completed successfully! System safe.", "info");
   };
@@ -285,7 +297,7 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
                     One-Click Application Update System
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
-                    v{checkInfo.current_version}
+                    v-{formatVer(checkInfo.current_version)}
                   </span>
                 </div>
                 <p className="text-xs text-[#5f6368] mt-0.5 leading-relaxed break-words">
@@ -312,12 +324,12 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
                 className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#0b57d0] hover:bg-[#0842a0] transition shadow-xs flex items-center space-x-2 cursor-pointer disabled:opacity-50"
               >
                 <DownloadCloud className="w-4 h-4" />
-                <span>Install Update (v{checkInfo.remote_version})</span>
+                <span>Install Update (v-{formatVer(checkInfo.remote_version)})</span>
               </button>
             ) : (
               <span className="px-4 py-2.5 rounded-xl text-xs font-bold text-[#137333] bg-[#e6f4ea] border border-[#ceedd5] flex items-center space-x-1.5 select-none">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Up to Date (v{checkInfo.current_version})</span>
+                <span>Up to Date (v-{formatVer(checkInfo.current_version)})</span>
               </span>
             )}
           </div>
@@ -327,11 +339,11 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-[#f1f3f4]">
           <div className="bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb]">
             <span className="text-[11px] font-bold text-[#5f6368] uppercase tracking-wider block mb-1">Installed Version</span>
-            <span className="text-lg font-extrabold text-[#1f1f1f]">v{checkInfo.current_version}</span>
+            <span className="text-lg font-extrabold text-[#1f1f1f]">v-{formatVer(checkInfo.current_version)}</span>
           </div>
           <div className="bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb]">
             <span className="text-[11px] font-bold text-[#5f6368] uppercase tracking-wider block mb-1">Latest Version</span>
-            <span className="text-lg font-extrabold text-[#0052cc]">v{checkInfo.remote_version}</span>
+            <span className="text-lg font-extrabold text-[#0052cc]">v-{formatVer(checkInfo.remote_version)}</span>
           </div>
           <div className="bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb]">
             <span className="text-[11px] font-bold text-[#5f6368] uppercase tracking-wider block mb-1">Release Date</span>
@@ -351,7 +363,7 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       <div className="bg-white rounded-2xl border border-[#e0e4eb] p-6 shadow-sm space-y-4">
         <h3 className="text-base font-bold text-[#1f1f1f] flex items-center space-x-2">
           <Sparkles className="w-5 h-5 text-[#0052cc]" />
-          <span>Release Notes &amp; Version Highlights (v{checkInfo.remote_version})</span>
+          <span>Release Notes &amp; Version Highlights (v-{formatVer(checkInfo.remote_version)})</span>
         </h3>
         <ul className="space-y-2 text-xs text-[#3c4043] list-disc list-inside bg-[#f8fafd] p-4 rounded-xl border border-[#e0e4eb] font-medium leading-relaxed">
           {checkInfo.release_notes.map((note, idx) => (
@@ -375,7 +387,7 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
 
               <div className="absolute top-3 right-3">
                 <span className="px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-white/20 text-white backdrop-blur-sm border border-white/30">
-                  v{checkInfo.remote_version}
+                  v-{formatVer(checkInfo.remote_version)}
                 </span>
               </div>
             </div>
@@ -529,8 +541,8 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
               {history.map((h) => (
                 <tr key={h.id} className="hover:bg-[#f8fafd]">
                   <td className="p-3 font-mono font-medium text-[#1f1f1f]">{h.update_id}</td>
-                  <td className="p-3">v{h.old_version}</td>
-                  <td className="p-3 font-bold text-[#0052cc]">v{h.new_version}</td>
+                  <td className="p-3 font-mono">v-{formatVer(h.old_version)}</td>
+                  <td className="p-3 font-mono font-bold text-[#0052cc]">v-{formatVer(h.new_version)}</td>
                   <td className="p-3">
                     <span
                       className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
