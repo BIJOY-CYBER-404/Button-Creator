@@ -1,14 +1,14 @@
 {
-  "version": "27.0",
+  "version": "29.0",
   "release_date": "2026-10-02",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "6071fb6851464bb31941191c2793764243579584f13a44a820cf4c81c705cc1f",
-  "sha256": "6071fb6851464bb31941191c2793764243579584f13a44a820cf4c81c705cc1f",
+  "checksum": "1989cd91affd0d5a3d653e4c861171427f318280ca5487c758b14d703552f17b",
+  "sha256": "1989cd91affd0d5a3d653e4c861171427f318280ca5487c758b14d703552f17b",
   "minimum_php": "7.4",
   "release_notes": [
-    "Redesigned the generator form layout: source link input field now occupies the first line in full width, with the generate button placed on the second line with full width for faster access.",
-    "Fixed first-try login failure by adding the missing last_login column to users schema and isolating the timestamp update.",
-    "Enforced 2-hour browser-only cookie authentication: deleting cookies from the browser automatically logs out and redirects to the login page with zero tokens in the URL.",
-    "Full remote update compatibility and automated staging file synchronization."
+    "Production release v-29.0: Streamlined link resolution and high-performance episode extraction pipelines.",
+    "Single-line source link input with full-width action generator button for maximum operational efficiency.",
+    "Secure cookie session management with automated staging file deployment across cPanel environments.",
+    "1-Click remote updater synchronization with automated rollback and health verification."
   ]
 }
