@@ -15,13 +15,11 @@ import { ExtractedItem } from "../types";
 
 interface EpisodeButtonsGeneratorProps {
   items: ExtractedItem[];
-  endMessageHtml?: string;
   onNotify: (text: string, type?: "success" | "error" | "info") => void;
 }
 
 export const EpisodeButtonsGenerator: React.FC<EpisodeButtonsGeneratorProps> = ({
   items,
-  endMessageHtml,
   onNotify,
 }) => {
   const [prefix, setPrefix] = useState<string>("Episode");
@@ -32,18 +30,9 @@ export const EpisodeButtonsGenerator: React.FC<EpisodeButtonsGeneratorProps> = (
   const [activeTab, setActiveTab] = useState<"preview" | "code">("preview");
   const [includeHoverStyle, setIncludeHoverStyle] = useState<boolean>(true);
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-  const [sessionEndText, setSessionEndText] = useState<string>("Season End");
-  const [sessionEndHtmlOverride, setSessionEndHtmlOverride] = useState<string>(
-    endMessageHtml || '<div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>'
-  );
+  const [sessionEndText, setSessionEndText] = useState<string>("- Session End -");
   const [marginSide, setMarginSide] = useState<number>(20);
   const [previewDevice, setPreviewDevice] = useState<"responsive" | "mobile" | "desktop">("responsive");
-
-  useEffect(() => {
-    if (endMessageHtml) {
-      setSessionEndHtmlOverride(endMessageHtml);
-    }
-  }, [endMessageHtml]);
 
   // Generate button list
   const buttonsData = useMemo(() => {
@@ -81,10 +70,10 @@ export const EpisodeButtonsGenerator: React.FC<EpisodeButtonsGeneratorProps> = (
       })
       .join("\n");
 
-    const sessionEndHtml = sessionEndHtmlOverride
-      ? `\n  ${sessionEndHtmlOverride}`
-      : sessionEndText
-      ? `\n  <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">${sessionEndText}</div>`
+    const sessionEndHtml = sessionEndText
+      ? includeHoverStyle
+        ? `\n  <div class="ep-session-end">${sessionEndText}</div>`
+        : `\n  <div style="margin-top: 14px; margin-left: ${marginSide}px; margin-right: ${marginSide}px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; color: #dc2626; text-align: center; letter-spacing: 0.5px;">${sessionEndText}</div>`
       : "";
 
     if (includeHoverStyle) {
@@ -165,7 +154,7 @@ ${buttonsHtml}${sessionEndHtml}
 <div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; margin: 16px auto; box-sizing: border-box;">
 ${buttonsHtml}${sessionEndHtml}
 </div>`;
-  }, [buttonsData, openInNewTab, includeHoverStyle, sessionEndText, sessionEndHtmlOverride, marginSide]);
+  }, [buttonsData, openInNewTab, includeHoverStyle, sessionEndText, marginSide]);
 
   const copyHtml = async () => {
     if (!generatedHtml) return;
@@ -499,12 +488,7 @@ ${buttonsHtml}${sessionEndHtml}
                       }
                     })}
 
-                    {sessionEndHtmlOverride ? (
-                      <div
-                        className="mt-3 w-full text-center"
-                        dangerouslySetInnerHTML={{ __html: sessionEndHtmlOverride }}
-                      />
-                    ) : sessionEndText ? (
+                    {sessionEndText && (
                       <div
                         style={{
                           textAlign: "center",
@@ -517,7 +501,7 @@ ${buttonsHtml}${sessionEndHtml}
                       >
                         {sessionEndText}
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               </div>

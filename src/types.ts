@@ -14,7 +14,6 @@ export interface ExtractionResponse {
   bytes?: number;
   count?: number;
   items?: ExtractedItem[];
-  end_message_html?: string;
   error?: string;
 }
 
@@ -51,7 +50,6 @@ export interface UnifiedResult {
   redirects: number;
   chain: ResolveChainItem[];
   items: ExtractedItem[];
-  end_message_html?: string;
   count: number;
   bytes?: number;
   target_destination_verified?: boolean;
@@ -71,7 +69,6 @@ export interface UnifiedResponse {
   redirects?: number;
   chain?: ResolveChainItem[];
   items?: ExtractedItem[];
-  end_message_html?: string;
   count?: number;
   bytes?: number;
   target_destination_verified?: boolean;
@@ -97,7 +94,6 @@ export interface ButtonPage {
   resolved_url?: string;
   theme?: "indigo" | "emerald" | "crimson" | "slate" | "dark";
   buttons: PageButton[];
-  end_message_html?: string;
   views: number;
   is_public?: number | boolean;
   created_at: string;
@@ -118,7 +114,6 @@ export interface CreatePageResponse {
     target_valid: boolean;
     button_count: number;
     buttons: PageButton[];
-    end_message_html?: string;
     page: ButtonPage;
   };
   error?: string;

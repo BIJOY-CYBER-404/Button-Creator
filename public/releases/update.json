@@ -1,14 +1,14 @@
 {
-  "version": "28.0",
+  "version": "27.0",
   "release_date": "2026-10-02",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "09a7ecd2a873dcccbf23a9a50668763c3a89c8666ed87b4d8836033c0f8da57f",
-  "sha256": "09a7ecd2a873dcccbf23a9a50668763c3a89c8666ed87b4d8836033c0f8da57f",
+  "checksum": "6071fb6851464bb31941191c2793764243579584f13a44a820cf4c81c705cc1f",
+  "sha256": "6071fb6851464bb31941191c2793764243579584f13a44a820cf4c81c705cc1f",
   "minimum_php": "7.4",
   "release_notes": [
-    "Automatic Season End message extraction: extracts (<div style=\"text-align:center;color:red;font-weight:bold;margin-top:10px;\">Season End</div>) and similar messages in the last of all button links and renders them as-is on the generated button page at the last of all buttons.",
-    "Database and datastore support: added end_message_html column to pages table and migration 024 for persistent storage and seamless remote updates.",
-    "Customizable End Message: edit or preview Season End message in the Generator, Pages Manager, and Extractor cards.",
-    "Full remote update package repacked and synchronized for 1-Click cPanel update."
+    "Redesigned the generator form layout: source link input field now occupies the first line in full width, with the generate button placed on the second line with full width for faster access.",
+    "Fixed first-try login failure by adding the missing last_login column to users schema and isolating the timestamp update.",
+    "Enforced 2-hour browser-only cookie authentication: deleting cookies from the browser automatically logs out and redirects to the login page with zero tokens in the URL.",
+    "Full remote update compatibility and automated staging file synchronization."
   ]
 }

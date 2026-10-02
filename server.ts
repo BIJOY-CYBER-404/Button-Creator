@@ -22,7 +22,6 @@ interface ButtonPage {
   resolved_url?: string;
   theme?: "indigo" | "emerald" | "crimson" | "slate" | "dark";
   buttons: PageButton[];
-  end_message_html?: string;
   views: number;
   is_public?: number | boolean;
   created_at: string;
@@ -915,7 +914,7 @@ async function startServer() {
 
   // Protected: Update page (Edit Page Flow)
   app.post("/api/pages/update", requireAdmin, (req, res) => {
-    const { id, title, slug, description, is_public, theme, buttons, end_message_html } = req.body || {};
+    const { id, title, slug, description, is_public, theme, buttons } = req.body || {};
     if (!id) {
       return res.status(400).json({ success: false, error: "Page ID is required." });
     }
@@ -934,7 +933,6 @@ async function startServer() {
       is_public: is_public !== undefined ? (Boolean(Number(is_public)) ? 1 : 0) : current.is_public,
       theme: theme || current.theme || "indigo",
       buttons: Array.isArray(buttons) ? buttons : current.buttons,
-      end_message_html: end_message_html !== undefined ? end_message_html : current.end_message_html,
       updated_at: new Date().toISOString(),
     };
 
@@ -968,7 +966,7 @@ async function startServer() {
 
   // Protected: Create page from Shortlink (The Main Requested Admin Flow!)
   app.post("/api/pages/create-from-shortlink", requireAdmin, async (req, res) => {
-    const { url, title_override, description_override, end_message_html: customEndMessage, theme = "indigo" } = req.body;
+    const { url, title_override, description_override, theme = "indigo" } = req.body;
     if (!url || typeof url !== "string" || !isSafePublicUrl(url)) {
       return res.status(400).json({ success: false, error: "Enter a valid public HTTP/HTTPS shortened URL." });
     }
@@ -1048,10 +1046,6 @@ async function startServer() {
           }
           pageTitle = sanitizePageTitle(pageTitle);
 
-          const endMessageHtml = (typeof customEndMessage === "string" && customEndMessage.trim())
-            ? customEndMessage.trim()
-            : ((parsed as any).end_message_html || "");
-
           const newPage: ButtonPage = {
             id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             slug,
@@ -1061,7 +1055,6 @@ async function startServer() {
             resolved_url: finalUrl,
             theme: theme as any,
             buttons: items,
-            end_message_html: endMessageHtml || undefined,
             views: 0,
             is_public: 1,
             created_at: new Date().toISOString()
@@ -1089,7 +1082,6 @@ async function startServer() {
               target_valid: Boolean(parsed.target_destination_verified),
               button_count: items.length,
               buttons: items,
-              end_message_html: endMessageHtml || null,
               page: newPage
             }
           });

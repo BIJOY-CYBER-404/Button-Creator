@@ -1917,12 +1917,6 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
               );
             })
           )}
-          {page.end_message_html && (
-            <div
-              className="ep-end-message-wrap w-full text-center py-2"
-              dangerouslySetInnerHTML={{ __html: page.end_message_html }}
-            />
-          )}
         </div>
 
         {/* Bottom Banner Ad Placement */}

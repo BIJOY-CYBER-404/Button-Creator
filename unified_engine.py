@@ -28,7 +28,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                     _, final_html = extractor.fetch_page(url)
                     items = extractor.extract_from_html(final_html, url, button_only=button_only) if final_html else []
                     page_title = extractor.extract_page_title(final_html, url) if final_html else extractor.derive_title_from_url(url)
-                    end_message_html = extractor.extract_end_message(final_html) if final_html else ""
                     return {
                         "success": True,
                         "resolved": True,
@@ -46,7 +45,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                             "type": "Target Destination (Blogspot Episode Page)"
                         }],
                         "items": items,
-                        "end_message_html": end_message_html,
                         "count": len(items),
                         "bytes": len(final_html) if final_html else 0
                     }
@@ -81,7 +79,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                     items = extractor.extract_from_html(final_html, final_dest_url, button_only=button_only) if final_html else []
                     is_target = resolver.is_target_destination(final_dest_url)
                     page_title = extractor.extract_page_title(final_html, final_dest_url) if final_html else extractor.derive_title_from_url(final_dest_url)
-                    end_message_html = extractor.extract_end_message(final_html) if final_html else ""
                     return {
                         "success": True,
                         "resolved": True,
@@ -94,7 +91,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                         "redirects": resolve_res.get("redirects", 0),
                         "chain": resolve_res.get("chain", []),
                         "items": items,
-                        "end_message_html": end_message_html,
                         "count": len(items),
                         "bytes": len(final_html) if final_html else 0
                     }
@@ -275,10 +271,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 if not page_title:
                     page_title = extractor.derive_title_from_url(final_dest_url)
 
-                end_message_html = extractor.extract_end_message(final_html) if final_html else ""
-                if not end_message_html and post_html:
-                    end_message_html = extractor.extract_end_message(post_html)
-
                 return {
                     "success": True,
                     "resolved": True,
@@ -291,7 +283,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                     "redirects": max(0, len(combined_chain) - 1),
                     "chain": combined_chain,
                     "items": items,
-                    "end_message_html": end_message_html,
                     "count": len(items),
                     "bytes": len(final_html) if final_html else 0
                 }
@@ -317,7 +308,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                         }
                     ],
                     "items": ext_res.get("items", []),
-                    "end_message_html": ext_res.get("end_message_html", ""),
                     "count": ext_res.get("count", 0),
                     "bytes": ext_res.get("bytes", 0)
                 }
@@ -326,7 +316,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
         elif html:
             target_url = (base_url or "https://example.com/page").strip()
             items = extractor.extract_from_html(html, target_url, button_only=button_only)
-            end_message_html = extractor.extract_end_message(html)
             return {
                 "success": True,
                 "resolved": False,
@@ -335,7 +324,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 "redirects": 0,
                 "chain": [],
                 "items": items,
-                "end_message_html": end_message_html,
                 "count": len(items),
                 "bytes": len(html)
             }

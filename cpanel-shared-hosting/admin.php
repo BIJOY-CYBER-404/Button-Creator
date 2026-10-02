@@ -268,17 +268,6 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                             <option value="dark">Dark Cinema</option>
                                         </select>
                                     </div>
-                                    <div class="space-y-1 sm:col-span-2">
-                                        <label class="text-[11px] font-semibold text-[#444746] block">
-                                            Custom Season End / Footer Message HTML (Optional)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            id="customEndMessageInput"
-                                            placeholder='Auto-extracted e.g. <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>'
-                                            class="w-full px-3 py-2 rounded-lg border border-[#c4c7c5] font-mono text-xs outline-none focus:border-[#0b57d0]"
-                                        />
-                                    </div>
                                 </div>
                             </details>
                         </div>
@@ -377,10 +366,6 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                             <div id="resIdentifiedShortlinkRow" class="hidden min-w-0 sm:col-span-2 pt-1 border-t border-[#f0f4f9]">
                                 <span class="text-[#747775]">Identified Shorten URL ("Episode Wise Links"):</span>
                                 <span id="resIdentifiedShortlinkText" class="font-mono font-semibold text-[#0b57d0] truncate block"></span>
-                            </div>
-                            <div id="resEndMessageRow" class="hidden min-w-0 sm:col-span-2 pt-1 border-t border-[#f0f4f9]">
-                                <span class="text-[#747775] text-[11px] block font-semibold mb-1">Extracted End of Buttons Message:</span>
-                                <div id="resEndMessageContent" class="p-2 rounded-lg bg-white border border-[#e0e4eb] text-center"></div>
                             </div>
                         </div>
 
@@ -551,7 +536,6 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     body: JSON.stringify({
                         url: url,
                         title_override: customTitle || undefined,
-                        end_message_html: customEndMessage || undefined,
                         theme: theme
                     }),
                     signal: controller.signal
@@ -595,18 +579,6 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     } else {
                         shortlinkText.innerText = '';
                         shortlinkRow.classList.add('hidden');
-                    }
-                }
-
-                const endMsgRow = document.getElementById('resEndMessageRow');
-                const endMsgContent = document.getElementById('resEndMessageContent');
-                if (endMsgRow && endMsgContent) {
-                    if (data.data.end_message_html) {
-                        endMsgContent.innerHTML = data.data.end_message_html;
-                        endMsgRow.classList.remove('hidden');
-                    } else {
-                        endMsgContent.innerHTML = '';
-                        endMsgRow.classList.add('hidden');
                     }
                 }
 

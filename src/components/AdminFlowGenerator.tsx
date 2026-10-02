@@ -32,7 +32,6 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
 }) => {
   const [shortenUrl, setShortenUrl] = useState<string>("");
   const [customTitle, setCustomTitle] = useState<string>("");
-  const [customEndMessage, setCustomEndMessage] = useState<string>("");
   const [theme, setTheme] = useState<"indigo" | "emerald" | "crimson" | "slate" | "dark">("indigo");
   const [loading, setLoading] = useState<boolean>(false);
   const [step, setStep] = useState<"idle" | "resolving" | "extracting" | "creating" | "done">("idle");
@@ -87,7 +86,6 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
         body: JSON.stringify({
           url: urlToProcess,
           title_override: customTitle.trim() || undefined,
-          end_message_html: customEndMessage.trim() || undefined,
           theme,
         }),
         signal: controller.signal,
@@ -237,18 +235,6 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
                     <option value="dark">Dark Cinema</option>
                   </select>
                 </div>
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="text-[11px] font-semibold text-[#444746] block">
-                    Custom Season End / Footer Message HTML (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={customEndMessage}
-                    onChange={(e) => setCustomEndMessage(e.target.value)}
-                    placeholder='Auto-extracted e.g. <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>'
-                    className="w-full px-3 py-2 rounded-lg border border-[#c4c7c5] font-mono text-xs outline-none focus:border-[#0b57d0]"
-                  />
-                </div>
               </div>
             </details>
           </div>
@@ -346,17 +332,6 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
                   <span className="font-mono font-semibold text-[#0b57d0] truncate block">
                     {createdResult.identified_shorten_url}
                   </span>
-                </div>
-              )}
-              {createdResult.end_message_html && (
-                <div className="min-w-0 sm:col-span-2 pt-1 border-t border-[#f0f4f9]">
-                  <span className="text-[#747775] text-[11px] block font-semibold mb-1">
-                    Extracted End of Buttons Message:
-                  </span>
-                  <div
-                    className="p-2 rounded-lg bg-white border border-[#e0e4eb] text-center"
-                    dangerouslySetInnerHTML={{ __html: createdResult.end_message_html }}
-                  />
                 </div>
               )}
             </div>
