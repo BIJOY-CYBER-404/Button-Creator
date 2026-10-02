@@ -407,6 +407,11 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     <textarea id="editDescription" rows="2" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:border-blue-600 outline-none" placeholder="Optional notes for visitors..."></textarea>
                 </div>
 
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-700 block">Season End / Footer Message HTML (Appears at last of all buttons)</label>
+                    <input type="text" id="editEndMessageHtml" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 font-mono text-xs focus:border-blue-600 outline-none" placeholder='e.g. <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>' />
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                     <!-- Public / Private Toggle Switch inside Modal -->
                     <div class="space-y-1.5">
@@ -706,6 +711,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             document.getElementById('editTitle').value = page.title || '';
             document.getElementById('editSlug').value = page.slug || '';
             document.getElementById('editDescription').value = page.description || '';
+            document.getElementById('editEndMessageHtml').value = page.end_message_html || '';
             document.getElementById('editTheme').value = page.theme || 'indigo';
 
             setModalVisibilityState(Number(page.is_public) === 1);
@@ -767,6 +773,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             const title = document.getElementById('editTitle').value.trim();
             const slug = document.getElementById('editSlug').value.trim();
             const description = document.getElementById('editDescription').value.trim();
+            const end_message_html = document.getElementById('editEndMessageHtml').value.trim();
             const isPublic = parseInt(document.getElementById('editIsPublic').value, 10);
             const theme = document.getElementById('editTheme').value;
 
@@ -794,6 +801,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                         title: title,
                         slug: slug,
                         description: description,
+                        end_message_html: end_message_html,
                         is_public: isPublic,
                         theme: theme,
                         buttons: buttons

@@ -1,14 +1,14 @@
 {
-  "version": "26.0",
+  "version": "28.0",
   "release_date": "2026-10-02",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "24710a8f0c34f55aa61171f7642649b19688a86348e23691a7b0aa81f20c0048",
-  "sha256": "24710a8f0c34f55aa61171f7642649b19688a86348e23691a7b0aa81f20c0048",
+  "checksum": "09a7ecd2a873dcccbf23a9a50668763c3a89c8666ed87b4d8836033c0f8da57f",
+  "sha256": "09a7ecd2a873dcccbf23a9a50668763c3a89c8666ed87b4d8836033c0f8da57f",
   "minimum_php": "7.4",
   "release_notes": [
-    "Implemented 2-hour persistent browser & signed HTTP cookie login state so admin and private pages work seamlessly across visits without re-logging in every time.",
-    "Added automatic redirect to the login page when the login cookie is expired, invalid, or unavailable, regenerating a fresh 2-hour cookie upon successful sign-in.",
-    "Updated the 404 Page Not Found view with an animated 404 character illustration, matching the site header, mobile hamburger drawer, and footer.",
-    "Removed Admin Login text, links, and buttons from all public pages and sign-in pages to keep the system protected and private."
+    "Automatic Season End message extraction: extracts (<div style=\"text-align:center;color:red;font-weight:bold;margin-top:10px;\">Season End</div>) and similar messages in the last of all button links and renders them as-is on the generated button page at the last of all buttons.",
+    "Database and datastore support: added end_message_html column to pages table and migration 024 for persistent storage and seamless remote updates.",
+    "Customizable End Message: edit or preview Season End message in the Generator, Pages Manager, and Extractor cards.",
+    "Full remote update package repacked and synchronized for 1-Click cPanel update."
   ]
 }

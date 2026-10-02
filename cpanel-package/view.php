@@ -1229,6 +1229,12 @@ function resolve_server_info($provider, $url, $btn_text) {
                     </div>
                 <?php endif; ?>
                 <?php endforeach; ?>
+                <?php if (!empty($page['end_message_html'])): ?>
+                    <!-- Extracted Season End / End Message in last of all buttons -->
+                    <div class="ep-end-message-wrap w-full text-center py-2">
+                        <?= $page['end_message_html'] ?>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
 

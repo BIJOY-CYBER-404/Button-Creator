@@ -59,25 +59,25 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [logs, setLogs] = useState<string[]>([]);
 
   const formatVer = (v: string) => {
-    const clean = String(v || "26.0").replace(/^[vV-]+/, "");
+    const clean = String(v || "27.0").replace(/^[vV-]+/, "");
     return clean.replace(/^(\d+\.\d+)\.0$/, "$1");
   };
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "26.0",
-    remote_version: "26.0",
+    current_version: "27.0",
+    remote_version: "27.0",
     update_available: false,
     release_date: "2026-10-02",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Fixed first-try login failure by adding the missing `last_login` column to the `users` table schema and isolating the `last_login` timestamp update inside `SLEA_Auth::login()` so valid credentials always sign in on the very first attempt.",
-      "Implemented 2-hour persistent browser & signed HTTP cookie login state so admin and private pages work seamlessly across visits without re-logging in every time.",
-      "Added automatic redirect to the login page when the login cookie is expired, invalid, or unavailable, regenerating a fresh 2-hour cookie upon successful sign-in.",
-      "Updated the 404 Page Not Found view with an animated 404 character illustration, matching the site header, mobile hamburger drawer, and footer."
+      "Redesigned the generator form layout: source link input field now occupies the first line in full width, with the generate button placed on the second line with full width for faster access.",
+      "Fixed first-try login failure by adding the missing last_login column to users schema and isolating the timestamp update.",
+      "Enforced 2-hour browser-only cookie authentication: deleting cookies from the browser automatically logs out and redirects to the login page with zero tokens in the URL.",
+      "Full remote update compatibility and automated staging file synchronization."
     ],
     minimum_php: "7.4",
-    checksum: "24710a8f0c34f55aa61171f7642649b19688a86348e23691a7b0aa81f20c0048"
+    checksum: "a333b1528b2592b41eb69a701fe6c575245832797748713d68f1e2e5bf6367bf"
   });
 
   const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json");

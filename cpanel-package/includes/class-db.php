@@ -185,12 +185,20 @@ class SLEA_DB {
                 resolved_url TEXT,
                 theme VARCHAR(30) DEFAULT 'indigo',
                 buttons_json {$text_type},
+                end_message_html {$text_type},
                 views INT DEFAULT 0,
                 is_public INT DEFAULT 1,
                 created_at DATETIME,
                 updated_at DATETIME
             ) {$table_engine}
         ");
+
+        // Ensure end_message_html column exists on existing pages tables
+        try {
+            self::$pdo->exec("ALTER TABLE pages ADD COLUMN end_message_html {$text_type}");
+        } catch (Exception $e) {
+            // Column already exists
+        }
 
         // 3. Settings Table
         self::$pdo->exec("

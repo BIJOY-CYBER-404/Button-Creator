@@ -10,7 +10,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { ExtractedItem, ExtractionResponse } from "../types";
-import { parseHTMLClientSide, isBlockedTestLink } from "../utils/pythonExtractor";
+import { parseHTMLClientSide, isBlockedTestLink, extractEndMessageClientSide } from "../utils/pythonExtractor";
 import { safeFetchJson } from "../utils/safeFetch";
 import { SAMPLES } from "../data/samples";
 import { ArrowUpRight } from "lucide-react";
@@ -37,6 +37,7 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState<boolean>(false);
   const [items, setItems] = useState<ExtractedItem[]>([]);
+  const [endMessageHtml, setEndMessageHtml] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState<boolean>(false);
 
@@ -83,6 +84,13 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
           (it) => !isBlockedTestLink(it.text, it.url)
         );
         setItems(filtered);
+        if (data.end_message_html) {
+          setEndMessageHtml(data.end_message_html);
+        } else if (targetHtml) {
+          setEndMessageHtml(extractEndMessageClientSide(targetHtml));
+        } else {
+          setEndMessageHtml(null);
+        }
         setStatusMessage(
           `Done (Python 3.10 standard library). Final URL: ${
             data.final_url || targetUrl
@@ -111,6 +119,7 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
             targetUrl || "https://example.com/page"
           );
           setItems(parsed);
+          setEndMessageHtml(extractEndMessageClientSide(targetHtml));
           setStatusMessage(
             `Parsed ${parsed.length} action links via client Python parser.`
           );
@@ -420,7 +429,11 @@ export const ExtractorCard: React.FC<ExtractorCardProps> = ({
 
         {/* Generated Episode Buttons (HTML) Section */}
         {items.length > 0 && (
-          <EpisodeButtonsGenerator items={items} onNotify={onNotify} />
+          <EpisodeButtonsGenerator
+            items={items}
+            endMessageHtml={endMessageHtml || undefined}
+            onNotify={onNotify}
+          />
         )}
 
         {/* Results List - strictly vertical stacking */}

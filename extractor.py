@@ -516,6 +516,43 @@ def extract_page_title(html, url=None):
         return derive_title_from_url(url)
     return title
 
+def extract_end_message(html):
+    """
+    Extracts end message (e.g. <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>)
+    located in the last of all button links.
+    """
+    if not html:
+        return ""
+
+    # Priority 1: Styled div or tag matching the user's pattern
+    m1 = re.search(
+        r'(<div\s+style=[\'"][^\'"]*(?:text-align\s*:\s*center|color\s*:\s*(?:red|#[0-9a-fA-F]{3,6}))[^\'"]*[\'"][^>]*>[\s\S]*?(?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed)[\s\S]*?</div>)',
+        html,
+        re.I
+    )
+    if m1:
+        return m1.group(1).strip()
+
+    # Priority 2: Any tag like div, p, center, span, b, strong with Season/Series End
+    m2 = re.search(
+        r'(<(?:div|p|center|span|h[1-6]|b|strong)\b[^>]*>[\s\S]*?(?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed)[\s\S]*?</(?:div|p|center|span|h[1-6]|b|strong)>)',
+        html,
+        re.I
+    )
+    if m2:
+        return m2.group(1).strip()
+
+    # Priority 3: Plain text Season End found in the HTML
+    m3 = re.search(
+        r'\b((?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed))\b',
+        html,
+        re.I
+    )
+    if m3:
+        return f'<div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">{m3.group(1).strip()}</div>'
+
+    return ""
+
 def run_extraction_api(url=None, html=None, base_url=None, button_only=True):
     try:
         if url:
@@ -524,25 +561,29 @@ def run_extraction_api(url=None, html=None, base_url=None, button_only=True):
             final_url, fetched_html = fetch_page(url)
             items = extract_from_html(fetched_html, final_url, button_only=button_only)
             page_title = extract_page_title(fetched_html, final_url)
+            end_message_html = extract_end_message(fetched_html)
             return {
                 "success": True,
                 "final_url": final_url,
                 "page_title": page_title,
                 "bytes": len(fetched_html),
                 "items": items,
-                "count": len(items)
+                "count": len(items),
+                "end_message_html": end_message_html
             }
         elif html:
             target_url = base_url or "https://example.com/page"
             items = extract_from_html(html, target_url, button_only=button_only)
             page_title = extract_page_title(html, target_url)
+            end_message_html = extract_end_message(html)
             return {
                 "success": True,
                 "final_url": target_url,
                 "page_title": page_title,
                 "bytes": len(html),
                 "items": items,
-                "count": len(items)
+                "count": len(items),
+                "end_message_html": end_message_html
             }
         else:
             return {"success": False, "error": "No URL or HTML provided"}

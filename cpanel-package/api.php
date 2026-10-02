@@ -189,6 +189,15 @@ try {
                 throw new Exception('Resolved destination could not be matched to an episode page: ' . $resolved_dest);
             }
 
+            // Extract End Message (e.g. Season End div) in last of all button links
+            $end_message_html = SLEA_Extractor::extract_end_message($final_html);
+            if (empty($end_message_html) && !empty($post_html)) {
+                $end_message_html = SLEA_Extractor::extract_end_message($post_html);
+            }
+            if (!empty($data['end_message_html'])) {
+                $end_message_html = trim((string)$data['end_message_html']);
+            }
+
             // 3. Extract Page Title strictly from this target HTML (or explicit admin title / post HTML fallback)
             $page_title = '';
             if (!empty($data['title'])) {
@@ -218,13 +227,14 @@ try {
 
             // 4. Save Page to Datastore
             $saved_page = SLEA_Datastore::save_page([
-                'title'        => $page_title,
-                'slug'         => $slug_candidate,
-                'source_url'   => $input_url,
-                'resolved_url' => $resolved_dest,
-                'theme'        => !empty($data['theme']) ? $data['theme'] : (defined('DEFAULT_PAGE_THEME') ? DEFAULT_PAGE_THEME : 'indigo'),
-                'is_public'    => isset($data['is_public']) ? intval($data['is_public']) : 1,
-                'buttons'      => $buttons
+                'title'            => $page_title,
+                'slug'             => $slug_candidate,
+                'source_url'       => $input_url,
+                'resolved_url'     => $resolved_dest,
+                'theme'            => !empty($data['theme']) ? $data['theme'] : (defined('DEFAULT_PAGE_THEME') ? DEFAULT_PAGE_THEME : 'indigo'),
+                'is_public'        => isset($data['is_public']) ? intval($data['is_public']) : 1,
+                'buttons'          => $buttons,
+                'end_message_html' => $end_message_html
             ]);
 
             $clean_url = $base_url . '/p/' . $saved_page['slug'];
@@ -244,7 +254,8 @@ try {
                     'resolved_url'           => $resolved_dest,
                     'target_valid'           => SLEA_Resolver::is_target_destination($resolved_dest),
                     'button_count'           => count($buttons),
-                    'buttons'                => $buttons
+                    'buttons'                => $buttons,
+                    'end_message_html'       => $saved_page['end_message_html'] ?? $end_message_html
                 ]
             ]);
             break;
@@ -266,15 +277,16 @@ try {
             $sanitized_title = SLEA_Extractor::sanitize_page_title($raw_title);
 
             $saved = SLEA_Datastore::save_page([
-                'id'          => $id,
-                'title'       => $sanitized_title,
-                'slug'        => $data['slug'] ?? $existing['slug'],
-                'description' => $data['description'] ?? $existing['description'],
-                'is_public'   => isset($data['is_public']) ? intval($data['is_public']) : $existing['is_public'],
-                'theme'       => $data['theme'] ?? $existing['theme'],
-                'buttons'     => isset($data['buttons']) ? $data['buttons'] : $existing['buttons'],
-                'source_url'  => $existing['source_url'],
-                'resolved_url'=> $existing['resolved_url']
+                'id'               => $id,
+                'title'            => $sanitized_title,
+                'slug'             => $data['slug'] ?? $existing['slug'],
+                'description'      => $data['description'] ?? $existing['description'],
+                'is_public'        => isset($data['is_public']) ? intval($data['is_public']) : $existing['is_public'],
+                'theme'            => $data['theme'] ?? $existing['theme'],
+                'buttons'          => isset($data['buttons']) ? $data['buttons'] : $existing['buttons'],
+                'end_message_html' => isset($data['end_message_html']) ? $data['end_message_html'] : ($existing['end_message_html'] ?? ''),
+                'source_url'       => $existing['source_url'],
+                'resolved_url'     => $existing['resolved_url']
             ]);
             echo json_encode(['success' => true, 'page' => $saved]);
             break;

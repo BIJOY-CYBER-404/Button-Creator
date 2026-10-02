@@ -464,3 +464,32 @@ export function deriveTitleFromUrlClientSide(url: string): string {
   return "Episode Download Links";
 }
 
+/**
+ * Extracts end message (e.g. <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>)
+ * located after all episode buttons on source/destination HTML.
+ */
+export function extractEndMessageClientSide(html: string): string | null {
+  if (!html) return null;
+
+  // Priority 1: Styled div or tag matching the user's pattern
+  const m1 = html.match(/(<div\s+style=['"][^'"]*(?:text-align\s*:\s*center|color\s*:\s*(?:red|#[0-9a-fA-F]{3,6}))[^'"]*['"][^>]*>[\s\S]*?(?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed)[\s\S]*?<\/div>)/i);
+  if (m1 && m1[1]) {
+    return m1[1].trim();
+  }
+
+  // Priority 2: Any tag like div, p, center, span, b, strong with Season/Series End
+  const m2 = html.match(/(<(?:div|p|center|span|h[1-6]|b|strong)\b[^>]*>[\s\S]*?(?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed)[\s\S]*?<\/(?:div|p|center|span|h[1-6]|b|strong)>)/i);
+  if (m2 && m2[1]) {
+    return m2[1].trim();
+  }
+
+  // Priority 3: Plain text Season End found in the HTML
+  const m3 = html.match(/\b((?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed))\b/i);
+  if (m3 && m3[1]) {
+    return `<div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">${m3[1].trim()}</div>`;
+  }
+
+  return null;
+}
+
+

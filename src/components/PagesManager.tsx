@@ -32,6 +32,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
     description: string;
     is_public: number;
     theme: string;
+    end_message_html: string;
     buttons: PageButton[];
   }>({
     id: "",
@@ -40,6 +41,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
     description: "",
     is_public: 1,
     theme: "indigo",
+    end_message_html: "",
     buttons: [],
   });
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
@@ -89,6 +91,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
       description: page.description || "",
       is_public: page.is_public === undefined || Boolean(Number(page.is_public)) ? 1 : 0,
       theme: page.theme || "indigo",
+      end_message_html: page.end_message_html || "",
       buttons: Array.isArray(page.buttons) && page.buttons.length > 0
         ? [...page.buttons.map(b => ({ ...b }))]
         : [{ text: "Episode 1", url: "", quality: "720p" }],
@@ -147,6 +150,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
           description: editForm.description,
           is_public: editForm.is_public,
           theme: editForm.theme,
+          end_message_html: editForm.end_message_html,
           buttons: validButtons,
         }),
       });
@@ -562,6 +566,19 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
                   value={editForm.description}
                   onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
                   className="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] text-xs focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 outline-none resize-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#444746]">
+                  Season End / Footer Message HTML (Appears at last of all buttons)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.end_message_html}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, end_message_html: e.target.value }))}
+                  placeholder='e.g. <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>'
+                  className="w-full px-3 py-2 rounded-xl border border-[#c4c7c5] font-mono text-xs focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 outline-none"
                 />
               </div>
 

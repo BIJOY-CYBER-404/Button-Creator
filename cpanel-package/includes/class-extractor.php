@@ -521,4 +521,30 @@ class SLEA_Extractor {
         }
         return 'https://' . $url;
     }
+
+    /**
+     * Extracts end message (e.g. <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>)
+     * located in the last of all button links.
+     */
+    public static function extract_end_message($html) {
+        if (empty($html)) return '';
+
+        // Priority 1: Styled div / tag matching the user's pattern
+        if (preg_match('/(<div\s+style=[\'"][^\'"]*(?:text-align\s*:\s*center|color\s*:\s*(?:red|#[0-9a-fA-F]{3,6}))[^\'"]*[\'"][^>]*>[\s\S]*?(?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed)[\s\S]*?<\/div>)/i', $html, $m)) {
+            return trim($m[1]);
+        }
+
+        // Priority 2: Any tag like div, p, center, span, b, strong with Season/Series End
+        if (preg_match('/(<(?:div|p|center|span|h[1-6]|b|strong)\b[^>]*>[\s\S]*?(?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed)[\s\S]*?<\/(?:div|p|center|span|h[1-6]|b|strong)>)/i', $html, $m)) {
+            return trim($m[1]);
+        }
+
+        // Priority 3: Plain text Season End found in the HTML
+        if (preg_match('/\b((?:Season|Series|Session)\s*(?:\d+\s*)?(?:End|Ended|Finale|Completed))\b/i', $html, $m)) {
+            $text = trim($m[1]);
+            return '<div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">' . htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . '</div>';
+        }
+
+        return '';
+    }
 }

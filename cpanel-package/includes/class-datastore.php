@@ -148,6 +148,7 @@ class SLEA_Datastore {
             $buttons[] = $btn;
         }
         $buttons_json = json_encode($buttons, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        $end_message_html = !empty($page_data['end_message_html']) ? trim($page_data['end_message_html']) : '';
 
         // Sanitize and derive slug
         if (empty($page_data['slug'])) {
@@ -190,21 +191,23 @@ class SLEA_Datastore {
                     resolved_url = :rurl,
                     theme = :theme,
                     buttons_json = :btns,
+                    end_message_html = :end_msg,
                     is_public = :pub,
                     updated_at = :now
                 WHERE id = :id
             ");
             $stmt->execute([
-                ':slug'  => $slug,
-                ':title' => $title,
-                ':desc'  => $description,
-                ':surl'  => $source_url,
-                ':rurl'  => $resolved_url,
-                ':theme' => $theme,
-                ':btns'  => $buttons_json,
-                ':pub'   => $is_public,
-                ':now'   => $now,
-                ':id'    => $id
+                ':slug'    => $slug,
+                ':title'   => $title,
+                ':desc'    => $description,
+                ':surl'    => $source_url,
+                ':rurl'    => $resolved_url,
+                ':theme'   => $theme,
+                ':btns'    => $buttons_json,
+                ':end_msg' => $end_message_html,
+                ':pub'     => $is_public,
+                ':now'     => $now,
+                ':id'      => $id
             ]);
 
             $saved_page = self::get_page_by_id($id);
@@ -223,10 +226,10 @@ class SLEA_Datastore {
             $stmt = $pdo->prepare("
                 INSERT INTO pages (
                     page_key, slug, title, description, source_url, resolved_url,
-                    theme, buttons_json, views, is_public, created_at, updated_at
+                    theme, buttons_json, end_message_html, views, is_public, created_at, updated_at
                 ) VALUES (
                     :k, :slug, :title, :desc, :surl, :rurl,
-                    :theme, :btns, 0, :pub, :created_at, :updated_at
+                    :theme, :btns, :end_msg, 0, :pub, :created_at, :updated_at
                 )
             ");
             $stmt->execute([
@@ -238,6 +241,7 @@ class SLEA_Datastore {
                 ':rurl'       => $resolved_url,
                 ':theme'      => $theme,
                 ':btns'       => $buttons_json,
+                ':end_msg'    => $end_message_html,
                 ':pub'        => $is_public,
                 ':created_at' => $now,
                 ':updated_at' => $now
@@ -1998,19 +2002,20 @@ class SLEA_Datastore {
         }
 
         return [
-            'id'           => intval($row['id']),
-            'page_key'     => $row['page_key'] ?? ('p_' . $row['id']),
-            'slug'         => $row['slug'],
-            'title'        => $row['title'],
-            'description'  => $row['description'] ?? '',
-            'source_url'   => $row['source_url'] ?? '',
-            'resolved_url' => $row['resolved_url'] ?? '',
-            'theme'        => $row['theme'] ?? 'indigo',
-            'buttons'      => $buttons,
-            'views'        => intval($row['views'] ?? 0),
-            'is_public'    => intval($row['is_public'] ?? 1),
-            'created_at'   => $row['created_at'],
-            'updated_at'   => $row['updated_at']
+            'id'               => intval($row['id']),
+            'page_key'         => $row['page_key'] ?? ('p_' . $row['id']),
+            'slug'             => $row['slug'],
+            'title'            => $row['title'],
+            'description'      => $row['description'] ?? '',
+            'source_url'       => $row['source_url'] ?? '',
+            'resolved_url'     => $row['resolved_url'] ?? '',
+            'theme'            => $row['theme'] ?? 'indigo',
+            'buttons'          => $buttons,
+            'end_message_html' => $row['end_message_html'] ?? '',
+            'views'            => intval($row['views'] ?? 0),
+            'is_public'        => intval($row['is_public'] ?? 1),
+            'created_at'       => $row['created_at'],
+            'updated_at'       => $row['updated_at']
         ];
     }
 

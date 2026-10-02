@@ -207,8 +207,8 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                     AdLinkFly, Sohojgyan, Drama posts, Blogspot
                                 </span>
                             </label>
-                            <div class="flex items-center gap-2">
-                                <div class="relative flex-1">
+                            <div class="space-y-3">
+                                <div class="relative w-full">
                                     <input
                                         type="url"
                                         id="shortenUrl"
@@ -224,13 +224,12 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                 <button
                                     type="submit"
                                     id="submitBtn"
-                                    class="px-5 py-3 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] disabled:bg-[#a8c7fa] text-white font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer shrink-0 shadow-xs transition-all"
+                                    class="w-full py-3 px-5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] disabled:bg-[#a8c7fa] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all active:scale-[0.99]"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
                                         <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>
                                     </svg>
-                                    <span class="hidden sm:inline">Resolve &amp; Create Page</span>
-                                    <span class="sm:hidden">Generate</span>
+                                    <span>Resolve &amp; Create Page</span>
                                 </button>
                             </div>
                         </div>
@@ -268,6 +267,17 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                             <option value="slate">Slate Minimal</option>
                                             <option value="dark">Dark Cinema</option>
                                         </select>
+                                    </div>
+                                    <div class="space-y-1 sm:col-span-2">
+                                        <label class="text-[11px] font-semibold text-[#444746] block">
+                                            Custom Season End / Footer Message HTML (Optional)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="customEndMessageInput"
+                                            placeholder='Auto-extracted e.g. <div style="text-align:center;color:red;font-weight:bold;margin-top:10px;">Season End</div>'
+                                            class="w-full px-3 py-2 rounded-lg border border-[#c4c7c5] font-mono text-xs outline-none focus:border-[#0b57d0]"
+                                        />
                                     </div>
                                 </div>
                             </details>
@@ -368,6 +378,10 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                 <span class="text-[#747775]">Identified Shorten URL ("Episode Wise Links"):</span>
                                 <span id="resIdentifiedShortlinkText" class="font-mono font-semibold text-[#0b57d0] truncate block"></span>
                             </div>
+                            <div id="resEndMessageRow" class="hidden min-w-0 sm:col-span-2 pt-1 border-t border-[#f0f4f9]">
+                                <span class="text-[#747775] text-[11px] block font-semibold mb-1">Extracted End of Buttons Message:</span>
+                                <div id="resEndMessageContent" class="p-2 rounded-lg bg-white border border-[#e0e4eb] text-center"></div>
+                            </div>
                         </div>
 
                         <!-- Button Preview List -->
@@ -462,6 +476,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             if (e) e.preventDefault();
             const input = document.getElementById('shortenUrl');
             const customTitle = document.getElementById('customTitleInput').value.trim();
+            const customEndMessage = document.getElementById('customEndMessageInput').value.trim();
             const theme = document.getElementById('themeSelect').value;
             const submitBtn = document.getElementById('submitBtn');
             const loadingBox = document.getElementById('loadingBox');
@@ -536,6 +551,7 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     body: JSON.stringify({
                         url: url,
                         title_override: customTitle || undefined,
+                        end_message_html: customEndMessage || undefined,
                         theme: theme
                     }),
                     signal: controller.signal
@@ -579,6 +595,18 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     } else {
                         shortlinkText.innerText = '';
                         shortlinkRow.classList.add('hidden');
+                    }
+                }
+
+                const endMsgRow = document.getElementById('resEndMessageRow');
+                const endMsgContent = document.getElementById('resEndMessageContent');
+                if (endMsgRow && endMsgContent) {
+                    if (data.data.end_message_html) {
+                        endMsgContent.innerHTML = data.data.end_message_html;
+                        endMsgRow.classList.remove('hidden');
+                    } else {
+                        endMsgContent.innerHTML = '';
+                        endMsgRow.classList.add('hidden');
                     }
                 }
 
