@@ -58,16 +58,27 @@ export default function App() {
     }
   };
 
-  // Automatically check cookie expiration every 15s and redirect to login page if the 2-hour cookie expired
+  // Automatically check browser cookie state every 1.5s and on focus/visibilitychange.
+  // Deleting cookies from the browser or 2-hour expiration automatically logs out and redirects to login page.
   useEffect(() => {
     if (!isAdmin) return;
-    const interval = setInterval(() => {
+    const verifyCookie = () => {
       const validTok = getValidAdminToken();
       if (!validTok) {
         redirectToLoginPage();
       }
-    }, 15000);
-    return () => clearInterval(interval);
+    };
+    const interval = setInterval(verifyCookie, 1500);
+    const onVisChange = () => {
+      if (document.visibilityState === "visible") verifyCookie();
+    };
+    window.addEventListener("focus", verifyCookie);
+    document.addEventListener("visibilitychange", onVisChange);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", verifyCookie);
+      document.removeEventListener("visibilitychange", onVisChange);
+    };
   }, [isAdmin]);
 
   const fetchPages = async () => {

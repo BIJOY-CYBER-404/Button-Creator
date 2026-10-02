@@ -547,12 +547,9 @@ async function startServer() {
   };
 
   const extractAdminTokenFromReq = (req: express.Request): string => {
-    const cookieToken = parseCookieValue(req.headers.cookie, "slea_admin_token").trim();
-    if (cookieToken) return cookieToken;
-    const authHeader = req.headers.authorization;
     return (
-      (req.headers["x-admin-token"] as string) ||
-      (authHeader ? authHeader.replace(/^Bearer\s+/i, "") : "")
+      parseCookieValue(req.headers.cookie, "slea_admin_token") ||
+      parseCookieValue(req.headers.cookie, "slea_auth_cookie")
     ).trim();
   };
 
@@ -1232,11 +1229,11 @@ async function startServer() {
       return res.sendFile(updatePath);
     }
     return res.json({
-      version: "25.0",
+      version: "26.0",
       release_date: "2026-10-02",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-      checksum: "507ccb46a5cc3a659216f843bcc272a414e0de3c2cc0b6eb4e58bc8e47f0f270",
-      sha256: "507ccb46a5cc3a659216f843bcc272a414e0de3c2cc0b6eb4e58bc8e47f0f270",
+      checksum: "24710a8f0c34f55aa61171f7642649b19688a86348e23691a7b0aa81f20c0048",
+      sha256: "24710a8f0c34f55aa61171f7642649b19688a86348e23691a7b0aa81f20c0048",
       minimum_php: "7.4",
       release_notes: [
         "Removed Admin Login text, links, and buttons from all public pages and sign-in pages to keep the system protected and private.",

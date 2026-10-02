@@ -1,8 +1,7 @@
 /**
- * Cookie-based Login State Utility (Browser Cookie + Local Cookie State)
- * Stores and validates login state with a 2-hour (7200 seconds) expiration.
- * If the cookie is valid, admin and private pages are accessible without re-logging in on every visit.
- * If expired, invalid, or unavailable, clears state so the app redirects to the login page.
+ * Browser Cookie Login State Utility
+ * Stores and validates login state strictly in browser cookies (document.cookie) with a 2-hour (7200s) expiration.
+ * Deleting cookies from the browser automatically invalidates the login state so the app logs out and redirects to the login page.
  */
 
 export const AUTH_COOKIE_NAME = "slea_admin_token";
@@ -10,7 +9,6 @@ export const AUTH_ALT_COOKIE_NAME = "slea_auth_cookie";
 export const AUTH_STATE_COOKIE_NAME = "slea_login_state";
 export const AUTH_USER_COOKIE_NAME = "slea_admin_user";
 export const AUTH_EXP_COOKIE_NAME = "slea_admin_exp";
-export const LOCAL_COOKIE_BACKUP_KEY = "slea_browser_cookie_state";
 export const AUTH_COOKIE_MAX_AGE_SEC = 7200; // 2 hours (1-2 hours window)
 
 export function getCookieValue(name: string): string {
@@ -65,10 +63,7 @@ export function setLoginCookies(
   writeBrowserCookies(token, username, expiresAtMs);
 
   try {
-    localStorage.setItem(
-      LOCAL_COOKIE_BACKUP_KEY,
-      JSON.stringify({ token, username, expMs: expiresAtMs })
-    );
+    localStorage.removeItem("slea_browser_cookie_state");
     localStorage.removeItem("slea_admin_token");
     localStorage.removeItem("slea_admin_user");
   } catch {
@@ -90,7 +85,7 @@ export function clearLoginCookies(): void {
     }
   }
   try {
-    localStorage.removeItem(LOCAL_COOKIE_BACKUP_KEY);
+    localStorage.removeItem("slea_browser_cookie_state");
     localStorage.removeItem("slea_admin_token");
     localStorage.removeItem("slea_admin_user");
   } catch {
@@ -122,37 +117,19 @@ export function getValidAdminToken(): string {
   const expStr = getCookieValue(AUTH_EXP_COOKIE_NAME).trim();
   const cookieExpMs = expStr ? Number(expStr) : 0;
 
-  if (cookieToken) {
-    if (!isNaN(cookieExpMs) && cookieExpMs > 0 && now > cookieExpMs) {
-      clearLoginCookies();
-      return "";
-    }
-    if (!isTokenTimestampValid(cookieToken, cookieExpMs)) {
-      clearLoginCookies();
-      return "";
-    }
-    return cookieToken;
+  if (!cookieToken) {
+    return "";
   }
 
-  // Fallback to local browser cookie state if within 2-hour expiration window
-  try {
-    const rawBackup = localStorage.getItem(LOCAL_COOKIE_BACKUP_KEY);
-    if (rawBackup) {
-      const parsed = JSON.parse(rawBackup);
-      const bToken = String(parsed?.token || "").trim();
-      const bUser = String(parsed?.username || "admin").trim();
-      const bExpMs = Number(parsed?.expMs || 0);
-      if (bToken && bExpMs > now && isTokenTimestampValid(bToken, bExpMs)) {
-        writeBrowserCookies(bToken, bUser, bExpMs);
-        return bToken;
-      } else {
-        clearLoginCookies();
-        return "";
-      }
-    }
-  } catch {
-    // ignore
+  if (!isNaN(cookieExpMs) && cookieExpMs > 0 && now > cookieExpMs) {
+    clearLoginCookies();
+    return "";
   }
 
-  return "";
+  if (!isTokenTimestampValid(cookieToken, cookieExpMs)) {
+    clearLoginCookies();
+    return "";
+  }
+
+  return cookieToken;
 }

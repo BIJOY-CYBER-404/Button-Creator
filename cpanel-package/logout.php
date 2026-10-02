@@ -21,7 +21,6 @@ SLEA_Auth::logout();
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-$sep = (strpos($login_url, '?') === false) ? '?' : '&';
-$logout_target = $login_url . $sep . 'logged_out=1';
-header('Location: ' . $logout_target);
+header('Expires: 0');
+header('Location: ' . $login_url, true, 302);
 exit;

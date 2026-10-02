@@ -139,14 +139,39 @@ class SLEA_DB {
             CREATE TABLE IF NOT EXISTS users (
                 id {$auto_inc},
                 username VARCHAR(60) NOT NULL UNIQUE,
-                email VARCHAR(120) NOT NULL,
+                email VARCHAR(120) DEFAULT '',
                 password_hash VARCHAR(255) NOT NULL,
                 role VARCHAR(30) DEFAULT 'admin',
                 permissions TEXT,
+                last_login DATETIME,
                 created_at DATETIME,
                 updated_at DATETIME
             ) {$table_engine}
         ");
+
+        // Ensure all user columns exist on existing users tables across upgrades
+        $user_alter_cols = [
+            "email VARCHAR(120) DEFAULT ''",
+            "role VARCHAR(30) DEFAULT 'admin'",
+            "permissions TEXT",
+            "last_login DATETIME",
+            "created_at DATETIME",
+            "updated_at DATETIME"
+        ];
+        foreach ($user_alter_cols as $u_col_def) {
+            try {
+                self::$pdo->exec("ALTER TABLE users ADD COLUMN {$u_col_def}");
+            } catch (Exception $e) {
+                // Column already exists
+            }
+        }
+        if ($is_mysql) {
+            try {
+                self::$pdo->exec("ALTER TABLE users MODIFY email VARCHAR(120) DEFAULT ''");
+            } catch (Exception $e) {
+                // Ignore if not applicable
+            }
+        }
 
         // 2. Button Pages Table
         self::$pdo->exec("

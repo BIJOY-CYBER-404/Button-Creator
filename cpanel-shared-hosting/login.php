@@ -26,8 +26,8 @@ if (!SLEA_Auth::has_users()) {
     exit;
 }
 
-// Sanitize optional redirect target (e.g., private page /p/{slug} or admin page)
-$raw_redirect = trim((string)($_POST['redirect'] ?? $_GET['redirect'] ?? ''));
+// Optional redirect target stored in session (e.g., private page /p/{slug} or admin page)
+$raw_redirect = trim((string)($_SESSION['slea_redirect_after_login'] ?? ''));
 $safe_redirect_target = 'admin.php';
 if ($raw_redirect !== '' && $raw_redirect[0] === '/' && strpos($raw_redirect, '//') !== 0) {
     $redir_path = strtolower((string)parse_url($raw_redirect, PHP_URL_PATH));
@@ -36,9 +36,10 @@ if ($raw_redirect !== '' && $raw_redirect[0] === '/' && strpos($raw_redirect, '/
     }
 }
 
-// If already logged in with a valid 2-hour cookie, redirect immediately to target or admin.php
+// If already logged in with a valid 2-hour browser cookie, redirect immediately to target or admin.php
 if (SLEA_Auth::is_logged_in()) {
-    header('Location: ' . $safe_redirect_target);
+    unset($_SESSION['slea_redirect_after_login']);
+    header('Location: ' . $safe_redirect_target, true, 302);
     exit;
 }
 
@@ -73,30 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             if (SLEA_Auth::login($username, $password)) {
-                unset($_SESSION['slea_login_form_token']);
-                $new_cookie_token = (string)($_SESSION['slea_auth_token'] ?? '');
-                $new_exp_sec = (int)($_SESSION['slea_cookie_expires_at'] ?? (time() + SLEA_Auth::AUTH_COOKIE_LIFETIME));
-                $new_exp_ms = $new_exp_sec * 1000;
-                $max_age = max(1, $new_exp_sec - time());
-                $target_js = json_encode($safe_redirect_target);
-                $target_attr = htmlspecialchars($safe_redirect_target, ENT_QUOTES, 'UTF-8');
-                $tok_js = json_encode($new_cookie_token);
-                $exp_js = json_encode($new_exp_ms);
-                echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Signing In...</title><script>'
-                    . '(function(){'
-                    . 'var tok=' . $tok_js . ';'
-                    . 'var expMs=' . $exp_js . ';'
-                    . 'var maxAge=' . (int)$max_age . ';'
-                    . 'var expUtc=new Date(expMs).toUTCString();'
-                    . 'var sec=window.location.protocol==="https:"?"; Secure":"";'
-                    . 'document.cookie="slea_auth_cookie="+encodeURIComponent(tok)+"; Max-Age="+maxAge+"; Expires="+expUtc+"; Path=/; SameSite=Lax"+sec;'
-                    . 'document.cookie="slea_admin_token="+encodeURIComponent(tok)+"; Max-Age="+maxAge+"; Expires="+expUtc+"; Path=/; SameSite=Lax"+sec;'
-                    . 'document.cookie="slea_login_state=1; Max-Age="+maxAge+"; Expires="+expUtc+"; Path=/; SameSite=Lax"+sec;'
-                    . 'document.cookie="slea_admin_exp="+expMs+"; Max-Age="+maxAge+"; Expires="+expUtc+"; Path=/; SameSite=Lax"+sec;'
-                    . 'try{localStorage.setItem("slea_browser_cookie_state",JSON.stringify({token:tok,expMs:expMs}));}catch(e){}'
-                    . 'window.location.replace(' . $target_js . ');'
-                    . '})();'
-                    . '</script><meta http-equiv="refresh" content="0;url=' . $target_attr . '"></head><body style="background:#f8fafd"></body></html>';
+                unset($_SESSION['slea_login_form_token'], $_SESSION['slea_redirect_after_login']);
+                header('Location: ' . $safe_redirect_target, true, 302);
                 exit;
             } else {
                 $error = 'Invalid username or password. Please try again.';
@@ -271,7 +250,6 @@ $app_base_path = $base_dir;
 
                 <form method="POST" action="<?= htmlspecialchars($form_action, ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
                     <input type="hidden" name="_login_token" value="<?= htmlspecialchars($login_form_token, ENT_QUOTES, 'UTF-8') ?>">
-                    <input type="hidden" name="redirect" value="<?= htmlspecialchars($raw_redirect, ENT_QUOTES, 'UTF-8') ?>">
                     <div class="space-y-1.5">
                         <label class="text-xs font-semibold text-[#444746] block">
                             Username
@@ -344,39 +322,10 @@ $app_base_path = $base_dir;
 
     <script>
         (function() {
-            var isLoggedOut = window.location.search.indexOf('logged_out=1') !== -1;
-            var isCookieSync = window.location.search.indexOf('cookie_sync=1') !== -1;
-            if (isLoggedOut || isCookieSync) {
-                var past = 'Thu, 01 Jan 1970 00:00:00 GMT';
-                document.cookie = 'slea_auth_cookie=; Max-Age=0; Expires=' + past + '; Path=/';
-                document.cookie = 'slea_admin_token=; Max-Age=0; Expires=' + past + '; Path=/';
-                document.cookie = 'slea_login_state=; Max-Age=0; Expires=' + past + '; Path=/';
-                document.cookie = 'slea_admin_exp=; Max-Age=0; Expires=' + past + '; Path=/';
-                try { localStorage.removeItem('slea_browser_cookie_state'); } catch (e) {}
-                return;
+            try { localStorage.removeItem('slea_browser_cookie_state'); } catch (e) {}
+            if (window.location.search && window.history && window.history.replaceState) {
+                window.history.replaceState({}, document.title, window.location.pathname);
             }
-            // If a valid unexpired (< 2h) local browser cookie exists, restore document.cookie automatically
-            try {
-                var raw = localStorage.getItem('slea_browser_cookie_state');
-                if (raw) {
-                    var parsed = JSON.parse(raw);
-                    if (parsed && parsed.token && parsed.expMs && Number(parsed.expMs) > Date.now() + 5000) {
-                        var maxAge = Math.max(1, Math.floor((Number(parsed.expMs) - Date.now()) / 1000));
-                        var expUtc = new Date(Number(parsed.expMs)).toUTCString();
-                        var sec = window.location.protocol === 'https:' ? '; Secure' : '';
-                        document.cookie = 'slea_auth_cookie=' + encodeURIComponent(parsed.token) + '; Max-Age=' + maxAge + '; Expires=' + expUtc + '; Path=/; SameSite=Lax' + sec;
-                        document.cookie = 'slea_admin_token=' + encodeURIComponent(parsed.token) + '; Max-Age=' + maxAge + '; Expires=' + expUtc + '; Path=/; SameSite=Lax' + sec;
-                        document.cookie = 'slea_login_state=1; Max-Age=' + maxAge + '; Expires=' + expUtc + '; Path=/; SameSite=Lax' + sec;
-                        document.cookie = 'slea_admin_exp=' + Number(parsed.expMs) + '; Max-Age=' + maxAge + '; Expires=' + expUtc + '; Path=/; SameSite=Lax' + sec;
-                        var dest = <?= json_encode($safe_redirect_target) ?>;
-                        var sep = dest.indexOf('?') === -1 ? '?' : '&';
-                        window.location.replace(dest + sep + 'cookie_sync=1&_auth_cookie=' + encodeURIComponent(parsed.token));
-                        return;
-                    } else {
-                        localStorage.removeItem('slea_browser_cookie_state');
-                    }
-                }
-            } catch (e) {}
         })();
 
         function openMobileMenu() {

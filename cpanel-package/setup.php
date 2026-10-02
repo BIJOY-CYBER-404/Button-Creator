@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $result = SLEA_Auth::create_first_admin($username, $email, $password);
         if ($result['success']) {
             unset($_SESSION['slea_setup_csrf']);
-            header('Location: admin.php?installed=1');
+            header('Location: admin.php');
             exit;
         } else {
             $error = $result['error'] ?? 'Failed to initialize administrator account.';

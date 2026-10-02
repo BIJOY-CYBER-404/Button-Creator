@@ -1,9 +1,9 @@
 {
-  "version": "25.0",
+  "version": "26.0",
   "release_date": "2026-10-02",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "507ccb46a5cc3a659216f843bcc272a414e0de3c2cc0b6eb4e58bc8e47f0f270",
-  "sha256": "507ccb46a5cc3a659216f843bcc272a414e0de3c2cc0b6eb4e58bc8e47f0f270",
+  "checksum": "24710a8f0c34f55aa61171f7642649b19688a86348e23691a7b0aa81f20c0048",
+  "sha256": "24710a8f0c34f55aa61171f7642649b19688a86348e23691a7b0aa81f20c0048",
   "minimum_php": "7.4",
   "release_notes": [
     "Implemented 2-hour persistent browser & signed HTTP cookie login state so admin and private pages work seamlessly across visits without re-logging in every time.",
