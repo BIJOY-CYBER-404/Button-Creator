@@ -56,9 +56,14 @@ class SLEA_MigrationManager {
         foreach ($migration_dirs as $mdir) {
             if (is_dir($mdir)) {
                 $files = glob($mdir . '/*.{sql,php}', GLOB_BRACE);
-                foreach ($files as $f) {
-                    $mname = basename($f);
-                    $migration_files[$mname] = $f;
+                if (is_array($files)) {
+                    foreach ($files as $f) {
+                        $mname = basename($f);
+                        if (strtolower($mname) === 'index.php') {
+                            continue;
+                        }
+                        $migration_files[$mname] = $f;
+                    }
                 }
             }
         }

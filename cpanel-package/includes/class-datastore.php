@@ -12,6 +12,20 @@ if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
 require_once __DIR__ . '/class-db.php';
 
 class SLEA_Datastore {
+    private static $debug_mode_cache = null;
+    private static $error_handler_registered = false;
+    private static $captured_debug_errors = [];
+
+    private static function parse_bool_flag($val) {
+        if (is_bool($val)) return $val;
+        if (is_int($val) || is_float($val)) return intval($val) !== 0;
+        if (is_string($val)) {
+            $v = strtolower(trim($val));
+            if (in_array($v, ['1', 'true', 'yes', 'on', 'enabled'], true)) return true;
+            if (in_array($v, ['0', 'false', 'no', 'off', 'disabled', ''], true)) return false;
+        }
+        return !empty($val);
+    }
 
     // -------------------------------------------------------------
     // Page Management with Automatic File-Backup & Self-Healing
@@ -105,17 +119,34 @@ class SLEA_Datastore {
         return null;
     }
 
+    public static function sanitize_safe_href($url) {
+        $u = trim((string)$url);
+        if ($u === '') return '#';
+        // Block dangerous URI schemes (javascript:, data:, vbscript:, file:)
+        $normalized = preg_replace('/[\x00-\x20]+/', '', strtolower($u));
+        if (preg_match('/^(javascript|data|vbscript|file):/i', $normalized)) {
+            return '#';
+        }
+        return $u;
+    }
+
     public static function save_page($page_data) {
         $pdo = SLEA_DB::get_connection();
         $now = date('Y-m-d H:i:s');
 
         $title        = !empty($page_data['title']) ? trim($page_data['title']) : 'Episode Download Links';
         $description  = !empty($page_data['description']) ? trim($page_data['description']) : '';
-        $source_url   = !empty($page_data['source_url']) ? trim($page_data['source_url']) : '';
-        $resolved_url = !empty($page_data['resolved_url']) ? trim($page_data['resolved_url']) : '';
+        $source_url   = !empty($page_data['source_url']) ? self::sanitize_safe_href($page_data['source_url']) : '';
+        $resolved_url = !empty($page_data['resolved_url']) ? self::sanitize_safe_href($page_data['resolved_url']) : '';
         $theme        = !empty($page_data['theme']) ? $page_data['theme'] : (defined('DEFAULT_PAGE_THEME') ? DEFAULT_PAGE_THEME : 'indigo');
         $is_public    = isset($page_data['is_public']) ? intval($page_data['is_public']) : 1;
-        $buttons      = isset($page_data['buttons']) && is_array($page_data['buttons']) ? $page_data['buttons'] : [];
+        $raw_buttons  = isset($page_data['buttons']) && is_array($page_data['buttons']) ? $page_data['buttons'] : [];
+        $buttons      = [];
+        foreach ($raw_buttons as $btn) {
+            if (!is_array($btn)) continue;
+            $btn['url'] = self::sanitize_safe_href($btn['url'] ?? '#');
+            $buttons[] = $btn;
+        }
         $buttons_json = json_encode($buttons, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
         // Sanitize and derive slug
@@ -130,6 +161,11 @@ class SLEA_Datastore {
             $raw_slug = $page_data['slug'];
         }
         $slug = self::sanitize_slug($raw_slug);
+        $reserved_slugs = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'api', 'logout', 'setup', 'view', 'index', 'login', 'p', 'page', '404', 'assets', 'data', 'includes', 'backups', 'temp', 'database', 'dmca', 'disclaimer', 'about-us', 'about', 'privacy-policy', 'privacy'];
+        $current_login_slug = strtolower(self::get_login_slug());
+        if (in_array(strtolower($slug), $reserved_slugs, true) || ($current_login_slug !== '' && strtolower($slug) === $current_login_slug)) {
+            $slug = 'ep-' . $slug;
+        }
 
         $id = !empty($page_data['id']) ? intval($page_data['id']) : 0;
         $page_key = !empty($page_data['page_key']) ? $page_data['page_key'] : ('p_' . substr(md5(uniqid(rand(), true)), 0, 12));
@@ -827,27 +863,25 @@ class SLEA_Datastore {
      */
     public static function save_raw_setting($key, $value) {
         $pdo = SLEA_DB::get_connection();
-        $driver = SLEA_DB::get_driver();
         $now = date('Y-m-d H:i:s');
         $json = is_string($value) ? $value : json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        if ($driver === 'sqlite') {
-            // Standard, robust SQLite upsert compatible with all SQLite versions
-            $stmt = $pdo->prepare("INSERT OR REPLACE INTO settings (setting_key, setting_value, updated_at) VALUES (:key, :val, :now)");
-            $stmt->execute([':key' => $key, ':val' => $json, ':now' => $now]);
-        } else {
-            // MySQL / MariaDB standard upsert
+        try {
+            // Remove any existing/duplicate rows for this setting_key first to guarantee single authoritative value
+            $del = $pdo->prepare("DELETE FROM settings WHERE setting_key = :key");
+            $del->execute([':key' => $key]);
+            $ins = $pdo->prepare("INSERT INTO settings (setting_key, setting_value, updated_at) VALUES (:key, :val, :now)");
+            $ins->execute([':key' => $key, ':val' => $json, ':now' => $now]);
+        } catch (Exception $e) {
             try {
-                $stmt = $pdo->prepare("
-                    INSERT INTO settings (setting_key, setting_value, updated_at)
-                    VALUES (:key, :val, :now)
-                    ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at)
-                ");
-                $stmt->execute([':key' => $key, ':val' => $json, ':now' => $now]);
-            } catch (Exception $e) {
-                // Fallback for strict MySQL / MariaDB configurations
-                $stmt2 = $pdo->prepare("REPLACE INTO settings (setting_key, setting_value, updated_at) VALUES (:key, :val, :now)");
-                $stmt2->execute([':key' => $key, ':val' => $json, ':now' => $now]);
+                $upd = $pdo->prepare("UPDATE settings SET setting_value = :val, updated_at = :now WHERE setting_key = :key");
+                $upd->execute([':val' => $json, ':now' => $now, ':key' => $key]);
+                if ($upd->rowCount() === 0) {
+                    $ins2 = $pdo->prepare("INSERT INTO settings (setting_key, setting_value, updated_at) VALUES (:key, :val, :now)");
+                    $ins2->execute([':key' => $key, ':val' => $json, ':now' => $now]);
+                }
+            } catch (Exception $e2) {
+                error_log("Error saving setting '{$key}': " . $e2->getMessage());
             }
         }
 
@@ -863,13 +897,13 @@ class SLEA_Datastore {
     public static function get_raw_setting($key) {
         try {
             $pdo = SLEA_DB::get_connection();
-            $stmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = :k LIMIT 1");
+            $stmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = :k ORDER BY updated_at DESC LIMIT 1");
             $stmt->execute([':k' => $key]);
             $row = $stmt->fetch();
             if ($row && isset($row['setting_value']) && $row['setting_value'] !== '') {
                 return $row['setting_value'];
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log("Error reading setting '{$key}': " . $e->getMessage());
         }
 
@@ -902,8 +936,15 @@ class SLEA_Datastore {
     }
 
     public static function save_menu_items($items) {
-        $clean = array_values($items);
-        return self::save_raw_setting('menu_items', $clean);
+        $clean = [];
+        if (is_array($items)) {
+            foreach ($items as $item) {
+                if (!is_array($item)) continue;
+                $item['url'] = self::sanitize_safe_href($item['url'] ?? '#');
+                $clean[] = $item;
+            }
+        }
+        return self::save_raw_setting('menu_items', array_values($clean));
     }
 
     // -------------------------------------------------------------
@@ -974,9 +1015,14 @@ class SLEA_Datastore {
     }
 
     public static function save_site_identity($data) {
+        $raw_logo = trim($data['site_logo_url'] ?? '');
+        $safe_logo = $raw_logo !== '' ? self::sanitize_safe_href($raw_logo) : '';
+        if ($safe_logo === '#') {
+            $safe_logo = '';
+        }
         $clean = [
             'site_name'      => !empty($data['site_name']) ? trim($data['site_name']) : 'Movie Hub HQ Drive',
-            'site_logo_url'  => trim($data['site_logo_url'] ?? ''),
+            'site_logo_url'  => $safe_logo,
             'site_logo_text' => trim($data['site_logo_text'] ?? 'MHQ'),
         ];
 
@@ -1017,9 +1063,12 @@ class SLEA_Datastore {
         if (empty($clean)) {
             $clean = 'login';
         }
-        $reserved = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'api', 'logout', 'setup', 'view', 'index', 'p', 'page', '404', 'assets', 'data', 'includes', 'database', 'dmca', 'disclaimer', 'about-us', 'about', 'privacy-policy', 'privacy'];
+        $reserved = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'api', 'logout', 'setup', 'view', 'index', 'p', 'page', '404', 'assets', 'data', 'includes', 'backups', 'temp', 'database', 'dmca', 'disclaimer', 'about-us', 'about', 'privacy-policy', 'privacy'];
         if (in_array($clean, $reserved, true)) {
             throw new Exception("The path '/{$clean}' is reserved by the system. Please choose a different login path.");
+        }
+        if ($clean !== 'login' && self::get_page_by_slug($clean, false) !== null) {
+            throw new Exception("The path '/{$clean}' is already used by an episode page. Please choose a unique login path.");
         }
         self::save_raw_setting('login_slug', $clean);
         return $clean;
@@ -1157,27 +1206,52 @@ class SLEA_Datastore {
     // -------------------------------------------------------------
 
     public static function get_debug_settings() {
+        if (self::$debug_mode_cache !== null) {
+            return ['enabled' => (bool)self::$debug_mode_cache];
+        }
+
         $defaults = [
             'enabled' => false,
         ];
 
         $raw = self::get_raw_setting('debug_settings');
-        if (!empty($raw)) {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                return [
-                    'enabled' => !empty($decoded['enabled']),
-                ];
+        if ($raw !== null && $raw !== '') {
+            $decoded = is_array($raw) ? $raw : json_decode((string)$raw, true);
+            if (is_array($decoded) && array_key_exists('enabled', $decoded)) {
+                $enabled = self::parse_bool_flag($decoded['enabled']);
+                self::$debug_mode_cache = $enabled;
+                return ['enabled' => $enabled];
+            } elseif (is_bool($decoded) || is_numeric($decoded) || is_string($decoded)) {
+                $enabled = self::parse_bool_flag($decoded);
+                self::$debug_mode_cache = $enabled;
+                return ['enabled' => $enabled];
             }
         }
 
+        $file_settings = self::get_settings_from_backup_file();
+        if (isset($file_settings['debug_settings'])) {
+            $ds = $file_settings['debug_settings'];
+            if (is_string($ds)) {
+                $ds = json_decode($ds, true);
+            }
+            if (is_array($ds) && array_key_exists('enabled', $ds)) {
+                $enabled = self::parse_bool_flag($ds['enabled']);
+                self::$debug_mode_cache = $enabled;
+                return ['enabled' => $enabled];
+            }
+        }
+
+        self::$debug_mode_cache = false;
         return $defaults;
     }
 
     public static function save_debug_settings($data) {
+        $enabled_raw = is_array($data) ? ($data['enabled'] ?? false) : $data;
+        $enabled = self::parse_bool_flag($enabled_raw);
         $clean = [
-            'enabled' => !empty($data['enabled']),
+            'enabled' => $enabled,
         ];
+        self::$debug_mode_cache = $enabled;
         self::save_raw_setting('debug_settings', $clean);
         return $clean;
     }
@@ -1186,75 +1260,462 @@ class SLEA_Datastore {
         try {
             $dbg = self::get_debug_settings();
             return !empty($dbg['enabled']);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
+            try {
+                $file_settings = self::get_settings_from_backup_file();
+                if (isset($file_settings['debug_settings']['enabled'])) {
+                    return self::parse_bool_flag($file_settings['debug_settings']['enabled']);
+                }
+            } catch (Throwable $e2) {}
             return false;
         }
     }
 
+    public static function get_captured_debug_errors() {
+        return self::$captured_debug_errors;
+    }
+
     public static function register_public_error_handler() {
-        $debug = self::is_debug_mode();
-        if ($debug) {
-            @ini_set('display_errors', '1');
-            @ini_set('display_startup_errors', '1');
-            @error_reporting(E_ALL);
-        } else {
-            @ini_set('display_errors', '0');
-            @ini_set('display_startup_errors', '0');
-            @error_reporting(0);
+        if (self::$error_handler_registered) {
+            return;
+        }
+        self::$error_handler_registered = true;
+
+        // Buffer output so partial HTML is never leaked before custom error screen renders
+        if (ob_get_level() === 0) {
+            @ob_start();
         }
 
+        // Prevent raw PHP error strings from corrupting HTTP headers; capture all errors internally
+        @ini_set('display_errors', '0');
+        @ini_set('display_startup_errors', '0');
+        @error_reporting(E_ALL);
+
+        set_error_handler(function ($severity, $message, $file, $line) {
+            // Respect @ error-suppression operator
+            if (!(error_reporting() & $severity)) {
+                return true;
+            }
+
+            $type_map = [
+                E_ERROR             => 'E_ERROR',
+                E_WARNING           => 'E_WARNING',
+                E_PARSE             => 'E_PARSE',
+                E_NOTICE            => 'E_NOTICE',
+                E_CORE_ERROR        => 'E_CORE_ERROR',
+                E_CORE_WARNING      => 'E_CORE_WARNING',
+                E_COMPILE_ERROR     => 'E_COMPILE_ERROR',
+                E_COMPILE_WARNING   => 'E_COMPILE_WARNING',
+                E_USER_ERROR        => 'E_USER_ERROR',
+                E_USER_WARNING      => 'E_USER_WARNING',
+                E_USER_NOTICE       => 'E_USER_NOTICE',
+                E_RECOVERABLE_ERROR => 'E_RECOVERABLE_ERROR',
+                E_DEPRECATED        => 'E_DEPRECATED',
+                E_USER_DEPRECATED   => 'E_USER_DEPRECATED',
+            ];
+            $type_label = $type_map[$severity] ?? "PHP_ERR_{$severity}";
+            $entry = "Actual Error [{$type_label}]: {$message} in " . basename((string)$file) . " on line {$line}";
+            self::$captured_debug_errors[] = $entry;
+
+            if (in_array($severity, [E_USER_ERROR, E_RECOVERABLE_ERROR, E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+                SLEA_Datastore::render_public_error(
+                    '500 - PHP Runtime Error',
+                    $entry,
+                    500,
+                    'Something went wrong while loading this page. Please try again in a moment.'
+                );
+            }
+
+            return true;
+        });
+
         set_exception_handler(function ($ex) {
-            $msg = "Uncaught " . get_class($ex) . ": " . $ex->getMessage() . " in " . basename($ex->getFile()) . " on line " . $ex->getLine();
+            $msg = "Actual Error [Uncaught " . get_class($ex) . "]: " . $ex->getMessage() . " in " . basename($ex->getFile()) . " on line " . $ex->getLine();
             SLEA_Datastore::render_public_error(
-                '500 - Application Error',
+                '500 - Uncaught Application Exception',
                 $msg,
                 500,
-                'Something went wrong while loading this page. Please try again in a moment.'
+                'Something went wrong while loading this page. Please try again in a moment.',
+                [
+                    'exception_class' => get_class($ex),
+                    'file'            => basename($ex->getFile()),
+                    'line'            => $ex->getLine(),
+                    'trace'           => $ex->getTraceAsString(),
+                ]
             );
         });
 
         register_shutdown_function(function () {
             $err = error_get_last();
-            if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
-                $msg = "Fatal Error [{$err['type']}]: {$err['message']} in " . basename($err['file']) . " on line {$err['line']}";
+            if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true)) {
+                $msg = "Actual Error [Fatal Shutdown Error #{$err['type']}]: {$err['message']} in " . basename($err['file']) . " on line {$err['line']}";
                 SLEA_Datastore::render_public_error(
-                    '500 - System Error',
+                    '500 - Fatal System Error',
                     $msg,
                     500,
-                    'Something went wrong while loading this page. Please try again in a moment.'
+                    'Something went wrong while loading this page. Please try again in a moment.',
+                    [
+                        'file' => basename($err['file']),
+                        'line' => $err['line'],
+                    ]
                 );
             }
         });
     }
 
-    public static function render_public_error($actual_title, $actual_error_msg, $http_code = 404, $safe_public_msg = null) {
-        if (!headers_sent()) {
-            http_response_code(intval($http_code) ?: 404);
-            header('X-Robots-Tag: noindex, nofollow, noarchive');
+    public static function render_public_error($actual_title, $actual_error_msg, $http_code = 404, $safe_public_msg = null, $extra_context = []) {
+        // Clear any buffered partial HTML output so the error screen renders cleanly
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
         }
-        $debug = self::is_debug_mode();
-        $req_uri = htmlspecialchars($_SERVER['REQUEST_URI'] ?? '/', ENT_QUOTES, 'UTF-8');
-        $safe_title = ($http_code === 404) ? 'Unable to Open Link' : 'Page Temporarily Unavailable';
-        $safe_desc = $safe_public_msg ?: 'We could not load this page right now. The link you followed may be unavailable, moved, or expired.';
 
-        $display_title = $debug ? htmlspecialchars($actual_title, ENT_QUOTES, 'UTF-8') : htmlspecialchars($safe_title, ENT_QUOTES, 'UTF-8');
-        $display_msg = $debug ? htmlspecialchars($actual_error_msg, ENT_QUOTES, 'UTF-8') : htmlspecialchars($safe_desc, ENT_QUOTES, 'UTF-8');
+        $code_int = intval($http_code) ?: 404;
+        if (!headers_sent()) {
+            http_response_code($code_int);
+            header('Content-Type: text/html; charset=utf-8');
+            header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+            header('X-LiteSpeed-Cache-Control: no-cache');
+        }
+
+        $debug = self::is_debug_mode();
+        $raw_req_uri = $_SERVER['REQUEST_URI'] ?? '/';
+        $req_uri = htmlspecialchars($raw_req_uri, ENT_QUOTES, 'UTF-8');
+        $req_method = htmlspecialchars($_SERVER['REQUEST_METHOD'] ?? 'GET', ENT_QUOTES, 'UTF-8');
+        $script_name = htmlspecialchars(basename($_SERVER['SCRIPT_NAME'] ?? ($_SERVER['PHP_SELF'] ?? 'view.php')), ENT_QUOTES, 'UTF-8');
+
+        // Safely load site branding, menu items, and footer for functional 404 navigation
+        $site_name = defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive';
+        $site_logo_url = '';
+        $site_logo_text = 'MHQ';
+        $menu_items = [
+            ['title' => 'Home', 'url' => 'https://moviehubhq.com/', 'new_tab' => false],
+            ['title' => 'Korean Drama', 'url' => 'https://moviehubhq.com/catagory/korean/', 'new_tab' => false],
+            ['title' => 'Chinese Drama', 'url' => 'https://moviehubhq.com/catagory/chinese/', 'new_tab' => false]
+        ];
+        $footer_html = '&copy; ' . date('Y') . ' MovieHubHQ • Direct Episode Link Gateway';
+        $is_admin_logged_in = false;
+
+        try {
+            $identity = self::get_site_identity();
+            if (!empty($identity['site_name'])) {
+                $site_name = $identity['site_name'];
+            }
+            if (!empty($identity['site_logo_url'])) {
+                $site_logo_url = self::sanitize_safe_href($identity['site_logo_url']);
+                if ($site_logo_url === '#') $site_logo_url = '';
+            }
+            if (!empty($identity['site_logo_text'])) {
+                $site_logo_text = $identity['site_logo_text'];
+            }
+            $loaded_menu = self::get_menu_items();
+            if (is_array($loaded_menu) && !empty($loaded_menu)) {
+                $login_slug_cfg = strtolower(self::get_login_slug());
+                $blocked_routes = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'login', 'logout', 'setup', 'api', $login_slug_cfg];
+                $filtered_menu = array_values(array_filter($loaded_menu, function($item) use ($blocked_routes) {
+                    $u = strtolower(trim($item['url'] ?? ''));
+                    if ($u === '' || $u === '#') return true;
+                    $path = trim(parse_url($u, PHP_URL_PATH) ?: '', '/');
+                    $base = preg_replace('/\.php$/i', '', basename($path));
+                    return !in_array($base, $blocked_routes, true);
+                }));
+                if (!empty($filtered_menu)) {
+                    $menu_items = $filtered_menu;
+                }
+            }
+            $loaded_footer = self::get_footer_copyright();
+            if (!empty($loaded_footer)) {
+                $footer_html = $loaded_footer;
+            }
+            if (class_exists('SLEA_Auth')) {
+                $is_admin_logged_in = SLEA_Auth::is_logged_in() && empty($_GET['preview_visitor']);
+            }
+        } catch (Throwable $e) {
+            // Safe fallback if DB is unreachable
+        }
+
+        $home_url = 'https://moviehubhq.com/';
+        foreach ($menu_items as $mi) {
+            $u = self::sanitize_safe_href($mi['url'] ?? '');
+            if ($u !== '' && $u !== '#') {
+                $home_url = $u;
+                break;
+            }
+        }
+
+        // Compute base path for /p/{slug} lookup form and legal links
+        $script_path = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
+        $base_dir = rtrim(dirname($script_path), '/');
+        $base_dir = preg_replace('#/(p|page)$#i', '', $base_dir);
+        if ($base_dir === '/' || $base_dir === '.' || $base_dir === '') {
+            $base_dir = '';
+        } elseif ($base_dir[0] !== '/') {
+            $base_dir = '/' . $base_dir;
+        }
+
+        $attempted_slug = isset($_GET['slug']) ? trim((string)$_GET['slug']) : '';
+        if ($attempted_slug === '' && preg_match('#/(?:p|page)/([a-zA-Z0-9_-]+)#', $raw_req_uri, $sm)) {
+            $attempted_slug = $sm[1];
+        }
+        $attempted_slug_safe = htmlspecialchars($attempted_slug, ENT_QUOTES, 'UTF-8');
+
+        $safe_title = ($code_int === 404) ? 'Episode Link Not Found' : 'Service Temporarily Unavailable';
+        $safe_desc = $safe_public_msg ?: (
+            $code_int === 404
+                ? 'The episode link you followed does not exist, may have been moved or expired, or is currently set to private.'
+                : 'Something went wrong while loading this page. Please try again in a moment.'
+        );
+
+        $display_title = $debug ? htmlspecialchars((string)$actual_title, ENT_QUOTES, 'UTF-8') : htmlspecialchars((string)$safe_title, ENT_QUOTES, 'UTF-8');
+        $display_msg = htmlspecialchars((string)$safe_desc, ENT_QUOTES, 'UTF-8');
+
+        $status_kicker = ($code_int === 404) ? 'HTTP 404 · GATEWAY ROUTE NOT FOUND' : ('HTTP ' . $code_int . ' · GATEWAY RUNTIME ERROR');
+        $badge_color = ($code_int === 404) ? '#38bdf8' : '#fb7185';
+
+        // Build Navigation Links HTML
+        $nav_links_html = '';
+        $quick_cats_html = '';
+        foreach ($menu_items as $item) {
+            $m_title = htmlspecialchars($item['title'] ?? 'Link', ENT_QUOTES, 'UTF-8');
+            $m_url = htmlspecialchars(self::sanitize_safe_href($item['url'] ?? '#'), ENT_QUOTES, 'UTF-8');
+            $m_blank = (!empty($item['new_tab']) || !empty($item['target_blank'])) ? ' target="_blank" rel="noopener noreferrer"' : '';
+            $nav_links_html .= '<a href="' . $m_url . '"' . $m_blank . ' class="nav-link">' . $m_title . '</a>';
+            $quick_cats_html .= '<a href="' . $m_url . '"' . $m_blank . ' class="cat-link"><span>' . $m_title . '</span><span aria-hidden="true">→</span></a>';
+        }
+
+        $logo_html = $site_logo_url !== ''
+            ? '<img src="' . htmlspecialchars($site_logo_url, ENT_QUOTES, 'UTF-8') . '" alt="' . htmlspecialchars($site_name, ENT_QUOTES, 'UTF-8') . '" style="width:100%;height:100%;object-fit:contain;" />'
+            : '<span>' . htmlspecialchars(substr($site_logo_text ?: 'MHQ', 0, 3), ENT_QUOTES, 'UTF-8') . '</span>';
 
         $debug_block = '';
         if ($debug) {
             $time_str = date('Y-m-d H:i:s T');
-            $debug_block = '<div style="margin-top:16px;text-align:left;background:#fef2f2;border:1px solid #fecaca;border-radius:16px;padding:14px;font-family:\'JetBrains Mono\',monospace;font-size:11px;color:#991b1b;line-height:1.5;">'
-                . '<div style="font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;color:#b91c1c;display:flex;align-items:center;justify-content:space-between;">'
-                . '<span>🛠️ Debug Mode: ON (Actual Error Details)</span>'
-                . '<span style="background:#fee2e2;padding:2px 6px;border-radius:6px;">HTTP ' . intval($http_code) . '</span>'
+            $php_ver = htmlspecialchars(PHP_VERSION, ENT_QUOTES, 'UTF-8');
+            $db_driver = 'unknown';
+            try {
+                if (class_exists('SLEA_DB')) {
+                    $db_driver = SLEA_DB::get_driver() ?: 'sqlite';
+                }
+            } catch (Throwable $e) {}
+
+            $extra_rows = '';
+            if (!empty($extra_context['file'])) {
+                $loc = htmlspecialchars($extra_context['file'] . (!empty($extra_context['line']) ? ':' . $extra_context['line'] : ''), ENT_QUOTES, 'UTF-8');
+                $extra_rows .= '<div class="dbg-row"><strong>Source Location:</strong> ' . $loc . '</div>';
+            }
+            if (!empty($extra_context['trace'])) {
+                $trace_safe = htmlspecialchars((string)$extra_context['trace'], ENT_QUOTES, 'UTF-8');
+                $extra_rows .= '<details style="margin-top:10px;"><summary style="cursor:pointer;font-weight:700;color:#fecdd3;">View Stack Trace</summary><pre style="margin:8px 0 0;padding:10px;background:#090d16;border:1px solid #334155;border-radius:8px;overflow-x:auto;font-size:11px;color:#fda4af;white-space:pre-wrap;word-break:break-word;">' . $trace_safe . '</pre></details>';
+            }
+            if (!empty(self::$captured_debug_errors)) {
+                $warn_items = '';
+                foreach (self::$captured_debug_errors as $w) {
+                    $warn_items .= '<li>' . htmlspecialchars((string)$w, ENT_QUOTES, 'UTF-8') . '</li>';
+                }
+                $extra_rows .= '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #475569;"><strong>Captured Runtime Warnings/Notices:</strong><ul style="margin:6px 0 0 18px;padding:0;">' . $warn_items . '</ul></div>';
+            }
+
+            $debug_block = '<div class="dbg-panel">'
+                . '<div class="dbg-head">'
+                . '<span>Developer Diagnostics (Debug Mode: ON)</span>'
+                . '<span class="dbg-code">HTTP ' . $code_int . '</span>'
                 . '</div>'
-                . '<div><strong>Actual Error:</strong> ' . htmlspecialchars($actual_error_msg, ENT_QUOTES, 'UTF-8') . '</div>'
-                . '<div style="margin-top:4px;color:#7f1d1d;"><strong>Request URI:</strong> ' . $req_uri . '</div>'
-                . '<div style="color:#7f1d1d;"><strong>Timestamp:</strong> ' . htmlspecialchars($time_str, ENT_QUOTES, 'UTF-8') . '</div>'
+                . '<div class="dbg-box"><strong>Actual Error:</strong> ' . htmlspecialchars((string)$actual_error_msg, ENT_QUOTES, 'UTF-8') . '</div>'
+                . '<div class="dbg-meta">'
+                . '<div><strong>Request:</strong> ' . $req_method . ' ' . $req_uri . '</div>'
+                . '<div><strong>Handler:</strong> ' . $script_name . ' · <strong>DB Driver:</strong> ' . htmlspecialchars((string)$db_driver, ENT_QUOTES, 'UTF-8') . ' · <strong>PHP:</strong> ' . $php_ver . '</div>'
+                . '<div><strong>Timestamp:</strong> ' . htmlspecialchars($time_str, ENT_QUOTES, 'UTF-8') . '</div>'
+                . $extra_rows
+                . '</div>'
                 . '</div>';
         }
 
-        die('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="robots" content="noindex, nofollow, noarchive"><title>' . $display_title . '</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;box-sizing:border-box;"><div style="max-width:480px;width:100%;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><div style="width:48px;height:48px;border-radius:16px;background:#fce8e6;color:#d93025;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-weight:800;font-size:20px;">!</div><h1 style="color:#111827;font-size:20px;font-weight:800;margin:0 0 8px;">' . $display_title . '</h1><p style="font-size:13px;color:#5f6368;margin:0;line-height:1.6;">' . $display_msg . '</p>' . $debug_block . '</div></body></html>');
+        $admin_bar_html = '';
+        if ($is_admin_logged_in) {
+            $admin_bar_html = '<div style="background:#0f172a;color:#f8fafc;padding:8px 16px;font-size:12px;border-bottom:1px solid #1e293b;">'
+                . '<div style="max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+                . '<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:#94a3b8;">Admin Session Active · HTTP ' . $code_int . ' Response</span>'
+                . '<div style="display:flex;align-items:center;gap:12px;">'
+                . '<a href="' . htmlspecialchars($base_dir . '/pages.php', ENT_QUOTES, 'UTF-8') . '" style="color:#38bdf8;text-decoration:none;font-weight:600;">Manage Pages</a>'
+                . '<a href="' . htmlspecialchars($base_dir . '/admin.php', ENT_QUOTES, 'UTF-8') . '" style="color:#f8fafc;text-decoration:none;font-weight:600;background:#1e293b;padding:4px 10px;border-radius:6px;border:1px solid #334155;">← Admin Dashboard</a>'
+                . '</div></div></div>';
+        }
+
+        $home_url_safe = htmlspecialchars($home_url, ENT_QUOTES, 'UTF-8');
+        $site_name_safe = htmlspecialchars($site_name, ENT_QUOTES, 'UTF-8');
+        $base_dir_js = json_encode($base_dir);
+
+        die('<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>' . $code_int . ' - ' . $display_title . ' | ' . $site_name_safe . '</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:#f4f6fb;color:#0f172a;font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.site-header{background:#ffffff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:30}
+.header-inner{max-width:980px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#0f172a;font-weight:800;font-size:15px}
+.brand-logo{width:36px;height:36px;border-radius:10px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;overflow:hidden;flex-shrink:0}
+.nav-bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.nav-link{color:#475569;text-decoration:none;font-size:13px;font-weight:600;transition:color .15s}
+.nav-link:hover{color:#0b57d0}
+.main-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:36px 20px}
+.shell{max-width:760px;width:100%;background:#ffffff;border:1px solid #dce3f0;border-radius:20px;overflow:hidden;box-shadow:0 12px 32px -12px rgba(15,23,42,0.08)}
+.hero-banner{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#f8fafc;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;border-bottom:1px solid #1e293b}
+.hero-left{flex:1;min-width:240px}
+.kicker{font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:700;letter-spacing:0.06em;color:' . $badge_color . ';margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.kicker-dot{width:7px;height:7px;border-radius:50%;background:' . $badge_color . ';display:inline-block}
+.hero-title{font-size:24px;font-weight:800;margin:0 0 6px;line-height:1.25;color:#ffffff;letter-spacing:-0.02em}
+.hero-uri{font-family:"JetBrains Mono",monospace;font-size:12px;color:#94a3b8;word-break:break-all}
+.code-monument{font-family:"JetBrains Mono",monospace;font-size:54px;font-weight:800;line-height:1;letter-spacing:-0.04em;color:#38bdf8;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);padding:14px 22px;border-radius:16px;user-select:none}
+.body-area{padding:28px 32px}
+.lead-desc{font-size:14px;line-height:1.65;color:#475569;margin:0 0 24px}
+.lookup-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:24px}
+.lookup-label{display:block;font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px}
+.lookup-row{display:flex;gap:10px;flex-wrap:wrap}
+.lookup-input{flex:1;min-width:200px;padding:11px 14px;border-radius:10px;border:1px solid #cbd5e1;background:#ffffff;font-family:"JetBrains Mono",monospace;font-size:13px;color:#0f172a;outline:none;transition:border-color .15s}
+.lookup-input:focus{border-color:#0b57d0;box-shadow:0 0 0 3px rgba(11,87,208,0.12)}
+.lookup-btn{padding:11px 20px;border-radius:10px;border:0;background:#0b57d0;color:#ffffff;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s;white-space:nowrap}
+.lookup-btn:hover{background:#0842a0}
+.lookup-hint{font-size:11px;color:#64748b;margin-top:7px}
+.actions-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:22px;border-bottom:1px solid #f1f5f9}
+.btn-primary{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;background:#0f172a;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;transition:background .15s}
+.btn-primary:hover{background:#1e293b}
+.btn-secondary{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:10px;background:#f1f5f9;color:#334155;border:1px solid #e2e8f0;text-decoration:none;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-secondary:hover{background:#e2e8f0;color:#0f172a}
+.cats-sec{margin-top:20px}
+.cats-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px}
+.cats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.cat-link{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;text-decoration:none;font-size:12px;font-weight:600;transition:all .15s}
+.cat-link:hover{border-color:#0b57d0;color:#0b57d0;background:#f0f6ff}
+.dbg-panel{margin-top:22px;background:#0f172a;border:1px solid #334155;border-radius:14px;padding:16px 18px;color:#e2e8f0;font-family:"JetBrains Mono",monospace;font-size:11px;line-height:1.6;text-align:left}
+.dbg-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-weight:700;color:#fda4af;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.04em}
+.dbg-code{background:#ef4444;color:#fff;padding:2px 8px;border-radius:6px;font-size:10px}
+.dbg-box{background:#1e293b;border:1px solid #475569;border-radius:8px;padding:10px 12px;color:#fecdd3;margin-bottom:10px;word-break:break-word}
+.dbg-meta{color:#94a3b8;display:grid;gap:4px}
+.dbg-meta strong{color:#cbd5e1}
+.site-footer{padding:20px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;background:#ffffff}
+.footer-links{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.footer-links a{color:#475569;text-decoration:none;font-weight:500}
+.footer-links a:hover{color:#0b57d0}
+@media(max-width:600px){
+  .hero-banner{padding:22px 20px}
+  .body-area{padding:22px 20px}
+  .code-monument{font-size:38px;padding:10px 16px}
+}
+</style>
+</head>
+<body>
+' . $admin_bar_html . '
+<header class="site-header">
+    <div class="header-inner">
+        <a href="' . $home_url_safe . '" class="brand">
+            <div class="brand-logo">' . $logo_html . '</div>
+            <span>' . $site_name_safe . '</span>
+        </a>
+        <nav class="nav-bar">' . $nav_links_html . '</nav>
+    </div>
+</header>
+<main class="main-wrap">
+    <div class="shell">
+        <div class="hero-banner">
+            <div class="hero-left">
+                <div class="kicker"><span class="kicker-dot"></span><span>' . $status_kicker . '</span></div>
+                <h1 class="hero-title">' . $display_title . '</h1>
+                <div class="hero-uri">Requested Path: ' . $req_uri . '</div>
+            </div>
+            <div class="code-monument">' . $code_int . '</div>
+        </div>
+        <div class="body-area">
+            <p class="lead-desc">' . $display_msg . '</p>
+
+            <form class="lookup-box" onsubmit="return handleEpisodeJump(event)">
+                <label class="lookup-label" for="epCodeInput">Open Episode Page by Slug or Link</label>
+                <div class="lookup-row">
+                    <input
+                        id="epCodeInput"
+                        type="text"
+                        class="lookup-input"
+                        value="' . $attempted_slug_safe . '"
+                        placeholder="Enter episode slug (e.g. flp-120926) or paste /p/ link..."
+                        autocomplete="off"
+                    />
+                    <button type="submit" class="lookup-btn">Open Episode →</button>
+                </div>
+                <div class="lookup-hint">If you have a valid episode code or mistyped the URL, enter it above to jump directly to the download page.</div>
+            </form>
+
+            <div class="actions-row">
+                <a href="' . $home_url_safe . '" class="btn-primary">
+                    <span>Return to Main Website</span>
+                    <span aria-hidden="true">↗</span>
+                </a>
+                <button type="button" class="btn-secondary" onclick="if(window.history.length>1){window.history.back();}else{window.location.href=\'' . $home_url_safe . '\';}">
+                    <span>← Go Back</span>
+                </button>
+                <button type="button" class="btn-secondary" onclick="window.location.reload()">
+                    <span>↻ Try Again</span>
+                </button>
+            </div>
+
+            <div class="cats-sec">
+                <div class="cats-title">Browse Website Sections</div>
+                <div class="cats-grid">' . $quick_cats_html . '</div>
+            </div>
+
+            ' . $debug_block . '
+        </div>
+    </div>
+</main>
+<footer class="site-footer">
+    <div class="footer-links">
+        <a href="' . htmlspecialchars($base_dir . '/dmca', ENT_QUOTES, 'UTF-8') . '">DMCA</a>
+        <span>·</span>
+        <a href="' . htmlspecialchars($base_dir . '/disclaimer', ENT_QUOTES, 'UTF-8') . '">Disclaimer</a>
+        <span>·</span>
+        <a href="' . htmlspecialchars($base_dir . '/about-us', ENT_QUOTES, 'UTF-8') . '">About Us</a>
+        <span>·</span>
+        <a href="' . htmlspecialchars($base_dir . '/privacy-policy', ENT_QUOTES, 'UTF-8') . '">Privacy Policy</a>
+    </div>
+    <div>' . $footer_html . '</div>
+</footer>
+<script>
+function handleEpisodeJump(e) {
+    if (e) e.preventDefault();
+    var input = document.getElementById("epCodeInput");
+    if (!input) return false;
+    var raw = (input.value || "").trim();
+    if (!raw) {
+        input.focus();
+        return false;
+    }
+    var slug = raw;
+    var pMatch = raw.match(/\/(?:p|page)\/([a-zA-Z0-9_-]+)/i);
+    var qMatch = raw.match(/[?&](?:slug|p)=([a-zA-Z0-9_-]+)/i);
+    if (pMatch && pMatch[1]) {
+        slug = pMatch[1];
+    } else if (qMatch && qMatch[1]) {
+        slug = qMatch[1];
+    } else {
+        slug = raw.replace(/^https?:\/\/[^\/]+\/?/i, "").replace(/^\/+|\/+$/g, "").replace(/[^a-zA-Z0-9_-]/g, "");
+    }
+    if (!slug) {
+        input.focus();
+        return false;
+    }
+    var baseDir = ' . $base_dir_js . ';
+    window.location.href = (baseDir ? baseDir : "") + "/p/" + encodeURIComponent(slug);
+    return false;
+}
+</script>
+</body>
+</html>');
     }
 
     // -------------------------------------------------------------
@@ -1621,7 +2082,7 @@ class SLEA_Datastore {
         return [
             'backup_format' => 'slea_backup_v2',
             'app_name'      => defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive',
-            'app_version'   => defined('APP_VERSION') ? APP_VERSION : '20.0',
+            'app_version'   => defined('APP_VERSION') ? APP_VERSION : '23.0',
             'scope'         => $scope,
             'created_at'    => date('Y-m-d H:i:s'),
             'counts'        => [

@@ -1,48 +1,53 @@
-# cPanel Apache Configuration & Clean URL Routing
+# Disable directory listing
+Options -Indexes
+
+# Custom Error Pages routed through index.php so Debug Mode (Off vs On) is respected for all public errors
+ErrorDocument 403 /index.php
+ErrorDocument 404 /index.php
+ErrorDocument 500 /index.php
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /
 
-    # Route /p/{slug} and /page/{slug} to view.php?slug={slug}
+    # 1. Block direct HTTP access to all internal/private directories
+    RewriteRule ^(includes|data|backups|temp|database)(/|$) - [F,L,NC]
+
+    # 2. Block direct HTTP access to hidden dot-files (except .well-known for SSL verification)
+    RewriteRule (^|/)\.(?!well-known/) - [F,L]
+
+    # 3. Clean URLs for Public Button Pages: /p/my-slug -> view.php?slug=my-slug
     RewriteRule ^p/([a-zA-Z0-9_-]+)/?$ view.php?slug=$1 [L,QSA]
     RewriteRule ^page/([a-zA-Z0-9_-]+)/?$ view.php?slug=$1 [L,QSA]
 
-    # Public Legal & Info Pages
+    # 4. Clean URLs for Built-in Legal Pages: /dmca, /disclaimer, /about-us, /privacy-policy
     RewriteRule ^(dmca|disclaimer|about-us|about|privacy-policy|privacy)/?$ view.php?slug=$1 [L,QSA,NC]
 
-    # Clean Admin Routes
-    RewriteRule ^admin/?$ admin.php [L,QSA]
-    RewriteRule ^pages/?$ pages.php [L,QSA]
-    RewriteRule ^settings/?$ settings.php [L,QSA]
-    RewriteRule ^analytics/?$ analytics.php [L,QSA]
-    RewriteRule ^update/?$ update.php [L,QSA]
-    RewriteRule ^updater/?$ update.php [L,QSA]
-    RewriteRule ^login/?$ login.php [L,QSA]
-    RewriteRule ^logout/?$ logout.php [L,QSA]
-    RewriteRule ^setup/?$ setup.php [L,QSA]
-
-    # Route custom login page path (with or without .php) to view.php handler
+    # 5. Route custom login slug or unknown single-segment paths through index.php (if not an existing file or directory)
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^([a-zA-Z0-9_-]+)(?:\.php)?/?$ view.php?slug=$1 [L,QSA]
+    RewriteRule ^([a-zA-Z0-9_-]+)(?:\.php)?/?$ index.php?slug=$1 [L,QSA]
 
-    # Block direct browser access to sensitive backend directories and config files
-    RewriteRule ^(data|includes|database|backups|temp|storage|logs|releases)/ - [F,L]
-    RewriteRule ^config(\.local)?\.php$ - [F,L]
-    RewriteRule ^README\.md$ - [F,L]
-    RewriteRule \.(sql|log|bak|sqlite|sqlite3|db|env|py|sh|jsonl|json|lock|md)$ - [F,L]
-    RewriteRule (extractor|resolver|unified_engine|pack_cpanel)\.py$ - [F,L]
+    # 6. Route any other non-existent deep path through index.php for unified error handling
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . index.php [L,QSA]
 </IfModule>
 
-# Extra Security Headers
+# Protect sensitive configuration, database, backup, and log files
+<FilesMatch "^(config\.php|config\.local\.php|\.maintenance|composer\.(json|lock)|package(-lock)?\.json|.*\.(sql|sqlite|db|log|bak|sh|py|md|lock))$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Security Headers
 <IfModule mod_headers.c>
-    Header unset X-Powered-By
-    Header set X-Content-Type-Options "nosniff"
-    Header set X-XSS-Protection "1; mode=block"
-    Header set X-Frame-Options "SAMEORIGIN"
-    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>
-
-# Disable Directory Listing & Server Signature
-Options -Indexes
-ServerSignature Off

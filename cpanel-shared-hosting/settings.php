@@ -10,6 +10,8 @@ require_once __DIR__ . '/includes/class-db.php';
 require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 
+SLEA_Datastore::register_public_error_handler();
+
 if (isset($_GET['maintenance_asset']) && $_GET['maintenance_asset'] === '1') {
     $img_file = __DIR__ . '/assets/images/maintenance_illustration.jpg';
     if (file_exists($img_file)) {
@@ -36,6 +38,7 @@ $footer_copyright = SLEA_Datastore::get_footer_copyright();
 $ad_settings = SLEA_Datastore::get_ad_settings();
 $site_identity = SLEA_Datastore::get_site_identity();
 $maintenance_settings = SLEA_Datastore::get_maintenance_settings();
+$debug_settings = SLEA_Datastore::get_debug_settings();
 $server_snapshots = method_exists('SLEA_Datastore', 'list_server_snapshots') ? SLEA_Datastore::list_server_snapshots() : [];
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : APP_NAME;
 $site_logo_url = !empty($site_identity['site_logo_url']) ? $site_identity['site_logo_url'] : '';
@@ -550,7 +553,7 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                                     </button>
                                 </div>
                                 <span class="text-[11px] text-[#5f6368] block">
-                                    Bookmark this URL. Anyone visiting admin or private pages without logging in will see a 404 Not Found page.
+                                    Bookmark this URL. When your admin account is already logged in, visiting this login page automatically redirects to <code class="font-mono text-[#0b57d0]">admin.php</code>.
                                 </span>
                             </div>
                         </div>
@@ -739,6 +742,104 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                                     <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>
                                 </svg>
                                 <span>Save Maintenance Settings</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🐞 Debug Mode & Public Error Handling Form -->
+                <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6" id="debug-mode-section">
+                    <div class="flex items-center justify-between pb-4 border-b border-[#f0f4f9]">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-base text-[#1f1f1f]">Debug Mode &amp; Public Error Handling</h3>
+                                <p class="text-xs text-[#5f6368]">
+                                    Control whether public pages hide actual technical errors with a safe message (Debug OFF) or display actual error diagnostics (Debug ON).
+                                </p>
+                            </div>
+                        </div>
+                        <span id="debugStatusBadge" class="text-[11px] font-semibold px-2.5 py-1 rounded-full <?= !empty($debug_settings['enabled']) ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' ?>">
+                            Debug Mode: <?= !empty($debug_settings['enabled']) ? 'ON (Showing Actual Errors)' : 'OFF (Safe Public Errors)' ?>
+                        </span>
+                    </div>
+
+                    <div class="space-y-5">
+                        <div class="flex items-center justify-between p-4 bg-[#f8fafd] rounded-2xl border border-[#e1e7f0]">
+                            <div>
+                                <span class="text-xs font-bold text-[#1f1f1f] block">Enable Debug Mode (Show Actual Error Messages on Public Pages)</span>
+                                <span class="text-[11px] text-[#5f6368]">
+                                    When <strong>OFF</strong>, public visitors see a friendly, non-technical error card without internal error details. When <strong>ON</strong>, the exact error message, HTTP status, and request path are displayed.
+                                </span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                                <input
+                                    type="checkbox"
+                                    id="debugEnabledInput"
+                                    <?= !empty($debug_settings['enabled']) ? 'checked' : '' ?>
+                                    onchange="onDebugToggleChange()"
+                                    class="sr-only peer"
+                                />
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Debug OFF Preview -->
+                            <div id="debugOffPreviewCard" class="p-4 rounded-2xl border transition-all space-y-2 <?= empty($debug_settings['enabled']) ? 'border-emerald-400 bg-emerald-50/40 ring-2 ring-emerald-500/20' : 'border-[#e0e4eb] bg-[#f8fafd] opacity-75' ?>">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                                        🛡️ When Debug Mode is OFF (Production Default)
+                                    </span>
+                                    <span id="debugOffActiveTag" class="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded bg-emerald-600 text-white <?= empty($debug_settings['enabled']) ? '' : 'hidden' ?>">
+                                        ACTIVE NOW
+                                    </span>
+                                </div>
+                                <div class="p-3.5 rounded-xl bg-white border border-[#e0e4eb] text-left space-y-1.5">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="text-xs font-extrabold text-[#111827]">Episode Link Not Found</div>
+                                        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-900 text-sky-400">404</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#5f6368]">
+                                        The episode link you followed does not exist, may have been moved or expired, or is currently set to private. Includes interactive Episode Slug Lookup &amp; site navigation.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Debug ON Preview -->
+                            <div id="debugOnPreviewCard" class="p-4 rounded-2xl border transition-all space-y-2 <?= !empty($debug_settings['enabled']) ? 'border-rose-400 bg-rose-50/40 ring-2 ring-rose-500/20' : 'border-[#e0e4eb] bg-[#f8fafd] opacity-75' ?>">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                                        🛠️ When Debug Mode is ON (Developer Diagnostics)
+                                    </span>
+                                    <span id="debugOnActiveTag" class="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded bg-rose-600 text-white <?= !empty($debug_settings['enabled']) ? '' : 'hidden' ?>">
+                                        ACTIVE NOW
+                                    </span>
+                                </div>
+                                <div class="p-3.5 rounded-xl bg-white border border-[#fecaca] text-left space-y-1">
+                                    <div class="text-xs font-extrabold text-rose-700">404 - Episode Page Not Found in Database</div>
+                                    <div class="text-[10px] font-mono text-rose-800 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                                        Actual Error [HTTP 404]: No episode page record matched slug in database.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-end pt-1">
+                            <button
+                                type="button"
+                                id="saveDebugBtn"
+                                onclick="saveDebugSettings()"
+                                class="px-5 py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                    <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>
+                                </svg>
+                                <span>Save Debug Mode Settings</span>
                             </button>
                         </div>
                     </div>
@@ -1564,6 +1665,84 @@ $brand_initials = substr($initials ?: 'MHQ', 0, 3);
                     }
                 } else if (!silent) {
                     showToast('Error saving maintenance settings: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                if (!silent) {
+                    showToast('Request failed: ' + e.message, 'error');
+                }
+            } finally {
+                if (btn && !silent) btn.disabled = false;
+            }
+        }
+
+        function updateDebugLivePreview() {
+            const enabledInput = document.getElementById('debugEnabledInput');
+            const badge = document.getElementById('debugStatusBadge');
+            const offCard = document.getElementById('debugOffPreviewCard');
+            const onCard = document.getElementById('debugOnPreviewCard');
+            const offTag = document.getElementById('debugOffActiveTag');
+            const onTag = document.getElementById('debugOnActiveTag');
+            if (!enabledInput || !badge) return;
+            const enabled = enabledInput.checked;
+            badge.innerText = 'Debug Mode: ' + (enabled ? 'ON (Showing Actual Errors)' : 'OFF (Safe Public Errors)');
+            badge.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-full ' + (
+                enabled
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            );
+            if (offCard && onCard) {
+                offCard.className = 'p-4 rounded-2xl border transition-all space-y-2 ' + (
+                    !enabled
+                        ? 'border-emerald-400 bg-emerald-50/40 ring-2 ring-emerald-500/20'
+                        : 'border-[#e0e4eb] bg-[#f8fafd] opacity-75'
+                );
+                onCard.className = 'p-4 rounded-2xl border transition-all space-y-2 ' + (
+                    enabled
+                        ? 'border-rose-400 bg-rose-50/40 ring-2 ring-rose-500/20'
+                        : 'border-[#e0e4eb] bg-[#f8fafd] opacity-75'
+                );
+            }
+            if (offTag) offTag.classList.toggle('hidden', enabled);
+            if (onTag) onTag.classList.toggle('hidden', !enabled);
+        }
+
+        function onDebugToggleChange() {
+            updateDebugLivePreview();
+            saveDebugSettings(false);
+        }
+
+        async function saveDebugSettings(silent = false) {
+            const btn = document.getElementById('saveDebugBtn');
+            const enabledInput = document.getElementById('debugEnabledInput');
+            if (!enabledInput) return;
+            if (btn && !silent) btn.disabled = true;
+
+            const payload = {
+                enabled: Boolean(enabledInput.checked)
+            };
+
+            try {
+                const res = await fetch(`api.php?action=save_debug_settings&enabled=${payload.enabled ? '1' : '0'}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ debug_settings: payload, enabled: payload.enabled })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (data.debug_settings && typeof data.debug_settings.enabled === 'boolean') {
+                        enabledInput.checked = data.debug_settings.enabled;
+                    }
+                    updateDebugLivePreview();
+                    if (!silent) {
+                        showToast(
+                            enabledInput.checked
+                                ? 'Debug Mode ON: Public pages will now show actual error messages.'
+                                : 'Debug Mode OFF: Public pages will hide technical errors and show safe messages.',
+                            enabledInput.checked ? 'info' : 'success'
+                        );
+                    }
+                } else if (!silent) {
+                    showToast('Error saving debug mode: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
                 if (!silent) {

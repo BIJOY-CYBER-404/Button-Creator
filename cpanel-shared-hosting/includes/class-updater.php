@@ -27,7 +27,7 @@ class SLEA_Updater {
         if (preg_match('/^(\d+)\.(\d+)\.0$/', $v, $m)) {
             return $m[1] . '.' . $m[2];
         }
-        return $v !== '' ? $v : '19.0';
+        return $v !== '' ? $v : '20.0';
     }
 
     public static function init() {
@@ -94,7 +94,7 @@ class SLEA_Updater {
     public static function check_for_updates($force = false) {
         self::init();
         $config = self::get_config();
-        $current_version = defined('APP_VERSION') ? self::normalize_version(APP_VERSION) : '19.0';
+        $current_version = defined('APP_VERSION') ? self::normalize_version(APP_VERSION) : '20.0';
 
         // Filter out non-http local file paths from saved manifest_url if present
         $saved_manifest = $config['manifest_url'] ?? '';
@@ -219,7 +219,7 @@ class SLEA_Updater {
 
         $update_id = 'update_' . date('Ymd_His') . '_' . substr(md5(uniqid()), 0, 4);
         $logger = new SLEA_UpdateLogger($update_id);
-        $current_version = defined('APP_VERSION') ? self::normalize_version(APP_VERSION) : '19.0';
+        $current_version = defined('APP_VERSION') ? self::normalize_version(APP_VERSION) : '20.0';
 
         $backup_manager = new SLEA_BackupManager($logger, $update_id);
         $rollback_manager = null;

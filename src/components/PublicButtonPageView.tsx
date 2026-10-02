@@ -37,6 +37,8 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   const [page, setPage] = useState<ButtonPage | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorTitle, setErrorTitle] = useState<string>("404 - Episode Page Not Found in Database");
+  const [errorHttpCode, setErrorHttpCode] = useState<number>(404);
   const [debugMode, setDebugMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("slea_debug_settings");
@@ -51,9 +53,18 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   const [qrModalOpen, setQrModalOpen] = useState<boolean>(false);
   const [mobileShareSheetOpen, setMobileShareSheetOpen] = useState<boolean>(false);
   const [adBlocked, setAdBlocked] = useState<boolean>(false);
+  const [jumpSlugInput, setJumpSlugInput] = useState<string>(() =>
+    slug && !slug.startsWith("__") ? slug : ""
+  );
+
+  useEffect(() => {
+    setJumpSlugInput(slug && !slug.startsWith("__") ? slug : "");
+  }, [slug]);
 
   const effectiveToken = propAdminToken !== undefined ? propAdminToken : localStorage.getItem("slea_admin_token") || "";
-  const isAdmin = propIsAdmin !== undefined ? propIsAdmin : Boolean(effectiveToken);
+  const isPreviewVisitor =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("preview_visitor") === "1";
+  const isAdmin = isPreviewVisitor ? false : propIsAdmin !== undefined ? propIsAdmin : Boolean(effectiveToken);
 
   const [siteIdentity, setSiteIdentity] = useState<SiteIdentity>(() => {
     const saved = localStorage.getItem("slea_site_identity");
@@ -131,6 +142,19 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   });
 
   useEffect(() => {
+    const syncDebugFromLocal = () => {
+      try {
+        const saved = localStorage.getItem("slea_debug_settings");
+        if (saved) {
+          setDebugMode(Boolean(JSON.parse(saved)?.enabled));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener("storage", syncDebugFromLocal);
+    window.addEventListener("debug_settings_updated", syncDebugFromLocal);
+
     fetch("/api/settings/public")
       .then((r) => r.json())
       .then((data) => {
@@ -153,6 +177,11 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         }
       })
       .catch(() => {});
+
+    return () => {
+      window.removeEventListener("storage", syncDebugFromLocal);
+      window.removeEventListener("debug_settings_updated", syncDebugFromLocal);
+    };
   }, []);
 
   const [adSettings] = useState<any>(() => {
@@ -246,6 +275,39 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     robotsMeta.setAttribute("content", "noindex, nofollow, noarchive, nosnippet, noimageindex");
 
     const fetchPage = async () => {
+      if (slug === "__login_restricted__") {
+        setPage(null);
+        setErrorTitle("403 - Login Page Restricted");
+        setErrorHttpCode(403);
+        setError(
+          "Actual Error [HTTP 403]: The login page cannot be accessed or viewed while an administrator account is already logged in."
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (slug === "__missing_slug__" || !slug.trim()) {
+        setPage(null);
+        setErrorTitle("404 - Route Not Found (Missing Episode Slug)");
+        setErrorHttpCode(404);
+        setError(
+          `Actual Error [HTTP 404]: Request to '${window.location.pathname || "/"}' failed because no episode page slug (?slug= or /p/{slug}) was provided in the request URL.`
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (slug === "__admin_restricted__") {
+        setPage(null);
+        setErrorTitle("403 / 404 - Protected Admin Route Restricted");
+        setErrorHttpCode(404);
+        setError(
+          `Actual Error [Unauthorized Access]: Access to protected admin endpoint '${window.location.pathname}' was denied because no active administrator session was found.`
+        );
+        setLoading(false);
+        return;
+      }
+
       if (legalSlug) {
         const legalTitles: Record<string, string> = {
           dmca: "DMCA Copyright Policy – Movie Hub HQ",
@@ -279,26 +341,49 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
           headers["Authorization"] = `Bearer ${effectiveToken}`;
           headers["x-admin-token"] = effectiveToken;
         }
-        const res = await fetch(`/api/public/pages/${encodeURIComponent(slug)}`, { headers });
+        const searchParams = new URLSearchParams(window.location.search);
+        const previewParam = searchParams.get("preview_visitor") === "1";
+        const querySuffix = previewParam ? "?preview_visitor=1" : "";
+        const res = await fetch(`/api/public/pages/${encodeURIComponent(slug)}${querySuffix}`, { headers });
         const data = await res.json();
+
+        if (typeof data.debug_mode === "boolean") {
+          setDebugMode(data.debug_mode);
+          localStorage.setItem("slea_debug_settings", JSON.stringify({ enabled: data.debug_mode }));
+        }
+
         if (res.ok && data.success && data.page) {
           const isPub = data.page.is_public === undefined ? true : Boolean(Number(data.page.is_public));
           if (!isPub && !isAdmin) {
+            setErrorTitle("403 / 404 - Private Episode Page Restricted");
+            setErrorHttpCode(404);
             setError(
-              `Actual Error [Private Page]: Episode page '${slug}' exists in datastore, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`
+              `Actual Error [Private Page]: Episode page '${slug}' (ID #${data.page.id}) exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`
             );
             setPage(null);
           } else {
             setPage(data.page);
           }
         } else {
+          const code = Number(data.http_code || res.status || 404);
+          setErrorHttpCode(code);
+          setErrorTitle(
+            data.error_title && data.debug_mode
+              ? data.error_title
+              : code === 500
+              ? "500 - Uncaught Application Exception"
+              : "404 - Episode Page Not Found in Database"
+          );
+          const altSlug = slug.startsWith("ep-") ? slug.substring(3) : `ep-${slug}`;
           setError(
-            data.error ||
-              `Actual Error [HTTP ${res.status || 404}]: No episode page record matched slug '${slug}' in the database.`
+            data.actual_error ||
+              `Actual Error [HTTP ${code}]: No episode page record matched slug '${slug}' (or fallback '${altSlug}') in the database.`
           );
           setPage(null);
         }
       } catch (err: any) {
+        setErrorHttpCode(500);
+        setErrorTitle("500 - Network / Runtime Error");
         setError(`Actual Error [Network/Runtime]: ${err.message || "Failed to load episode page."}`);
       } finally {
         setLoading(false);
@@ -656,41 +741,294 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     );
   }
 
-  const renderPublicErrorScreen = (actualTitle: string, actualErrorMsg: string) => {
-    const safeTitle = "Unable to Open Link";
+  const renderPublicErrorScreen = (actualTitle: string, actualErrorMsg: string, httpCode = 404) => {
+    const safeTitle = httpCode === 404 ? "Episode Link Not Found" : "Service Temporarily Unavailable";
     const safeDesc =
-      "We could not load this page right now. The link you followed may be unavailable, moved, or expired.";
+      httpCode === 404
+        ? "The episode link you followed does not exist, may have been moved or expired, or is currently set to private."
+        : "Something went wrong while loading this page. Please try again in a moment.";
     const displayTitle = debugMode ? actualTitle : safeTitle;
-    const displayMsg = debugMode ? actualErrorMsg : safeDesc;
+    const displayMsg = safeDesc;
+    const siteNameStr = siteIdentity.site_name || "Movie Hub HQ Drive";
+    const homeUrl = menuItems[0]?.url && menuItems[0].url !== "#" ? menuItems[0].url : "https://moviehubhq.com/";
+    const reqPath =
+      typeof window !== "undefined" ? window.location.pathname + window.location.search : `/p/${slug}`;
+    const statusKicker =
+      httpCode === 404 ? "HTTP 404 · GATEWAY ROUTE NOT FOUND" : `HTTP ${httpCode} · GATEWAY RUNTIME ERROR`;
+
+    const handleEpisodeJumpSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const raw = jumpSlugInput.trim();
+      if (!raw) return;
+      let targetSlug = raw;
+      const pMatch = raw.match(/\/(?:p|page)\/([a-zA-Z0-9_-]+)/i);
+      const qMatch = raw.match(/[?&](?:slug|p)=([a-zA-Z0-9_-]+)/i);
+      if (pMatch && pMatch[1]) {
+        targetSlug = pMatch[1];
+      } else if (qMatch && qMatch[1]) {
+        targetSlug = qMatch[1];
+      } else {
+        targetSlug = raw
+          .replace(/^https?:\/\/[^/]+\/?/i, "")
+          .replace(/^\/+|\/+$/g, "")
+          .replace(/[^a-zA-Z0-9_-]/g, "");
+      }
+      if (!targetSlug) return;
+      if (onNavigateSlug) {
+        onNavigateSlug(targetSlug);
+      } else {
+        window.location.href = `/p/${encodeURIComponent(targetSlug)}`;
+      }
+    };
+
+    const navigateLegal = (e: React.MouseEvent, targetLegal: string) => {
+      if (onNavigateSlug) {
+        e.preventDefault();
+        onNavigateSlug(targetLegal);
+      }
+    };
 
     return (
-      <div className="min-h-screen bg-[#f8fafd] text-[#1f1f1f] text-center py-[60px] px-[20px] flex items-center justify-center">
-        <div className="max-w-[480px] w-full mx-auto bg-white p-8 rounded-[24px] border border-[#e0e4eb] shadow-xs">
-          <div className="w-12 h-12 rounded-2xl bg-[#fce8e6] text-[#d93025] flex items-center justify-center mx-auto mb-3.5 font-extrabold text-xl">
-            !
-          </div>
-          <h1 className="text-[#111827] text-xl font-extrabold mt-0 mb-2">{displayTitle}</h1>
-          <p className="text-[13px] text-[#5f6368] m-0 leading-relaxed">{displayMsg}</p>
-
-          {debugMode && (
-            <div className="mt-4 text-left bg-rose-50 border border-rose-200 rounded-2xl p-3.5 font-mono text-[11px] text-rose-900 leading-relaxed space-y-1">
-              <div className="font-bold uppercase tracking-wider text-rose-700 flex items-center justify-between">
-                <span>🛠️ Debug Mode: ON (Actual Error Details)</span>
-                <span className="bg-rose-100 px-1.5 py-0.5 rounded">HTTP 404</span>
-              </div>
-              <div>
-                <strong>Actual Error:</strong> {actualErrorMsg}
-              </div>
-              <div className="text-rose-800">
-                <strong>Request URI:</strong>{" "}
-                {typeof window !== "undefined" ? window.location.pathname + window.location.search : `/p/${slug}`}
-              </div>
-              <div className="text-rose-800">
-                <strong>Timestamp:</strong> {new Date().toISOString()}
+      <div className="min-h-screen flex flex-col bg-[#f4f6fb] text-[#0f172a] font-sans antialiased">
+        {/* Admin Session Bar (Only shown when logged in as admin) */}
+        {isAdmin && onBackToAdmin && (
+          <div className="bg-[#0f172a] text-[#f8fafc] px-4 py-2 text-xs border-b border-[#1e293b]">
+            <div className="max-w-[980px] mx-auto flex items-center justify-between gap-3 flex-wrap">
+              <span className="font-mono text-[11px] text-[#94a3b8]">
+                Admin Session Active · HTTP {httpCode} Response
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={onBackToAdmin}
+                  className="text-[#f8fafc] bg-[#1e293b] hover:bg-[#334155] px-2.5 py-1 rounded-md border border-[#334155] font-semibold cursor-pointer transition-colors"
+                >
+                  ← Admin Dashboard
+                </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Site Header */}
+        <header className="bg-white border-b border-[#e2e8f0] sticky top-0 z-30">
+          <div className="max-w-[980px] mx-auto px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+            <a href={homeUrl} className="flex items-center gap-2.5 text-[#0f172a] font-extrabold text-[15px] no-underline">
+              <div className="w-9 h-9 rounded-[10px] bg-[#0f172a] text-white flex items-center justify-center text-xs font-extrabold overflow-hidden shrink-0">
+                {siteIdentity.site_logo_url ? (
+                  <img
+                    src={siteIdentity.site_logo_url}
+                    alt={siteNameStr}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <span>{(siteIdentity.site_logo_text || "MHQ").slice(0, 3)}</span>
+                )}
+              </div>
+              <span>{siteNameStr}</span>
+            </a>
+            <nav className="flex items-center gap-4 flex-wrap">
+              {menuItems.map((item, idx) => (
+                <a
+                  key={idx}
+                  href={item.url || "#"}
+                  target={item.new_tab || item.target_blank ? "_blank" : undefined}
+                  rel={item.new_tab || item.target_blank ? "noopener noreferrer" : undefined}
+                  className="text-[#475569] hover:text-[#0b57d0] text-[13px] font-semibold transition-colors"
+                >
+                  {item.title}
+                </a>
+              ))}
+            </nav>
+          </div>
+        </header>
+
+        {/* Main 404 Content Area */}
+        <main className="flex-1 flex items-center justify-center px-5 py-9">
+          <div className="max-w-[760px] w-full bg-white border border-[#dce3f0] rounded-[20px] overflow-hidden shadow-[0_12px_32px_-12px_rgba(15,23,42,0.08)]">
+            {/* Dark Hero Banner */}
+            <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] text-[#f8fafc] px-6 sm:px-8 py-7 flex items-center justify-between gap-5 flex-wrap border-b border-[#1e293b]">
+              <div className="flex-1 min-w-[240px]">
+                <div
+                  className={`font-mono text-[11px] font-bold tracking-wider mb-2 flex items-center gap-2 ${
+                    httpCode === 404 ? "text-[#38bdf8]" : "text-[#fb7185]"
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full inline-block ${
+                      httpCode === 404 ? "bg-[#38bdf8]" : "bg-[#fb7185]"
+                    }`}
+                  />
+                  <span>{statusKicker}</span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight leading-snug mb-1.5">
+                  {displayTitle}
+                </h1>
+                <div className="font-mono text-xs text-[#94a3b8] break-all">
+                  Requested Path: {reqPath}
+                </div>
+              </div>
+              <div className="font-mono text-4xl sm:text-[54px] font-extrabold leading-none tracking-tighter text-[#38bdf8] bg-[#38bdf8]/10 border border-[#38bdf8]/25 px-5 py-3.5 rounded-2xl select-none">
+                {httpCode}
+              </div>
+            </div>
+
+            {/* Functional Body Area */}
+            <div className="p-6 sm:p-8">
+              <p className="text-sm leading-relaxed text-[#475569] mb-6">{displayMsg}</p>
+
+              {/* Direct Episode Lookup Form */}
+              <form
+                onSubmit={handleEpisodeJumpSubmit}
+                className="bg-[#f8fafc] border border-[#e2e8f0] rounded-[14px] p-4 sm:p-5 mb-6"
+              >
+                <label
+                  htmlFor="epCodeInputReact"
+                  className="block text-xs font-bold text-[#1e293b] mb-2"
+                >
+                  Open Episode Page by Slug or Link
+                </label>
+                <div className="flex gap-2.5 flex-wrap">
+                  <input
+                    id="epCodeInputReact"
+                    type="text"
+                    value={jumpSlugInput}
+                    onChange={(e) => setJumpSlugInput(e.target.value)}
+                    placeholder="Enter episode slug (e.g. flp-120926) or paste /p/ link..."
+                    autoComplete="off"
+                    className="flex-1 min-w-[200px] px-3.5 py-2.5 rounded-[10px] border border-[#cbd5e1] bg-white font-mono text-[13px] text-[#0f172a] outline-none focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 transition-all"
+                  />
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-[10px] bg-[#0b57d0] hover:bg-[#0842a0] text-white text-[13px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+                  >
+                    Open Episode →
+                  </button>
+                </div>
+                <div className="text-[11px] text-[#64748b] mt-2">
+                  If you have a valid episode code or mistyped the URL, enter it above to jump directly to the download page.
+                </div>
+              </form>
+
+              {/* Navigation & Recovery Actions */}
+              <div className="flex items-center gap-2.5 flex-wrap pb-5 border-b border-[#f1f5f9]">
+                <a
+                  href={homeUrl}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] bg-[#0f172a] hover:bg-[#1e293b] text-white text-[13px] font-bold transition-colors"
+                >
+                  <span>Return to Main Website</span>
+                  <span aria-hidden="true">↗</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.history.length > 1) {
+                      window.history.back();
+                    } else {
+                      window.location.href = homeUrl;
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[10px] bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#334155] hover:text-[#0f172a] border border-[#e2e8f0] text-[13px] font-semibold cursor-pointer transition-colors"
+                >
+                  <span>← Go Back</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[10px] bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#334155] hover:text-[#0f172a] border border-[#e2e8f0] text-[13px] font-semibold cursor-pointer transition-colors"
+                >
+                  <span>↻ Try Again</span>
+                </button>
+              </div>
+
+              {/* Browse Website Sections */}
+              <div className="mt-5">
+                <div className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider mb-2.5">
+                  Browse Website Sections
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {menuItems.map((item, idx) => (
+                    <a
+                      key={idx}
+                      href={item.url || "#"}
+                      target={item.new_tab || item.target_blank ? "_blank" : undefined}
+                      rel={item.new_tab || item.target_blank ? "noopener noreferrer" : undefined}
+                      className="flex items-center justify-between px-3.5 py-2.5 rounded-[10px] bg-[#f8fafc] border border-[#e2e8f0] hover:border-[#0b57d0] hover:bg-[#f0f6ff] text-[#1e293b] hover:text-[#0b57d0] text-xs font-semibold transition-all"
+                    >
+                      <span>{item.title}</span>
+                      <span aria-hidden="true">→</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+
+              {/* Developer Diagnostics (Debug Mode ON) */}
+              {debugMode && (
+                <div className="mt-6 bg-[#0f172a] border border-[#334155] rounded-[14px] p-4 text-[#e2e8f0] font-mono text-[11px] leading-relaxed text-left space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap font-bold text-[#fda4af] uppercase tracking-wider">
+                    <span>Developer Diagnostics (Debug Mode: ON)</span>
+                    <span className="bg-[#ef4444] text-white px-2 py-0.5 rounded text-[10px]">
+                      HTTP {httpCode}
+                    </span>
+                  </div>
+                  <div className="bg-[#1e293b] border border-[#475569] rounded-lg px-3 py-2.5 text-[#fecdd3] break-words">
+                    <strong>Actual Error:</strong> {actualErrorMsg}
+                  </div>
+                  <div className="text-[#94a3b8] space-y-1">
+                    <div>
+                      <strong className="text-[#cbd5e1]">Request:</strong> GET {reqPath}
+                    </div>
+                    <div>
+                      <strong className="text-[#cbd5e1]">Handler:</strong> view.php ·{" "}
+                      <strong className="text-[#cbd5e1]">Debug Mode:</strong> Enabled
+                    </div>
+                    <div>
+                      <strong className="text-[#cbd5e1]">Timestamp:</strong> {new Date().toISOString()}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+
+        {/* Site Footer */}
+        <footer className="p-5 text-center text-xs text-[#64748b] border-t border-[#e2e8f0] bg-white">
+          <div className="flex items-center justify-center gap-3.5 flex-wrap mb-2">
+            <a
+              href="/dmca"
+              onClick={(e) => navigateLegal(e, "dmca")}
+              className="text-[#475569] hover:text-[#0b57d0] font-medium"
+            >
+              DMCA
+            </a>
+            <span>·</span>
+            <a
+              href="/disclaimer"
+              onClick={(e) => navigateLegal(e, "disclaimer")}
+              className="text-[#475569] hover:text-[#0b57d0] font-medium"
+            >
+              Disclaimer
+            </a>
+            <span>·</span>
+            <a
+              href="/about-us"
+              onClick={(e) => navigateLegal(e, "about-us")}
+              className="text-[#475569] hover:text-[#0b57d0] font-medium"
+            >
+              About Us
+            </a>
+            <span>·</span>
+            <a
+              href="/privacy-policy"
+              onClick={(e) => navigateLegal(e, "privacy-policy")}
+              className="text-[#475569] hover:text-[#0b57d0] font-medium"
+            >
+              Privacy Policy
+            </a>
+          </div>
+          <div dangerouslySetInnerHTML={{ __html: footerText }} />
+        </footer>
       </div>
     );
   };
@@ -698,8 +1036,9 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   // Error screen controlled by Debug Mode (Off = generic safe message, On = actual error reason)
   if (error || !page) {
     return renderPublicErrorScreen(
-      "404 - Episode Page Not Found in Database",
-      error || `Actual Error [HTTP 404]: No episode page record matched slug '${slug}' in the database.`
+      errorTitle,
+      error || `Actual Error [HTTP 404]: No episode page record matched slug '${slug}' in the database.`,
+      errorHttpCode
     );
   }
 
@@ -707,7 +1046,8 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   if (!isPublic && !isAdmin) {
     return renderPublicErrorScreen(
       "403 / 404 - Private Episode Page Restricted",
-      `Actual Error [Private Page]: Episode page '${slug}' exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`
+      `Actual Error [Private Page]: Episode page '${slug}' exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`,
+      404
     );
   }
 
@@ -1439,8 +1779,25 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         {/* Episode Buttons List (Server Icon, Episode 01/02.., Watch Now Button - Matches cpanel-package/view.php lines 660-767) */}
         <div className="space-y-2.5">
           {!page.buttons || page.buttons.length === 0 ? (
-            <div className="bg-white border border-[#e0e4eb] rounded-2xl p-8 text-center text-xs text-[#747775]">
-              No episode download buttons currently available for this title.
+            <div className="bg-white border border-[#e0e4eb] rounded-2xl p-8 text-center space-y-3">
+              <div className="text-xs text-[#747775]">
+                No episode download buttons currently available for this title.
+              </div>
+              {debugMode && (
+                <div className="text-left bg-rose-50 border border-rose-200 rounded-2xl p-4 font-mono text-[11px] text-rose-900 leading-relaxed space-y-1 max-w-xl mx-auto">
+                  <div className="font-bold uppercase tracking-wider text-rose-700 flex items-center justify-between">
+                    <span>🛠️ Debug Mode: ON (Actual Error Details)</span>
+                    <span className="bg-rose-100 px-2 py-0.5 rounded border border-rose-200">EMPTY BUTTONS</span>
+                  </div>
+                  <div>
+                    <strong>Actual Error:</strong> Actual Error [Empty Episode Buttons]: Episode page '{slug}' (ID #{page.id}) loaded from datastore, but <code>buttons</code> array contains 0 valid episode links.
+                  </div>
+                  <div className="text-rose-800">
+                    <strong>Source URL:</strong> {page.source_url || "None"} • <strong>Resolved URL:</strong>{" "}
+                    {page.resolved_url || "None"}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             page.buttons.map((btn, idx) => {

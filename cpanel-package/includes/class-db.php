@@ -75,6 +75,14 @@ class SLEA_DB {
             return self::$pdo;
         } catch (PDOException $ex) {
             error_log('Database connection error: ' . $ex->getMessage());
+            if (class_exists('SLEA_Datastore') && method_exists('SLEA_Datastore', 'render_public_error')) {
+                SLEA_Datastore::render_public_error(
+                    '503 - Database Connection Error',
+                    'Actual Error [Database PDOException]: ' . $ex->getMessage(),
+                    503,
+                    'Service temporarily unavailable. Please try again in a moment.'
+                );
+            }
             http_response_code(503);
             die('Service temporarily unavailable.');
         }

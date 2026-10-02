@@ -12,6 +12,8 @@ require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 require_once __DIR__ . '/includes/class-updater.php';
 
+SLEA_Datastore::register_public_error_handler();
+
 // Protect with Admin Auth
 SLEA_Auth::require_admin();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');

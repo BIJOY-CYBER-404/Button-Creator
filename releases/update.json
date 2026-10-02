@@ -1,19 +1,15 @@
 {
-  "version": "20.0",
+  "version": "23.0",
   "release_date": "2026-10-02",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "package_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "065b0162009589d0e6da9058363b187533b15e2e49fe72fef50c7eb2b669104e",
+  "checksum": "cf25da669119ecb6cfc6e75b84ffa1a715b31395eb2b518fb49aca5116857ebf",
+  "sha256": "cf25da669119ecb6cfc6e75b84ffa1a715b31395eb2b518fb49aca5116857ebf",
   "minimum_php": "7.4",
   "release_notes": [
-    "Added Official About Us Page (/about-us) to Horizontal Footer Links & humanized all legal pages (DMCA, Disclaimer, About Us, Privacy Policy)",
-    "Added Debug Mode ON/OFF toggle in Admin Settings (/settings) with intelligent Public Error Handling System",
-    "100% Real Active Sessions & Avg Visit Duration Telemetry with live client-side dwell duration heartbeats"
-  ],
-  "changelog": [
-    "Added Official About Us Page (/about-us) to Horizontal Footer Links & humanized all legal pages (DMCA, Disclaimer, About Us, Privacy Policy)",
-    "Added Debug Mode ON/OFF toggle in Admin Settings (/settings) with intelligent Public Error Handling System",
-    "100% Real Active Sessions & Avg Visit Duration Telemetry with live client-side dwell duration heartbeats"
-  ],
-  "sha256": "065b0162009589d0e6da9058363b187533b15e2e49fe72fef50c7eb2b669104e"
+    "Removed Built-in Live Error Test Buttons from Settings (cPanel & React) and removed Quick Samples from the Generator.",
+    "Redesigned the 404 Gateway Route Not Found page with a dark slate header monument, full site navigation, working Direct Episode Slug/Link Resolver, and recovery actions.",
+    "Comprehensive cPanel Security Hardening: Persistent IP + Session brute-force login rate limiting, User-Agent session fingerprinting, idle timeout, and live user verification.",
+    "Cryptographic CSRF token auto-injection and enforcement across all state-changing Admin API actions, setup.php, login.php, and logout.php.",
+    "Added strict .htaccess and index.php guards to data/, backups/, temp/, includes/, and database/ directories, plus per-hop SSRF redirect validation and anti-cache headers for private pages."
+  ]
 }

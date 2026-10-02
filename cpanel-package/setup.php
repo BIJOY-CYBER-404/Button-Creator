@@ -11,6 +11,8 @@ require_once __DIR__ . '/includes/class-db.php';
 require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 
+SLEA_Datastore::register_public_error_handler();
+
 $site_identity = SLEA_Datastore::get_site_identity();
 $site_name = !empty($site_identity['site_name']) ? $site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive');
 header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
@@ -22,22 +24,30 @@ header('Pragma: no-cache');
 header('Expires: 0');
 @header_remove('X-Powered-By');
 
+SLEA_Auth::init_session();
 $has_users = SLEA_Auth::has_users();
 $error = '';
 
 // If admin already exists, return 404 Not Found (no links to login or admin pages)
 if ($has_users) {
-    SLEA_Auth::render_404();
+    SLEA_Auth::render_404(
+        '403 / 404 - One-Time Setup Locked',
+        'Actual Error [Setup Locked]: One-time setup (setup.php) is permanently locked because an administrator account already exists in the database.'
+    );
 }
 
 // Handle Form Submission for first admin
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $posted_csrf  = (string)($_POST['_setup_csrf'] ?? '');
+    $session_csrf = (string)($_SESSION['slea_setup_csrf'] ?? '');
     $username = trim($_POST['username'] ?? '');
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm  = $_POST['confirm_password'] ?? '';
 
-    if (empty($username) || empty($email) || empty($password)) {
+    if ($session_csrf === '' || $posted_csrf === '' || !hash_equals($session_csrf, $posted_csrf)) {
+        $error = 'Invalid or expired setup session token. Please reload and try again.';
+    } elseif (empty($username) || empty($email) || empty($password)) {
         $error = 'All fields are required.';
     } elseif ($password !== $confirm) {
         $error = 'Passwords do not match.';
@@ -46,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $result = SLEA_Auth::create_first_admin($username, $email, $password);
         if ($result['success']) {
+            unset($_SESSION['slea_setup_csrf']);
             header('Location: admin.php?installed=1');
             exit;
         } else {
@@ -53,6 +64,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+if (empty($_SESSION['slea_setup_csrf'])) {
+    $_SESSION['slea_setup_csrf'] = bin2hex(random_bytes(32));
+}
+$setup_csrf = $_SESSION['slea_setup_csrf'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -116,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
 
                     <form method="POST" action="setup.php" class="space-y-4">
+                        <input type="hidden" name="_setup_csrf" value="<?= htmlspecialchars($setup_csrf, ENT_QUOTES, 'UTF-8') ?>">
                         <div class="space-y-1">
                             <label class="text-xs font-semibold text-[#444746] block">Admin Username</label>
                             <input type="text" name="username" required value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"

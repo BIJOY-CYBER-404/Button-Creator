@@ -12,6 +12,8 @@ require_once __DIR__ . '/includes/class-resolver.php';
 require_once __DIR__ . '/includes/class-extractor.php';
 require_once __DIR__ . '/includes/class-updater.php';
 
+SLEA_Datastore::register_public_error_handler();
+
 // Protect this admin page - redirects to private login.php if not authenticated
 SLEA_Auth::require_admin();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -231,26 +233,6 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                     <span class="sm:hidden">Generate</span>
                                 </button>
                             </div>
-                        </div>
-
-                        <!-- Quick Samples -->
-                        <div class="flex items-center gap-1.5 flex-wrap pt-0.5 text-xs">
-                            <span class="text-[#747775] font-medium text-[11px]">Quick Samples:</span>
-                            <button type="button" onclick="setSample('https://shrt.sohojgyan.com/Ij03ndJ')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Shortlink 1 (Ij03ndJ)
-                            </button>
-                            <button type="button" onclick="setSample('https://safe.sohojgyan.com/Oh28Si')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Shortlink 2 (Oh28Si)
-                            </button>
-                            <button type="button" onclick="setSample('https://mydverse.com/2026/07/the-princess-and-the-werewolf-chinese-hindi/')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Post URL (Princess &amp; Werewolf)
-                            </button>
-                            <button type="button" onclick="setSample('https://mydverse.com/2026/09/fanletter-please-korean-drama-in-hindi/')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Post URL (Fanletter Please)
-                            </button>
-                            <button type="button" onclick="setSample('https://mydverse02.blogspot.com/p/flp-120926.html')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Target (flp-120926)
-                            </button>
                         </div>
 
                         <!-- Optional Page Customization Accordion -->
@@ -474,11 +456,6 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                     setTimeout(() => el.remove(), 250);
                 }
             }, 3500);
-        }
-
-        function setSample(url) {
-            document.getElementById('shortenUrl').value = url;
-            handleGenerate(null, url);
         }
 
         async function handleGenerate(e, overrideUrl) {

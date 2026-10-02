@@ -13,29 +13,37 @@ require_once __DIR__ . '/includes/class-extractor.php';
 require_once __DIR__ . '/includes/class-updater.php';
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('X-Robots-Tag: noindex, nofollow');
 
-$action = isset($_GET['action']) ? trim($_GET['action']) : '';
+$action = isset($_GET['action']) ? trim((string)$_GET['action']) : '';
 $raw_input = file_get_contents('php://input');
-$data = json_decode($raw_input, true) ?: [];
+$data = is_string($raw_input) && $raw_input !== '' ? (json_decode($raw_input, true) ?: []) : [];
 
-// Same-Origin CSRF Verification for state-changing POST requests
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $origin_hdr = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? '';
-    $req_host = strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? ''));
-    if ($origin_hdr !== '' && $req_host !== '') {
-        $origin_host = strtolower((string)parse_url($origin_hdr, PHP_URL_HOST));
-        if ($origin_host !== '' && $origin_host !== $req_host) {
-            http_response_code(403);
-            echo json_encode(['success' => false, 'error' => 'Cross-origin request forbidden.']);
-            exit;
-        }
+// Same-Origin Verification for all requests carrying Origin or Referer
+$origin_hdr = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? '';
+$req_host = strtolower(preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? '')));
+if ($origin_hdr !== '' && $origin_hdr !== 'null' && $req_host !== '') {
+    $origin_host = strtolower((string)parse_url($origin_hdr, PHP_URL_HOST));
+    if ($origin_host !== '' && $origin_host !== $req_host) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Cross-origin request forbidden.']);
+        exit;
     }
 }
 
-// Public Real-Time Visitor Dwell Duration Heartbeat
+// Public Real-Time Visitor Dwell Duration Heartbeat (POST only)
 if ($action === 'telemetry_heartbeat') {
-    $hb_slug = trim((string)($data['slug'] ?? ($_GET['slug'] ?? '')));
-    $hb_dur  = isset($data['duration_sec']) ? (int)$data['duration_sec'] : (isset($_GET['duration_sec']) ? (int)$_GET['duration_sec'] : 1);
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Method Not Allowed']);
+        exit;
+    }
+    $hb_slug = preg_replace('/[^a-zA-Z0-9_-]/', '', substr(trim((string)($data['slug'] ?? '')), 0, 64));
+    $hb_dur  = isset($data['duration_sec']) ? max(1, min(7200, (int)$data['duration_sec'])) : 1;
     $updated_dur = SLEA_Datastore::update_visit_duration($hb_slug, $hb_dur);
     $is_admin = SLEA_Auth::is_logged_in();
     echo json_encode([
@@ -46,8 +54,40 @@ if ($action === 'telemetry_heartbeat') {
     exit;
 }
 
-// Strict Admin Authorization Check
-SLEA_Auth::require_admin();
+// Strict Admin Authorization Check (returns stealth 404 JSON to unauthenticated callers)
+SLEA_Auth::require_admin(true);
+
+// Read-only actions vs State-changing actions
+$read_only_actions = [
+    'list_pages',
+    'get_site_identity',
+    'get_login_slug',
+    'get_ad_settings',
+    'get_maintenance_settings',
+    'get_share_settings',
+    'get_debug_settings',
+    'check_update',
+    'get_update_config',
+    'get_update_history',
+    'export_backup',
+    'list_snapshots',
+    'download_snapshot',
+    'analytics_telemetry',
+    'health'
+];
+
+if (!in_array($action, $read_only_actions, true)) {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Method Not Allowed: POST required for state-changing actions.']);
+        exit;
+    }
+    if (!SLEA_Auth::verify_request_csrf($data)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'CSRF security verification failed. Please reload the page and try again.']);
+        exit;
+    }
+}
 
 // Ensure script execution time doesn't exceed 40 seconds on shared hosting
 @set_time_limit(40);
@@ -344,8 +384,16 @@ try {
             break;
 
         case 'save_debug_settings':
-            $d_data = $data['debug_settings'] ?? $data ?? [];
-            if (!is_array($d_data)) throw new Exception('Invalid debug settings format.');
+            $d_data = [];
+            if (isset($data['debug_settings']) && is_array($data['debug_settings'])) {
+                $d_data = $data['debug_settings'];
+            } elseif (is_array($data) && array_key_exists('enabled', $data)) {
+                $d_data = ['enabled' => $data['enabled']];
+            } elseif (isset($_POST['enabled'])) {
+                $d_data = ['enabled' => $_POST['enabled']];
+            } elseif (isset($_GET['enabled'])) {
+                $d_data = ['enabled' => $_GET['enabled']];
+            }
             $saved = SLEA_Datastore::save_debug_settings($d_data);
             echo json_encode(['success' => true, 'debug_settings' => $saved]);
             break;
@@ -536,7 +584,7 @@ try {
             $logger = new SLEA_UpdateLogger('health_check');
             $checker = new SLEA_HealthChecker($logger);
             $ok = $checker->verify_health();
-            echo json_encode(['success' => $ok, 'version' => defined('APP_VERSION') ? APP_VERSION : 'v-19.0', 'time' => date('Y-m-d H:i:s')]);
+            echo json_encode(['success' => $ok, 'version' => defined('APP_VERSION') ? APP_VERSION : 'v-20.0', 'time' => date('Y-m-d H:i:s')]);
             break;
 
         default:

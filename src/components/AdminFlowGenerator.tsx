@@ -38,14 +38,6 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [createdResult, setCreatedResult] = useState<CreatePageResponse["data"] | null>(null);
 
-  const sampleShortlinks = [
-    { label: "Shortlink 1 (Ij03ndJ)", url: "https://shrt.sohojgyan.com/Ij03ndJ" },
-    { label: "Shortlink 2 (Oh28Si)", url: "https://safe.sohojgyan.com/Oh28Si" },
-    { label: "Post URL (Princess & Werewolf)", url: "https://mydverse.com/2026/07/the-princess-and-the-werewolf-chinese-hindi/" },
-    { label: "Post URL (Fanletter Please)", url: "https://mydverse.com/2026/09/fanletter-please-korean-drama-in-hindi/" },
-    { label: "Target (flp-120926)", url: "https://mydverse02.blogspot.com/p/flp-120926.html" },
-  ];
-
   const isPostUrlInput = (u: string) => {
     const trimmed = u.trim().toLowerCase();
     if (!trimmed) return false;
@@ -205,24 +197,6 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
                 )}
               </button>
             </div>
-          </div>
-
-          {/* Quick Samples */}
-          <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-xs">
-            <span className="text-[#747775] font-medium text-[11px]">Quick Samples:</span>
-            {sampleShortlinks.map((s, idx) => (
-              <button
-                key={`samp-${idx}`}
-                type="button"
-                onClick={() => {
-                  setShortenUrl(s.url);
-                  handleGenerate(undefined, s.url);
-                }}
-                className="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]"
-              >
-                {s.label}
-              </button>
-            ))}
           </div>
 
           {/* Optional Page Customization Accordion */}

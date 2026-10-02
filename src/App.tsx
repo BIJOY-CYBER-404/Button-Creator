@@ -72,17 +72,48 @@ export default function App() {
     }
   }, [adminToken, isAdmin, currentTab]);
 
-  // Detect URL slug for public viewing (/p/{slug} or ?slug={slug})
+  // Detect URL slug for public viewing (/p/{slug} or ?slug={slug}) or block login page when already logged in
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const qSlug = params.get("slug") || params.get("p");
+    const configuredLoginSlug = (localStorage.getItem("slea_login_slug") || "login")
+      .trim()
+      .toLowerCase()
+      .replace(/^[/\\]+|[/\\]+$/g, "")
+      .replace(/\.php$/i, "");
+
     if (qSlug) {
+      const qClean = qSlug.trim().toLowerCase().replace(/\.php$/i, "");
+      if (qClean === "login" || qClean === configuredLoginSlug) {
+        if (isAdmin) {
+          setActiveSlugView(null);
+          setCurrentTab("admin_flow");
+          if (window.history.replaceState) {
+            window.history.replaceState({}, "", "/admin.php");
+          }
+          return;
+        }
+      }
       setActiveSlugView(qSlug);
       return;
     }
 
     const path = window.location.pathname;
     const cleanPath = path.replace(/\/$/, "").toLowerCase();
+    const pathSlug = cleanPath.replace(/^\/+/, "").replace(/\.php$/i, "");
+
+    // When admin account is logged in, login page cannot be viewed and redirects directly to admin.php
+    if (pathSlug === "login" || (configuredLoginSlug && pathSlug === configuredLoginSlug)) {
+      if (isAdmin) {
+        setActiveSlugView(null);
+        setCurrentTab("admin_flow");
+        if (window.history.replaceState) {
+          window.history.replaceState({}, "", "/admin.php");
+        }
+        return;
+      }
+    }
+
     if (["/dmca", "/disclaimer", "/about-us", "/about", "/privacy-policy", "/privacy"].includes(cleanPath)) {
       const legalSlug =
         cleanPath === "/privacy"
@@ -100,7 +131,7 @@ export default function App() {
         setActiveSlugView(slugFromPath);
       }
     }
-  }, []);
+  }, [isAdmin]);
 
   const addToast = (text: string, type: "success" | "error" | "info" = "info") => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -255,7 +286,12 @@ export default function App() {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <SettingsManager onNotify={addToast} />
+                  <SettingsManager
+                    onNotify={addToast}
+                    onPreviewPage={(slug: string) => {
+                      setActiveSlugView(slug);
+                    }}
+                  />
                 </motion.div>
               )}
 

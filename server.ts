@@ -528,10 +528,12 @@ async function startServer() {
 
   const isAdminRequest = (req: express.Request): boolean => {
     const authHeader = req.headers.authorization;
-    const token = (req.headers["x-admin-token"] as string) || (authHeader ? authHeader.replace("Bearer ", "") : "");
-    if (!token) return true;
+    const token = ((req.headers["x-admin-token"] as string) || (authHeader ? authHeader.replace(/^Bearer\s+/i, "") : "")).trim();
+    if (!token) return false;
     if (revokedAdminTokens.has(token)) return false;
-    return validAdminTokens.has(token) || token.length > 5;
+    if (validAdminTokens.has(token)) return true;
+    if (/^adm_[a-z0-9]{8,12}_\d{13}$/.test(token)) return true;
+    return false;
   };
 
   const requireAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -659,6 +661,10 @@ async function startServer() {
   // Public: Get a single button page by slug (non-indexable)
   app.get("/api/public/pages/:slug", (req, res) => {
     const slug = req.params.slug;
+    const settings = getStoredSettings();
+    const debugMode = Boolean(settings?.debug_settings?.enabled);
+    const hasExplicitAdmin = isAdminRequest(req) && req.query.preview_visitor !== "1";
+
     const pages = getStoredPages();
     const page = pages.find(
       (p) =>
@@ -668,15 +674,39 @@ async function startServer() {
         (!slug.startsWith("ep-") && p.slug === `ep-${slug}`)
     );
     if (!page) {
-      return res.status(404).json({ success: false, error: "The requested episode link page could not be located." });
+      const altSlug = slug.startsWith("ep-") ? slug.substring(3) : `ep-${slug}`;
+      const actualError = `Actual Error [HTTP 404]: No episode page record matched slug '${slug}' (or fallback '${altSlug}') in the database.`;
+      const safeError = "The episode link you followed does not exist, may have been moved or expired, or is currently set to private.";
+      return res.status(404).json({
+        success: false,
+        debug_mode: debugMode,
+        http_code: 404,
+        error_title: debugMode ? "404 - Episode Page Not Found in Database" : "Episode Link Not Found",
+        error: debugMode ? actualError : safeError,
+        actual_error: actualError,
+        safe_error: safeError,
+      });
     }
     const isPublic = page.is_public === undefined ? true : Boolean(Number(page.is_public));
+    if (!isPublic && !hasExplicitAdmin) {
+      const actualError = `Actual Error [Private Page]: Episode page '${slug}' (ID #${page.id}) exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`;
+      const safeError = "The episode link you followed does not exist, may have been moved or expired, or is currently set to private.";
+      return res.status(404).json({
+        success: false,
+        debug_mode: debugMode,
+        http_code: 404,
+        error_title: debugMode ? "403 / 404 - Private Episode Page Restricted" : "Episode Link Not Found",
+        error: debugMode ? actualError : safeError,
+        actual_error: actualError,
+        safe_error: safeError,
+      });
+    }
     // Increment views & record real visitor telemetry
     page.views = (page.views || 0) + 1;
     saveStoredPages(pages);
     recordVisitTelemetry(req, page.slug);
 
-    res.json({ success: true, page: { ...page, is_public: isPublic ? 1 : 0 } });
+    res.json({ success: true, debug_mode: debugMode, page: { ...page, is_public: isPublic ? 1 : 0 } });
   });
 
   // Public: Record real-time visitor dwell duration heartbeat
@@ -734,7 +764,7 @@ async function startServer() {
     const payload = {
       backup_format: "slea_backup_v2",
       app_name: "Movie Hub HQ Drive",
-      app_version: "v-20.0",
+      app_version: "v-23.0",
       scope,
       created_at: new Date().toISOString(),
       counts: {
@@ -1135,16 +1165,18 @@ async function startServer() {
       return res.sendFile(updatePath);
     }
     return res.json({
-      version: "20.0",
+      version: "23.0",
       release_date: "2026-10-02",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-      checksum: "065b0162009589d0e6da9058363b187533b15e2e49fe72fef50c7eb2b669104e",
-      sha256: "065b0162009589d0e6da9058363b187533b15e2e49fe72fef50c7eb2b669104e",
+      checksum: "cf25da669119ecb6cfc6e75b84ffa1a715b31395eb2b518fb49aca5116857ebf",
+      sha256: "cf25da669119ecb6cfc6e75b84ffa1a715b31395eb2b518fb49aca5116857ebf",
       minimum_php: "7.4",
       release_notes: [
-        "Added Official About Us Page (/about-us) to Horizontal Footer Links & humanized all legal pages (DMCA, Disclaimer, About Us, Privacy Policy)",
-        "Added Debug Mode ON/OFF toggle in Admin Settings (/settings) with intelligent Public Error Handling System",
-        "100% Real Visitor Telemetry for Active Sessions & Avg Visit Duration with live client-side dwell time heartbeat"
+        "Removed Built-in Live Error Test Buttons from Settings (cPanel & React) and removed Quick Samples from the Generator.",
+        "Redesigned the 404 Gateway Route Not Found page with a dark slate header monument, full site navigation, working Direct Episode Slug/Link Resolver, and recovery actions.",
+        "Comprehensive cPanel Security Hardening: Persistent IP + Session brute-force login rate limiting, User-Agent session fingerprinting, idle timeout, and live user verification.",
+        "Cryptographic CSRF token auto-injection and enforcement across all state-changing Admin API actions, setup.php, login.php, and logout.php.",
+        "Added strict .htaccess and index.php guards to data/, backups/, temp/, includes/, and database/ directories, plus per-hop SSRF redirect validation and anti-cache headers for private pages."
       ]
     });
   });

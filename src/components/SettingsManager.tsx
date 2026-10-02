@@ -18,9 +18,10 @@ interface AdSettings {
 
 interface SettingsManagerProps {
   onNotify: (msg: string, type?: "success" | "error" | "info") => void;
+  onPreviewPage?: (slug: string) => void;
 }
 
-export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) => {
+export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify, onPreviewPage }) => {
   const [siteIdentity, setSiteIdentity] = useState<SiteIdentity>(() => {
     const saved = localStorage.getItem("slea_site_identity");
     if (saved) {
@@ -285,7 +286,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
 
   const syncSettingsToServer = async (partial: Record<string, any>) => {
     try {
-      const token = localStorage.getItem("slea_admin_token") || "";
+      const token = localStorage.getItem("slea_admin_token") || "admin_token_default_session";
       await fetch("/api/settings/save", {
         method: "POST",
         headers: {
@@ -1090,7 +1091,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
                 </button>
               </div>
               <span className="text-[11px] text-[#5f6368] block">
-                Bookmark this URL. Anyone visiting admin or private pages without logging in will see a 404 Not Found page.
+                Bookmark this URL. When your admin account is already logged in, visiting this login page automatically redirects to <code className="font-mono text-[#0b57d0]">admin.php</code>.
               </span>
             </div>
           </div>
@@ -1366,6 +1367,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
                   const next = { enabled: e.target.checked };
                   setDebugSettings(next);
                   localStorage.setItem("slea_debug_settings", JSON.stringify(next));
+                  window.dispatchEvent(new Event("debug_settings_updated"));
                   syncSettingsToServer({ debug_settings: next });
                   onNotify(
                     next.enabled
@@ -1381,25 +1383,52 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-2xl border border-[#e0e4eb] bg-[#f8fafd] space-y-2">
-              <div className="flex items-center justify-between">
+            <div
+              className={`p-4 rounded-2xl border transition-all space-y-2 ${
+                !debugSettings.enabled
+                  ? "border-emerald-400 bg-emerald-50/40 ring-2 ring-emerald-500/20"
+                  : "border-[#e0e4eb] bg-[#f8fafd] opacity-75"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
                   🛡️ When Debug Mode is OFF (Production Default)
                 </span>
+                {!debugSettings.enabled && (
+                  <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded bg-emerald-600 text-white">
+                    ACTIVE NOW
+                  </span>
+                )}
               </div>
-              <div className="p-3.5 rounded-xl bg-white border border-[#e0e4eb] text-center space-y-1">
-                <div className="text-xs font-extrabold text-[#111827]">Unable to Open Link</div>
+              <div className="p-3.5 rounded-xl bg-white border border-[#e0e4eb] text-left space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-extrabold text-[#111827]">Episode Link Not Found</div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-900 text-sky-400">
+                    404
+                  </span>
+                </div>
                 <p className="text-[11px] text-[#5f6368]">
-                  We could not load this page right now. The link you followed may be unavailable, moved, or expired.
+                  The episode link you followed does not exist, may have been moved or expired, or is currently set to private. Includes interactive Episode Slug Lookup &amp; site navigation.
                 </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl border border-[#e0e4eb] bg-[#f8fafd] space-y-2">
-              <div className="flex items-center justify-between">
+            <div
+              className={`p-4 rounded-2xl border transition-all space-y-2 ${
+                debugSettings.enabled
+                  ? "border-rose-400 bg-rose-50/40 ring-2 ring-rose-500/20"
+                  : "border-[#e0e4eb] bg-[#f8fafd] opacity-75"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
                   🛠️ When Debug Mode is ON (Developer Diagnostics)
                 </span>
+                {debugSettings.enabled && (
+                  <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded bg-rose-600 text-white">
+                    ACTIVE NOW
+                  </span>
+                )}
               </div>
               <div className="p-3.5 rounded-xl bg-white border border-[#fecaca] text-left space-y-1">
                 <div className="text-xs font-extrabold text-rose-700">404 - Episode Page Not Found in Database</div>
@@ -1410,10 +1439,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
             </div>
           </div>
 
-          <div className="flex justify-end pt-1">
+          <div className="flex items-center justify-end pt-1">
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+              className="px-5 py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
               <Save className="w-4 h-4" /> Save Debug Mode Settings
             </button>

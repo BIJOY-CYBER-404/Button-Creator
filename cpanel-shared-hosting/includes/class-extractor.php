@@ -359,13 +359,7 @@ class SLEA_Extractor {
             }
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_HEADER, true);
-            $open_basedir = ini_get('open_basedir');
-            if (empty($open_basedir)) {
-                @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-                @curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
-            } else {
-                @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-            }
+            @curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
             curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
             curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
@@ -405,14 +399,14 @@ class SLEA_Extractor {
                 $current_url = $effective_url;
                 break;
             } else {
-                // Stream context fallback if curl failed
+                // Stream context fallback if curl failed (no auto-redirect so SSRF guard checks each hop)
                 $context = stream_context_create([
                     'http' => [
                         'method' => 'GET',
                         'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n",
                         'timeout' => $timeout,
-                        'follow_location' => 1,
-                        'max_redirects' => 5
+                        'follow_location' => 0,
+                        'max_redirects' => 0
                     ],
                     'ssl' => [
                         'verify_peer' => false,

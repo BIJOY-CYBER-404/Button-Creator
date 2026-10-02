@@ -59,24 +59,26 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [logs, setLogs] = useState<string[]>([]);
 
   const formatVer = (v: string) => {
-    const clean = String(v || "20.0").replace(/^[vV-]+/, "");
+    const clean = String(v || "23.0").replace(/^[vV-]+/, "");
     return clean.replace(/^(\d+\.\d+)\.0$/, "$1");
   };
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "20.0",
-    remote_version: "20.0",
+    current_version: "23.0",
+    remote_version: "23.0",
     update_available: false,
     release_date: "2026-10-02",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Added Official About Us Page (/about-us) to Horizontal Footer Links & humanized all legal pages (DMCA, Disclaimer, About Us, Privacy Policy)",
-      "Added Debug Mode ON/OFF toggle in Admin Settings (/settings) with intelligent Public Error Handling System",
-      "100% Real Active Sessions & Avg Visit Duration Telemetry with live client-side dwell duration heartbeats"
+      "Removed Built-in Live Error Test Buttons from Settings (cPanel & React) and removed Quick Samples from the Generator.",
+      "Redesigned the 404 Gateway Route Not Found page with a dark slate header monument, full site navigation, working Direct Episode Slug/Link Resolver, and recovery actions.",
+      "Comprehensive cPanel Security Hardening: Persistent IP + Session brute-force login rate limiting, User-Agent session fingerprinting, idle timeout, and live user verification.",
+      "Cryptographic CSRF token auto-injection and enforcement across all state-changing Admin API actions, setup.php, login.php, and logout.php.",
+      "Added strict .htaccess and index.php guards to data/, backups/, temp/, includes/, and database/ directories, plus per-hop SSRF redirect validation and anti-cache headers for private pages."
     ],
     minimum_php: "7.4",
-    checksum: "065b0162009589d0e6da9058363b187533b15e2e49fe72fef50c7eb2b669104e"
+    checksum: "cf25da669119ecb6cfc6e75b84ffa1a715b31395eb2b518fb49aca5116857ebf"
   });
 
   const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json");
@@ -87,9 +89,9 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [history, setHistory] = useState<UpdateHistoryItem[]>([
     {
       id: 1,
-      update_id: "update_20261002_041500_b20f",
-      old_version: "19.0",
-      new_version: "20.0",
+      update_id: "update_20261002_041500_b23f",
+      old_version: "22.0",
+      new_version: "23.0",
       status: "success",
       step: "Finalizing update",
       rollback_status: "not_needed",
@@ -157,8 +159,8 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       });
       if (mRes.ok) {
         const mData = await mRes.json();
-        const remVer = mData.version ? formatVer(mData.version) : "20.0";
-        const currVer = formatVer(checkInfo.current_version || "20.0");
+        const remVer = mData.version ? formatVer(mData.version) : "23.0";
+        const currVer = formatVer(checkInfo.current_version || "23.0");
         setCheckInfo((prev) => ({
           ...prev,
           current_version: currVer,

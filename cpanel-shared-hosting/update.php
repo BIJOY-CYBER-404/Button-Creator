@@ -12,6 +12,8 @@ require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 require_once __DIR__ . '/includes/class-updater.php';
 
+SLEA_Datastore::register_public_error_handler();
+
 // Protect with Admin Auth
 SLEA_Auth::require_admin();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -22,7 +24,7 @@ $current_user = SLEA_Auth::get_current_user();
 // Check and abort any interrupted updates if page was refreshed / navigated away
 SLEA_Updater::check_and_abort_interrupted_updates();
 
-$current_version = defined('APP_VERSION') ? SLEA_Updater::normalize_version(APP_VERSION) : '19.0';
+$current_version = defined('APP_VERSION') ? SLEA_Updater::normalize_version(APP_VERSION) : '20.0';
 $updater_config = SLEA_Updater::get_config();
 $update_check = SLEA_Updater::check_for_updates();
 $update_history = SLEA_Updater::get_update_history();

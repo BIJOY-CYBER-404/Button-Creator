@@ -35,6 +35,16 @@ $slug = isset($_GET['slug']) ? trim($_GET['slug']) : (isset($_GET['p']) ? trim($
 $configured_login_slug = SLEA_Datastore::get_login_slug();
 $req_path_only = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 if (!empty($slug) && strtolower($slug) === $configured_login_slug && !preg_match('#/(?:p|page)/#i', $req_path_only)) {
+    if (SLEA_Auth::is_logged_in()) {
+        $v_proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $v_host = $_SERVER['HTTP_HOST'] ?? '';
+        $v_base_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/view.php')), '/');
+        if ($v_base_dir === '.' || $v_base_dir === '/') {
+            $v_base_dir = '';
+        }
+        header('Location: ' . ($v_host !== '' ? $v_proto . $v_host : '') . $v_base_dir . '/admin.php');
+        exit;
+    }
     define('SLEA_LOGIN_ROUTED', true);
     require __DIR__ . '/login.php';
     exit;
@@ -58,20 +68,8 @@ if ($normalized_slug_lower === 'privacy') {
 }
 $legal_slug = in_array($normalized_slug_lower, ['dmca', 'disclaimer', 'about-us', 'privacy-policy'], true) ? $normalized_slug_lower : null;
 
-// Seamless 301 redirect if accessed via direct view.php?slug=... to modern /p/{slug} clean structure
-$request_uri = $_SERVER['REQUEST_URI'] ?? '';
-if (strpos($request_uri, 'view.php') !== false && !empty($slug) && !$legal_slug) {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $base_dir = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
-    // Normalize slug (strip legacy ep- prefix for public clean URLs)
-    $clean_slug_redirect = (strpos($slug, 'ep-') === 0) ? substr($slug, 3) : $slug;
-    $target_clean_url = ($base_dir === '' || $base_dir === '/') ? "/p/{$clean_slug_redirect}" : "{$base_dir}/p/{$clean_slug_redirect}";
-    header("Location: {$protocol}{$host}{$target_clean_url}", true, 301);
-    exit;
-}
-
-$is_admin = SLEA_Auth::is_logged_in();
+$is_admin = SLEA_Auth::is_logged_in() && empty($_GET['preview_visitor']);
+$debug_mode_active = SLEA_Datastore::is_debug_mode();
 
 $maintenance = SLEA_Datastore::get_maintenance_settings();
 
@@ -322,22 +320,23 @@ if ($legal_slug) {
         SLEA_Datastore::record_visit_telemetry($legal_slug);
     }
 } else {
-    // Lookup page by slug with bi-directional fallback (supports both clean slug and legacy ep- prefix)
-    $page = SLEA_Datastore::get_page_by_slug($slug, !$is_admin);
+    // Lookup page by slug with bi-directional fallback (fetch regardless of is_public so we can distinguish Not Found vs Private)
+    $page = SLEA_Datastore::get_page_by_slug($slug, false);
+    $alt_slug = '';
     if (!$page) {
         if (strpos($slug, 'ep-') === 0) {
             $alt_slug = substr($slug, 3);
-            $page = SLEA_Datastore::get_page_by_slug($alt_slug, !$is_admin);
+            $page = SLEA_Datastore::get_page_by_slug($alt_slug, false);
         } else {
             $alt_slug = 'ep-' . $slug;
-            $page = SLEA_Datastore::get_page_by_slug($alt_slug, !$is_admin);
+            $page = SLEA_Datastore::get_page_by_slug($alt_slug, false);
         }
     }
 
     if (!$page) {
         SLEA_Datastore::render_public_error(
             '404 - Episode Page Not Found in Database',
-            "Actual Error [HTTP 404]: No episode page record matched slug '{$slug}' (or fallback '{$alt_slug}') in the database.",
+            "Actual Error [HTTP 404]: No episode page record matched slug '{$slug}'" . ($alt_slug !== '' ? " (or fallback '{$alt_slug}')" : "") . " in the database.",
             404,
             'We could not load this page right now. The link you followed may be unavailable, moved, or expired.'
         );
@@ -350,6 +349,18 @@ if ($legal_slug) {
             404,
             'We could not load this page right now. The link you followed may be unavailable, moved, or expired.'
         );
+    }
+
+    // Seamless 301 redirect if valid page was accessed via direct view.php?slug=... to modern /p/{slug} clean structure
+    $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+    if (strpos($request_uri, 'view.php') !== false && !empty($slug) && empty($_GET['preview_visitor'])) {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base_dir = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+        $clean_slug_redirect = (strpos($slug, 'ep-') === 0) ? substr($slug, 3) : $slug;
+        $target_clean_url = ($base_dir === '' || $base_dir === '/') ? "/p/{$clean_slug_redirect}" : "{$base_dir}/p/{$clean_slug_redirect}";
+        header("Location: {$protocol}{$host}{$target_clean_url}", true, 301);
+        exit;
     }
 
     // Increment view counter
@@ -372,6 +383,13 @@ $theme = $page['theme'] ?? 'indigo';
 $resolved_url = htmlspecialchars($page['resolved_url'] ?? '');
 $is_public = !empty($page['is_public']);
 $page_id = intval($page['id'] ?? 0);
+
+// Prevent shared proxy/CDN caching when admin is logged in or when viewing a private page
+if ($is_admin || !$is_public) {
+    header('Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
 
 // Load site branding, navigation menu, footer copyright, and ad settings
 $site_identity = SLEA_Datastore::get_site_identity();
@@ -1021,8 +1039,24 @@ function resolve_server_info($provider, $url, $btn_text) {
         <!-- Episode Buttons List (Server Icon, Episode 01/02.., Watch Now Button) -->
         <div class="space-y-2.5">
             <?php if (empty($buttons)): ?>
-                <div class="bg-white border border-[#e0e4eb] rounded-2xl p-8 text-center text-xs text-[#747775]">
-                    No episode download buttons currently available for this title.
+                <div class="bg-white border border-[#e0e4eb] rounded-2xl p-8 text-center space-y-3">
+                    <div class="text-xs text-[#747775]">
+                        No episode download buttons currently available for this title.
+                    </div>
+                    <?php if ($debug_mode_active): ?>
+                        <div class="text-left bg-rose-50 border border-rose-200 rounded-2xl p-4 font-mono text-[11px] text-rose-900 leading-relaxed space-y-1 max-w-xl mx-auto">
+                            <div class="font-bold uppercase tracking-wider text-rose-700 flex items-center justify-between">
+                                <span>🛠️ Debug Mode: ON (Actual Error Details)</span>
+                                <span class="bg-rose-100 px-2 py-0.5 rounded border border-rose-200">EMPTY BUTTONS</span>
+                            </div>
+                            <div>
+                                <strong>Actual Error:</strong> Actual Error [Empty Episode Buttons]: Episode page '<?= htmlspecialchars($slug) ?>' (ID #<?= intval($page_id) ?>) loaded from datastore, but <code>buttons_json</code> contains 0 valid episode links.
+                            </div>
+                            <div class="text-rose-800">
+                                <strong>Source URL:</strong> <?= htmlspecialchars($page['source_url'] ?? 'None') ?> • <strong>Resolved URL:</strong> <?= htmlspecialchars($page['resolved_url'] ?? 'None') ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php else: ?>
                 <?php foreach ($buttons as $idx => $btn): 
