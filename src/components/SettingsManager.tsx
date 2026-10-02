@@ -259,6 +259,19 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
     return localStorage.getItem("slea_login_slug") || "login";
   });
 
+  const [debugSettings, setDebugSettings] = useState<{ enabled: boolean }>(() => {
+    const saved = localStorage.getItem("slea_debug_settings");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return { enabled: Boolean(parsed?.enabled) };
+      } catch {
+        // fallback
+      }
+    }
+    return { enabled: false };
+  });
+
   const sanitizeLoginSlugClient = (val: string) => {
     return String(val || "")
       .trim()
@@ -296,6 +309,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
             setLoginSlug(data.settings.login_slug);
             localStorage.setItem("slea_login_slug", data.settings.login_slug);
           }
+          if (data.settings.debug_settings && typeof data.settings.debug_settings === "object") {
+            const nextDbg = { enabled: Boolean(data.settings.debug_settings.enabled) };
+            setDebugSettings(nextDbg);
+            localStorage.setItem("slea_debug_settings", JSON.stringify(nextDbg));
+          }
           if (Array.isArray(data.settings.menu_items) && !localStorage.getItem("slea_menu_items")) {
             setMenuItems(data.settings.menu_items);
           }
@@ -326,6 +344,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
     menu_items: menuItems,
     footer_copyright: footerText,
     maintenance_settings: maintenanceSettings,
+    debug_settings: debugSettings,
   });
 
   const applyRestoredSettingsBundle = (s: any) => {
@@ -356,6 +375,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
     if (s.maintenance_settings) {
       setMaintenanceSettings((prev: any) => ({ ...prev, ...s.maintenance_settings }));
       localStorage.setItem("slea_maintenance_settings", JSON.stringify({ ...maintenanceSettings, ...s.maintenance_settings }));
+    }
+    if (s.debug_settings && typeof s.debug_settings === "object") {
+      const nextDbg = { enabled: Boolean(s.debug_settings.enabled) };
+      setDebugSettings(nextDbg);
+      localStorage.setItem("slea_debug_settings", JSON.stringify(nextDbg));
     }
   };
 
@@ -521,7 +545,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
   const handleSaveLoginSlug = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = sanitizeLoginSlugClient(loginSlug) || "login";
-    const reserved = ["admin", "pages", "settings", "analytics", "update", "updater", "api", "logout", "setup", "view", "index", "p", "page", "404"];
+    const reserved = ["admin", "pages", "settings", "analytics", "update", "updater", "api", "logout", "setup", "view", "index", "p", "page", "404", "dmca", "disclaimer", "about-us", "about", "privacy-policy", "privacy"];
     if (reserved.includes(clean)) {
       onNotify(`The path '/${clean}' is reserved by the system. Please choose a different login path.`, "error");
       return;
@@ -558,6 +582,18 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
     localStorage.setItem("slea_maintenance_settings", JSON.stringify(nextSettings));
     syncSettingsToServer({ maintenance_settings: nextSettings });
     onNotify("Maintenance settings & countdown timer saved successfully!", "success");
+  };
+
+  const handleSaveDebugMode = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem("slea_debug_settings", JSON.stringify(debugSettings));
+    syncSettingsToServer({ debug_settings: debugSettings });
+    onNotify(
+      debugSettings.enabled
+        ? "Debug Mode ON: Public pages will now show actual error messages."
+        : "Debug Mode OFF: Public pages will hide technical errors and show safe messages.",
+      debugSettings.enabled ? "info" : "success"
+    );
   };
 
   const handleAddMenuItem = (e: React.FormEvent) => {
@@ -1282,6 +1318,104 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify }) =>
               className="px-5 py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
               <Save className="w-4 h-4" /> Save Maintenance Settings
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* 🐞 Debug Mode & Public Error Handling Form */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6" id="debug-mode-section">
+        <div className="flex items-center justify-between pb-4 border-b border-[#f0f4f9] flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+              <Code className="w-5 h-5 text-rose-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-[#1f1f1f]">Debug Mode &amp; Public Error Handling</h3>
+              <p className="text-xs text-[#5f6368]">
+                Control whether public pages hide actual technical errors with a safe message (Debug OFF) or display actual error diagnostics (Debug ON).
+              </p>
+            </div>
+          </div>
+          <span
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+              debugSettings.enabled
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+            }`}
+          >
+            Debug Mode: {debugSettings.enabled ? "ON (Showing Actual Errors)" : "OFF (Safe Public Errors)"}
+          </span>
+        </div>
+
+        <form onSubmit={handleSaveDebugMode} className="space-y-5">
+          <div className="flex items-center justify-between p-4 bg-[#f8fafd] rounded-2xl border border-[#e1e7f0]">
+            <div>
+              <span className="text-xs font-bold text-[#1f1f1f] block">
+                Enable Debug Mode (Show Actual Error Messages on Public Pages)
+              </span>
+              <span className="text-[11px] text-[#5f6368]">
+                When <strong>OFF</strong>, public visitors see a friendly, non-technical error card without internal error details. When <strong>ON</strong>, the exact error message, HTTP status, and request path are displayed.
+              </span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+              <input
+                type="checkbox"
+                checked={debugSettings.enabled}
+                onChange={(e) => {
+                  const next = { enabled: e.target.checked };
+                  setDebugSettings(next);
+                  localStorage.setItem("slea_debug_settings", JSON.stringify(next));
+                  syncSettingsToServer({ debug_settings: next });
+                  onNotify(
+                    next.enabled
+                      ? "Debug Mode ON: Public pages will now show actual error messages."
+                      : "Debug Mode OFF: Public pages will hide technical errors and show safe messages.",
+                    next.enabled ? "info" : "success"
+                  );
+                }}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-2xl border border-[#e0e4eb] bg-[#f8fafd] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  🛡️ When Debug Mode is OFF (Production Default)
+                </span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-white border border-[#e0e4eb] text-center space-y-1">
+                <div className="text-xs font-extrabold text-[#111827]">Unable to Open Link</div>
+                <p className="text-[11px] text-[#5f6368]">
+                  We could not load this page right now. The link you followed may be unavailable, moved, or expired.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-[#e0e4eb] bg-[#f8fafd] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                  🛠️ When Debug Mode is ON (Developer Diagnostics)
+                </span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-white border border-[#fecaca] text-left space-y-1">
+                <div className="text-xs font-extrabold text-rose-700">404 - Episode Page Not Found in Database</div>
+                <div className="text-[10px] font-mono text-rose-800 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                  Actual Error [HTTP 404]: No episode page record matched slug in database.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              className="px-5 py-2.5 rounded-full bg-[#0b57d0] hover:bg-[#0842a0] text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <Save className="w-4 h-4" /> Save Debug Mode Settings
             </button>
           </div>
         </form>

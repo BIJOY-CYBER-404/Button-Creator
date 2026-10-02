@@ -59,24 +59,24 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [logs, setLogs] = useState<string[]>([]);
 
   const formatVer = (v: string) => {
-    const clean = String(v || "18.0").replace(/^[vV-]+/, "");
+    const clean = String(v || "20.0").replace(/^[vV-]+/, "");
     return clean.replace(/^(\d+\.\d+)\.0$/, "$1");
   };
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "18.0",
-    remote_version: "18.0",
+    current_version: "20.0",
+    remote_version: "20.0",
     update_available: false,
-    release_date: "2026-10-01",
+    release_date: "2026-10-02",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Standardized application version format to v-x.x (v-18.0) across all pages and updater manifests",
-      "Comprehensive security hardening: SSRF protection, CSRF origin verification, brute-force rate limiting, and direct PHP access guards",
-      "100% Real Visitor Telemetry: Live tracking and aggregation of Device Breakdown, Top Traffic Channels, and Top Traffic Country"
+      "Added Official About Us Page (/about-us) to Horizontal Footer Links & humanized all legal pages (DMCA, Disclaimer, About Us, Privacy Policy)",
+      "Added Debug Mode ON/OFF toggle in Admin Settings (/settings) with intelligent Public Error Handling System",
+      "100% Real Active Sessions & Avg Visit Duration Telemetry with live client-side dwell duration heartbeats"
     ],
     minimum_php: "7.4",
-    checksum: "3832fc7b1fa5aeec8afa2dc55330935d785652c084313ae1c7989c0745efd87f"
+    checksum: "065b0162009589d0e6da9058363b187533b15e2e49fe72fef50c7eb2b669104e"
   });
 
   const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json");
@@ -87,14 +87,14 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [history, setHistory] = useState<UpdateHistoryItem[]>([
     {
       id: 1,
-      update_id: "update_20261001_020000_a81f",
-      old_version: "17.0",
-      new_version: "18.0",
+      update_id: "update_20261002_041500_b20f",
+      old_version: "19.0",
+      new_version: "20.0",
       status: "success",
       step: "Finalizing update",
       rollback_status: "not_needed",
-      started_at: "2026-10-01 02:00:00",
-      completed_at: "2026-10-01 02:00:12"
+      started_at: "2026-10-02 03:30:00",
+      completed_at: "2026-10-02 03:30:11"
     }
   ]);
 
@@ -157,8 +157,8 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
       });
       if (mRes.ok) {
         const mData = await mRes.json();
-        const remVer = mData.version ? formatVer(mData.version) : "18.0";
-        const currVer = formatVer(checkInfo.current_version || "18.0");
+        const remVer = mData.version ? formatVer(mData.version) : "20.0";
+        const currVer = formatVer(checkInfo.current_version || "20.0");
         setCheckInfo((prev) => ({
           ...prev,
           current_version: currVer,

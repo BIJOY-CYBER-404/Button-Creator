@@ -69,7 +69,7 @@ if (!defined('DB_CHARSET')) {
 // Application & Security Configuration
 // -------------------------------------------------------------
 define('APP_NAME', 'Movie Hub HQ Drive');
-define('APP_VERSION', 'v-18.0');
+define('APP_VERSION', 'v-20.0');
 define('DEFAULT_PAGE_THEME', 'indigo');
 define('AUTO_INCREMENT_VIEWS', true);
 define('ROBOTS_NOINDEX', true); // Enforce noindex, nofollow on all button pages

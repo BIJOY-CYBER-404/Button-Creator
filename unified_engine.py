@@ -31,6 +31,8 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                     return {
                         "success": True,
                         "resolved": True,
+                        "input_type": "target_url",
+                        "identified_shorten_url": None,
                         "original_url": url,
                         "final_url": url,
                         "page_title": page_title,
@@ -50,12 +52,19 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 # Check if input URL is already a shortened URL
                 parsed_in = urlparse(url)
                 host_in = (parsed_in.hostname or "").lower()
-                is_direct_shortlink = any(k in host_in for k in ["shrt.sohojgyan", "safe.sohojgyan", "go.sohojgyan", "bit.ly", "tinyurl", "ouo.io"]) or (
-                    "sohojgyan.com" in host_in and len(parsed_in.path.strip("/").split("/")) == 1
+                path_in = (parsed_in.path or "").strip("/")
+                query_in = (parsed_in.query or "").lower()
+                is_direct_shortlink = (
+                    any(k in host_in for k in [
+                        "shrt.sohojgyan", "safe.sohojgyan", "go.sohojgyan", "bit.ly", "tinyurl",
+                        "ouo.io", "droplink", "gplinks", "shrinkme", "cutt.ly", "is.gd", "v.gd", "t.co", "adlinkfly"
+                    ])
+                    or ("sohojgyan.com" in host_in and len(path_in.split("/")) == 1 and path_in != "")
+                    or any(qp in query_in for qp in ["code=", "safelink=", "token=", "url=", "dest="])
                 )
 
                 if is_direct_shortlink:
-                    # Directly resolve the shortened URL with retry until target format matches
+                    # Flow A: Shorten URL pasted -> resolve shorten url -> extract buttons -> generate button pages
                     resolve_res = resolver.resolve_shortlink_until_target(url, max_retries=4, return_html=True)
                     final_dest_url = resolve_res["final"]
                     final_html = resolve_res.get("final_html")
@@ -73,6 +82,8 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                     return {
                         "success": True,
                         "resolved": True,
+                        "input_type": "shorten_url",
+                        "identified_shorten_url": url,
                         "original_url": url,
                         "final_url": final_dest_url,
                         "page_title": page_title,
@@ -84,21 +95,30 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                         "bytes": len(final_html) if final_html else 0
                     }
 
-                # Otherwise, resolve the drama / source page first to inspect content and find the shorten URL
-                resolve_res = resolver.resolve_url(url, return_html=True)
-                final_dest_url = resolve_res["final"]
-                final_html = resolve_res.get("final_html")
+                # Flow B: Post URL pasted (e.g. https://mydverse.com/2026/07/the-princess-and-the-werewolf-chinese-hindi/)
+                # Step 1: Fetch the Post URL page to identify the shorten URL from the "Episode Wise Links" button
+                post_final_url = url
+                post_html = ""
+                try:
+                    fetched_post_url, fetched_post_html = extractor.fetch_page(url)
+                    if fetched_post_url:
+                        post_final_url = fetched_post_url
+                    if fetched_post_html:
+                        post_html = fetched_post_html
+                except Exception:
+                    pass
 
-                if not final_html or len(final_html) < 200:
-                    try:
-                        _, dest_page_html = extractor.fetch_page(final_dest_url)
-                        if dest_page_html and len(dest_page_html) > len(final_html or ""):
-                            final_html = dest_page_html
-                    except Exception:
-                        pass
+                identified_shorten_url = None
+                final_dest_url = post_final_url
+                final_html = post_html
+                combined_chain = [{
+                    "step": 1,
+                    "url": post_final_url,
+                    "status": 200,
+                    "type": "Source Post URL"
+                }]
 
-                # Find shortened URLs associated with "Episode Wise Links" from the source page
-                if final_html and not resolver.is_target_destination(final_dest_url):
+                if post_html and not resolver.is_target_destination(post_final_url):
                     import re
                     from urllib.parse import urljoin
 
@@ -106,52 +126,80 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                         if not cand_url:
                             return False
                         low = cand_url.lower()
-                        if any(b in low for b in ["movihubhq.com", "movihub", "payout-rates", "privacy", "terms", "contact", "about", "pages/"]):
+                        if low.startswith(("javascript:", "mailto:", "tel:", "sms:", "#")):
+                            return False
+                        if "#respond" in low or cand_url.rstrip("/") == post_final_url.rstrip("/"):
+                            return False
+                        if any(b in low for b in ["movihubhq.com", "moviehubhq.com", "movihub", "payout-rates", "privacy", "disclaimer", "dmca", "terms", "contact", "about", "pages/"]):
                             return False
                         return True
 
                     candidates = []
+                    fallback_btn_slide = []
+                    fallback_shortlinks = []
 
-                    # 1. Direct target Blogspot episode destination format (https://mydverse02.blogspot.com/p/*.html)
-                    for m_target in re.finditer(r'<a\s+[^>]*href=[\'"](https?://(?:www\.)?mydverse02\.blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html)[\'"]', final_html, re.I):
-                        c = m_target.group(1).strip()
-                        if resolver.is_target_destination(c) and c not in candidates:
-                            candidates.append(c)
+                    # Parse all <a>...</a> tags without crossing </a> boundaries
+                    for m_a in re.finditer(r'<a\s+([^>]*?)href=[\'"]([^\'"]+)[\'"]([^>]*)>((?:(?!</a>)[\s\S])*?)</a>', post_html, re.I):
+                        attrs = (m_a.group(1) or "") + " " + (m_a.group(3) or "")
+                        raw_href = (m_a.group(2) or "").strip()
+                        inner_html = m_a.group(4) or ""
+                        if not raw_href or raw_href.startswith(("#", "javascript:", "mailto:", "tel:")):
+                            continue
+                        if "comment-reply" in attrs.lower():
+                            continue
+                        cand = urljoin(post_final_url, raw_href)
+                        if not is_valid_shortlink(cand):
+                            continue
 
-                    # 2. Anchor containing Episode Wise Links / Episode-Wise / Download Episodes
-                    for m_ew in re.finditer(r'<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise|Download[\s_-]*Episodes?)[\s\S]*?</a>', final_html, re.I):
-                        resolved_cand = urljoin(final_dest_url, m_ew.group(1).strip())
-                        if is_valid_shortlink(resolved_cand) and resolved_cand not in candidates:
-                            candidates.append(resolved_cand)
+                        text_clean = re.sub(r"<[^>]+>", " ", inner_html)
+                        text_clean = re.sub(r"\s+", " ", text_clean).strip()
 
-                    # 3. Contextual nearby container
-                    m_near = re.search(r'(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)[\s\S]{0,300}?<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]', final_html, re.I)
+                        # Priority 1: Explicit "Episode Wise Links" / "Episode Wise" / "Download Episodes" button text
+                        if re.search(r'(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise|Download[\s_-]*Episodes?|Episode[\s_-]*Links?)', text_clean, re.I):
+                            if cand not in candidates:
+                                candidates.append(cand)
+                        # Priority 2: Button with class="btn-slide" (used on mydverse post pages for Episode Wise Links)
+                        elif "btn-slide" in attrs.lower():
+                            if cand not in fallback_btn_slide:
+                                fallback_btn_slide.append(cand)
+                        # Priority 3: Direct shortener link (safe.sohojgyan.com, shrt.sohojgyan.com, go.sohojgyan.com) or target Blogspot link
+                        elif any(k in cand.lower() for k in ["safe.sohojgyan", "shrt.sohojgyan", "go.sohojgyan", "bit.ly", "tinyurl", "ouo.io"]) or resolver.is_target_destination(cand):
+                            if cand not in fallback_shortlinks:
+                                fallback_shortlinks.append(cand)
+
+                    # Contextual nearby check if not yet found
+                    m_near = re.search(r'(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)(?:(?!</a>)[\s\S]){0,350}?<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]', post_html, re.I)
                     if m_near:
-                        resolved_cand = urljoin(final_dest_url, m_near.group(1).strip())
-                        if is_valid_shortlink(resolved_cand) and resolved_cand not in candidates:
-                            candidates.append(resolved_cand)
+                        near_cand = urljoin(post_final_url, m_near.group(1).strip())
+                        if is_valid_shortlink(near_cand) and near_cand not in candidates:
+                            candidates.append(near_cand)
 
-                    # 4. Direct href matching shrt.sohojgyan.com or go.sohojgyan.com
-                    for m_shrt in re.finditer(r'<a\s+[^>]*href=[\'"](https?://(?:shrt\.[a-z0-9.-]+|go\.sohojgyan\.com)/[a-zA-Z0-9_-]+)[\'"]', final_html, re.I):
-                        c = m_shrt.group(1).strip()
-                        if is_valid_shortlink(c) and c not in candidates:
+                    for c in fallback_btn_slide + fallback_shortlinks:
+                        if c not in candidates:
                             candidates.append(c)
 
-                    # 5. Direct search in scripts for https://mydverse02.blogspot.com/p/*.html
-                    for m_script in re.finditer(r'[\'"](https?://(?:www\.)?mydverse02\.blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html)[\'"]', final_html, re.I):
+                    # Direct search in scripts for https://mydverse02.blogspot.com/p/*.html
+                    for m_script in re.finditer(r'[\'"](https?://(?:www\.)?mydverse02\.blogspot\.[a-z.]+/p/[a-zA-Z0-9_-]+\.html)[\'"]', post_html, re.I):
                         c = m_script.group(1).strip()
                         if resolver.is_target_destination(c) and c not in candidates:
                             candidates.append(c)
 
-                    # After finding candidate shortened URLs, resolve with retry until destination matches Blogspot structure:
-                    # (https://mydverse02.blogspot.com/p/flp-120926.html, https://mydverse02.blogspot.com/p/mbmb-030826.html)
+                    # Step 2: Resolve the identified shorten URL -> extract buttons -> generate button pages
                     for shortlink_candidate in candidates:
-                        if shortlink_candidate == url:
+                        if shortlink_candidate == url or shortlink_candidate == post_final_url:
                             continue
+
+                        identified_shorten_url = shortlink_candidate
 
                         # If candidate is already the target destination
                         if resolver.is_target_destination(shortlink_candidate):
                             final_dest_url = shortlink_candidate
+                            combined_chain.append({
+                                "step": len(combined_chain) + 1,
+                                "url": shortlink_candidate,
+                                "status": 200,
+                                "type": "Target Destination (Blogspot Episode Page)"
+                            })
                             try:
                                 _, sub_html = extractor.fetch_page(final_dest_url)
                                 if sub_html:
@@ -165,8 +213,7 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                         sub_final_url = sub_resolve.get("final", "")
                         sub_final_html = sub_resolve.get("final_html")
 
-                        # If matched required Blogspot structure or retries completed:
-                        if resolver.is_target_destination(sub_final_url):
+                        if resolver.is_target_destination(sub_final_url) or sub_final_url:
                             if not sub_final_html or len(sub_final_html) < 200:
                                 try:
                                     _, fetched_html = extractor.fetch_page(sub_final_url)
@@ -175,7 +222,6 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                                 except Exception:
                                     pass
 
-                            combined_chain = list(resolve_res.get("chain", []))
                             combined_chain.append({
                                 "step": len(combined_chain) + 1,
                                 "url": shortlink_candidate,
@@ -183,6 +229,8 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                                 "type": "Identified Episode Wise Shortened URL"
                             })
                             for sc in sub_resolve.get("chain", []):
+                                if sc.get("url") == shortlink_candidate and len(combined_chain) > 1:
+                                    continue
                                 combined_chain.append({
                                     "step": len(combined_chain) + 1,
                                     "url": sc.get("url"),
@@ -192,9 +240,15 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
 
                             final_dest_url = sub_final_url
                             final_html = sub_final_html
-                            resolve_res["redirects"] = len(combined_chain) - 1
-                            resolve_res["chain"] = combined_chain
-                            break
+                            if resolver.is_target_destination(sub_final_url):
+                                break
+
+                # Fallback if post_html didn't yield candidates directly
+                if not resolver.is_target_destination(final_dest_url) and not identified_shorten_url:
+                    resolve_res = resolver.resolve_url(url, return_html=True)
+                    final_dest_url = resolve_res.get("final", url)
+                    final_html = resolve_res.get("final_html") or final_html
+                    combined_chain = resolve_res.get("chain", combined_chain)
 
                 # If final destination HTML was not captured, fetch it now
                 if not final_html or len(final_html) < 200 or resolver.is_target_destination(final_dest_url):
@@ -209,17 +263,25 @@ def run_unified_pipeline(url=None, html=None, base_url=None, button_only=True, a
                 items = extractor.extract_from_html(final_html, final_dest_url, button_only=button_only) if final_html else []
                 is_target = resolver.is_target_destination(final_dest_url)
 
-                page_title = extractor.extract_page_title(final_html, final_dest_url) if final_html else extractor.derive_title_from_url(final_dest_url)
+                page_title = extractor.extract_page_title(final_html, final_dest_url) if final_html else ""
+                if (not page_title or page_title == "Episode Download Links") and post_html:
+                    post_title = extractor.extract_page_title(post_html, post_final_url)
+                    if post_title:
+                        page_title = post_title
+                if not page_title:
+                    page_title = extractor.derive_title_from_url(final_dest_url)
 
                 return {
                     "success": True,
                     "resolved": True,
+                    "input_type": "post_url",
+                    "identified_shorten_url": identified_shorten_url,
                     "original_url": url,
                     "final_url": final_dest_url,
                     "page_title": page_title,
                     "target_destination_verified": is_target,
-                    "redirects": resolve_res.get("redirects", 0),
-                    "chain": resolve_res.get("chain", []),
+                    "redirects": max(0, len(combined_chain) - 1),
+                    "chain": combined_chain,
                     "items": items,
                     "count": len(items),
                     "bytes": len(final_html) if final_html else 0

@@ -7,6 +7,9 @@
     RewriteRule ^p/([a-zA-Z0-9_-]+)/?$ view.php?slug=$1 [L,QSA]
     RewriteRule ^page/([a-zA-Z0-9_-]+)/?$ view.php?slug=$1 [L,QSA]
 
+    # Public Legal & Info Pages
+    RewriteRule ^(dmca|disclaimer|about-us|about|privacy-policy|privacy)/?$ view.php?slug=$1 [L,QSA,NC]
+
     # Clean Admin Routes
     RewriteRule ^admin/?$ admin.php [L,QSA]
     RewriteRule ^pages/?$ pages.php [L,QSA]

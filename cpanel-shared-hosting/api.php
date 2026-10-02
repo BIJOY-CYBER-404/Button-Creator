@@ -18,9 +18,6 @@ $action = isset($_GET['action']) ? trim($_GET['action']) : '';
 $raw_input = file_get_contents('php://input');
 $data = json_decode($raw_input, true) ?: [];
 
-// Strict Admin Authorization Check
-SLEA_Auth::require_admin();
-
 // Same-Origin CSRF Verification for state-changing POST requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $origin_hdr = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? '';
@@ -34,6 +31,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+// Public Real-Time Visitor Dwell Duration Heartbeat
+if ($action === 'telemetry_heartbeat') {
+    $hb_slug = trim((string)($data['slug'] ?? ($_GET['slug'] ?? '')));
+    $hb_dur  = isset($data['duration_sec']) ? (int)$data['duration_sec'] : (isset($_GET['duration_sec']) ? (int)$_GET['duration_sec'] : 1);
+    $updated_dur = SLEA_Datastore::update_visit_duration($hb_slug, $hb_dur);
+    $is_admin = SLEA_Auth::is_logged_in();
+    echo json_encode([
+        'success'      => true,
+        'duration_sec' => $updated_dur,
+        'telemetry'    => $is_admin ? SLEA_Datastore::get_visit_telemetry_stats() : null
+    ]);
+    exit;
+}
+
+// Strict Admin Authorization Check
+SLEA_Auth::require_admin();
 
 // Ensure script execution time doesn't exceed 40 seconds on shared hosting
 @set_time_limit(40);
@@ -49,17 +63,66 @@ try {
                 throw new Exception('Please provide a shortened URL or source link.');
             }
 
-            // 1. Resolve URL with retry until target Blogspot structure
+            // 1. Determine URL Flow:
+            // - Shorten URL Flow: shorten url -> resolve shorten url -> extract buttons -> generate button pages
+            // - Post URL Flow: post url -> identify shorten url from "Episode Wise Links" button -> resolve shorten url -> extract buttons -> generate button pages
             $resolved_dest = $input_url;
             $final_html = '';
+            $post_html = '';
+            $input_type = 'shorten_url';
+            $identified_shorten_url = null;
 
             if (SLEA_Resolver::is_target_destination($input_url)) {
+                $input_type = 'target_url';
                 $resolved_dest = $input_url;
                 list($_, $final_html) = SLEA_Extractor::fetch_page($input_url);
-            } else {
+            } elseif (SLEA_Resolver::is_shortener_url($input_url)) {
+                // Flow A: Shorten URL pasted -> resolve shorten url -> extract buttons -> generate button pages
+                $input_type = 'shorten_url';
+                $identified_shorten_url = $input_url;
                 $res_obj = SLEA_Resolver::resolve_shortlink_until_target($input_url, [], 4);
                 $resolved_dest = !empty($res_obj['final']) ? $res_obj['final'] : $input_url;
                 $final_html = !empty($res_obj['final_html']) ? $res_obj['final_html'] : '';
+
+                if (!SLEA_Resolver::is_target_destination($resolved_dest)) {
+                    if (preg_match('/(https?:\/\/(?:www\.)?[a-zA-Z0-9.-]+\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)/i', $final_html, $tdm)) {
+                        $resolved_dest = $tdm[1];
+                        list($_, $fetched_html) = SLEA_Extractor::fetch_page($resolved_dest);
+                        if (!empty($fetched_html)) {
+                            $final_html = $fetched_html;
+                        }
+                    }
+                }
+
+                if (empty($final_html) || strlen($final_html) < 200) {
+                    list($_, $fetched_html) = SLEA_Extractor::fetch_page($resolved_dest);
+                    if (!empty($fetched_html)) {
+                        $final_html = $fetched_html;
+                    }
+                }
+            } else {
+                // Flow B: Post URL pasted -> identify shorten url from "Episode Wise Links" button -> resolve shorten url -> extract buttons -> generate button pages
+                $input_type = 'post_url';
+                list($post_final_url, $post_html) = SLEA_Extractor::fetch_page($input_url);
+                $post_base = !empty($post_final_url) ? $post_final_url : $input_url;
+
+                $identified_shorten_url = SLEA_Resolver::extract_episode_wise_shortlink($post_html, $post_base);
+
+                if (!empty($identified_shorten_url)) {
+                    if (SLEA_Resolver::is_target_destination($identified_shorten_url)) {
+                        $resolved_dest = $identified_shorten_url;
+                        list($_, $final_html) = SLEA_Extractor::fetch_page($resolved_dest);
+                    } else {
+                        $res_obj = SLEA_Resolver::resolve_shortlink_until_target($identified_shorten_url, [], 4);
+                        $resolved_dest = !empty($res_obj['final']) ? $res_obj['final'] : $identified_shorten_url;
+                        $final_html = !empty($res_obj['final_html']) ? $res_obj['final_html'] : '';
+                    }
+                } else {
+                    // Fallback: attempt full chain resolution on the post URL
+                    $res_obj = SLEA_Resolver::resolve_shortlink_until_target($input_url, [], 4);
+                    $resolved_dest = !empty($res_obj['final']) ? $res_obj['final'] : $input_url;
+                    $final_html = !empty($res_obj['final_html']) ? $res_obj['final_html'] : '';
+                }
 
                 if (!SLEA_Resolver::is_target_destination($resolved_dest)) {
                     if (preg_match('/(https?:\/\/(?:www\.)?[a-zA-Z0-9.-]+\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)/i', $final_html, $tdm)) {
@@ -86,7 +149,7 @@ try {
                 throw new Exception('Resolved destination could not be matched to an episode page: ' . $resolved_dest);
             }
 
-            // 3. Extract Page Title strictly from this target HTML (or explicit admin title)
+            // 3. Extract Page Title strictly from this target HTML (or explicit admin title / post HTML fallback)
             $page_title = '';
             if (!empty($data['title'])) {
                 $page_title = trim($data['title']);
@@ -95,6 +158,12 @@ try {
             }
             if (empty($page_title)) {
                 $page_title = SLEA_Extractor::extract_page_title($final_html, $resolved_dest);
+            }
+            if ((empty($page_title) || $page_title === 'Episode Download Links') && !empty($post_html)) {
+                $post_title = SLEA_Extractor::extract_page_title($post_html, $input_url);
+                if (!empty($post_title)) {
+                    $page_title = $post_title;
+                }
             }
             // Sanitize title: if page title contains "DramaVerse 2", "mydverse", "mydverse 2" replace with "Movie Hub HQ"
             $page_title = SLEA_Extractor::sanitize_page_title($page_title);
@@ -124,16 +193,18 @@ try {
             echo json_encode([
                 'success' => true,
                 'data'    => [
-                    'id'           => $saved_page['id'],
-                    'slug'         => $saved_page['slug'],
-                    'title'        => $saved_page['title'],
-                    'clean_url'    => $clean_url,
-                    'view_url'     => $view_url,
-                    'is_public'    => intval($saved_page['is_public']),
-                    'resolved_url' => $resolved_dest,
-                    'target_valid' => SLEA_Resolver::is_target_destination($resolved_dest),
-                    'button_count' => count($buttons),
-                    'buttons'      => $buttons
+                    'id'                     => $saved_page['id'],
+                    'slug'                   => $saved_page['slug'],
+                    'title'                  => $saved_page['title'],
+                    'clean_url'              => $clean_url,
+                    'view_url'               => $view_url,
+                    'is_public'              => intval($saved_page['is_public']),
+                    'input_type'             => $input_type,
+                    'identified_shorten_url' => $identified_shorten_url,
+                    'resolved_url'           => $resolved_dest,
+                    'target_valid'           => SLEA_Resolver::is_target_destination($resolved_dest),
+                    'button_count'           => count($buttons),
+                    'buttons'                => $buttons
                 ]
             ]);
             break;
@@ -270,6 +341,18 @@ try {
         case 'get_share_settings':
             $s_settings = SLEA_Datastore::get_share_settings();
             echo json_encode(['success' => true, 'share_settings' => $s_settings]);
+            break;
+
+        case 'save_debug_settings':
+            $d_data = $data['debug_settings'] ?? $data ?? [];
+            if (!is_array($d_data)) throw new Exception('Invalid debug settings format.');
+            $saved = SLEA_Datastore::save_debug_settings($d_data);
+            echo json_encode(['success' => true, 'debug_settings' => $saved]);
+            break;
+
+        case 'get_debug_settings':
+            $d_settings = SLEA_Datastore::get_debug_settings();
+            echo json_encode(['success' => true, 'debug_settings' => $d_settings]);
             break;
 
         case 'resolve':
@@ -453,7 +536,7 @@ try {
             $logger = new SLEA_UpdateLogger('health_check');
             $checker = new SLEA_HealthChecker($logger);
             $ok = $checker->verify_health();
-            echo json_encode(['success' => $ok, 'version' => defined('APP_VERSION') ? APP_VERSION : 'v-18.0', 'time' => date('Y-m-d H:i:s')]);
+            echo json_encode(['success' => $ok, 'version' => defined('APP_VERSION') ? APP_VERSION : 'v-19.0', 'time' => date('Y-m-d H:i:s')]);
             break;
 
         default:

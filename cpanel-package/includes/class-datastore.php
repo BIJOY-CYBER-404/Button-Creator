@@ -389,6 +389,26 @@ class SLEA_Datastore {
         return ['code' => 'UN', 'name' => 'Unknown'];
     }
 
+    public static function get_visitor_session_id() {
+        $raw_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        if (strpos($raw_ip, ',') !== false) {
+            $raw_ip = trim(explode(',', $raw_ip)[0]);
+        }
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $today = date('Y-m-d');
+        return substr(hash('sha256', $raw_ip . '|' . $ua . '|' . $today), 0, 32);
+    }
+
+    public static function format_duration_label($sec) {
+        $sec = max(0, (int)round($sec));
+        if ($sec <= 0) {
+            return '0s';
+        }
+        $mins = (int)floor($sec / 60);
+        $rem = $sec % 60;
+        return $mins > 0 ? ($mins . 'm ' . $rem . 's') : ($rem . 's');
+    }
+
     public static function record_visit_telemetry($slug, $override = null) {
         try {
             $pdo = SLEA_DB::get_connection();
@@ -418,39 +438,189 @@ class SLEA_Datastore {
                 }
             }
 
-            $raw_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+            $raw_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+            if (strpos($raw_ip, ',') !== false) {
+                $raw_ip = trim(explode(',', $raw_ip)[0]);
+            }
             $ip_hash = $raw_ip !== '' ? substr(hash('sha256', $raw_ip . date('Y-m')), 0, 24) : '';
+            $session_id = self::get_visitor_session_id();
+            $ref_raw = trim((string)($_SERVER['HTTP_REFERER'] ?? ''));
+            $ref_host = $ref_raw !== '' ? strtolower((string)parse_url($ref_raw, PHP_URL_HOST)) : '';
+            $today = date('Y-m-d');
+            $ym = date('Y-m');
+            $now = date('Y-m-d H:i:s');
+
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                if (empty($_SESSION['slea_session_start_ts'])) {
+                    $_SESSION['slea_session_start_ts'] = time();
+                }
+            }
+
+            $duration_sec = is_array($override) && isset($override['duration_sec'])
+                ? max(1, min(7200, (int)$override['duration_sec']))
+                : 1;
+
+            if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['slea_session_start_ts'])) {
+                $sess_elapsed = max(1, min(7200, time() - (int)$_SESSION['slea_session_start_ts']));
+                $duration_sec = max($duration_sec, $sess_elapsed);
+            }
+
+            // Check if this visitor session already has a record today to compute real multi-request session elapsed time
+            try {
+                $chk = $pdo->prepare("
+                    SELECT MIN(COALESCE(created_at, visited_at)) AS first_seen, MAX(duration_sec) AS max_dur
+                    FROM analytics_visits
+                    WHERE (session_id = :sid OR (ip_hash != '' AND ip_hash = :iph))
+                      AND (visit_date = :vd OR SUBSTR(COALESCE(created_at, visited_at), 1, 10) = :vd2)
+                ");
+                $chk->execute([
+                    ':sid' => $session_id,
+                    ':iph' => $ip_hash,
+                    ':vd'  => $today,
+                    ':vd2' => $today
+                ]);
+                $prev = $chk->fetch(PDO::FETCH_ASSOC);
+                if ($prev && !empty($prev['first_seen'])) {
+                    $first_ts = strtotime($prev['first_seen']);
+                    if ($first_ts !== false && $first_ts > 0) {
+                        $elapsed = max(1, min(7200, time() - $first_ts));
+                        $duration_sec = max($duration_sec, (int)($prev['max_dur'] ?? 0), $elapsed);
+                    }
+                    $upd = $pdo->prepare("
+                        UPDATE analytics_visits
+                        SET duration_sec = CASE WHEN duration_sec > :dur1 THEN duration_sec ELSE :dur2 END,
+                            updated_at = :now,
+                            session_id = CASE WHEN session_id = '' OR session_id IS NULL THEN :sid_set ELSE session_id END
+                        WHERE (session_id = :sid OR (ip_hash != '' AND ip_hash = :iph))
+                          AND (visit_date = :vd OR SUBSTR(COALESCE(created_at, visited_at), 1, 10) = :vd2)
+                    ");
+                    $upd->execute([
+                        ':dur1'    => $duration_sec,
+                        ':dur2'    => $duration_sec,
+                        ':now'     => $now,
+                        ':sid_set' => $session_id,
+                        ':sid'     => $session_id,
+                        ':iph'     => $ip_hash,
+                        ':vd'      => $today,
+                        ':vd2'     => $today
+                    ]);
+                }
+            } catch (Exception $e) {
+                // Non-blocking
+            }
 
             $stmt = $pdo->prepare("
-                INSERT INTO analytics_visits (page_slug, device_type, traffic_channel, country_code, country_name, ip_hash, visited_at)
-                VALUES (:slug, :dev, :chan, :cc, :cn, :iph, :now)
+                INSERT INTO analytics_visits (
+                    session_id, page_slug, device_type, channel, traffic_channel,
+                    referrer_host, country, country_name, country_code, ip_hash,
+                    duration_sec, visit_date, year_month, visited_at, created_at, updated_at
+                ) VALUES (
+                    :sid, :slug, :dev, :chan1, :chan2,
+                    :ref, :cnt1, :cnt2, :cc, :iph,
+                    :dur, :vd, :ym, :va, :ca, :ua
+                )
             ");
             $stmt->execute([
-                ':slug' => substr((string)$slug, 0, 255),
-                ':dev'  => $device,
-                ':chan' => $channel,
-                ':cc'   => $country['code'],
-                ':cn'   => $country['name'],
-                ':iph'  => $ip_hash,
-                ':now'  => date('Y-m-d H:i:s')
+                ':sid'   => $session_id,
+                ':slug'  => substr((string)$slug, 0, 120),
+                ':dev'   => $device,
+                ':chan1' => $channel,
+                ':chan2' => $channel,
+                ':ref'   => substr($ref_host, 0, 190),
+                ':cnt1'  => $country['name'],
+                ':cnt2'  => $country['name'],
+                ':cc'    => $country['code'],
+                ':iph'   => $ip_hash,
+                ':dur'   => $duration_sec,
+                ':vd'    => $today,
+                ':ym'    => $ym,
+                ':va'    => $now,
+                ':ca'    => $now,
+                ':ua'    => $now
             ]);
         } catch (Exception $e) {
             // Non-blocking
         }
     }
 
+    public static function update_visit_duration($slug = '', $client_duration_sec = 0) {
+        try {
+            $pdo = SLEA_DB::get_connection();
+            $session_id = self::get_visitor_session_id();
+            $raw_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+            if (strpos($raw_ip, ',') !== false) {
+                $raw_ip = trim(explode(',', $raw_ip)[0]);
+            }
+            $ip_hash = $raw_ip !== '' ? substr(hash('sha256', $raw_ip . date('Y-m')), 0, 24) : '';
+            $today = date('Y-m-d');
+            $now = date('Y-m-d H:i:s');
+            $dur = max(1, min(7200, (int)$client_duration_sec));
+
+            if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['slea_session_start_ts'])) {
+                $dur = max($dur, max(1, min(7200, time() - (int)$_SESSION['slea_session_start_ts'])));
+            }
+
+            $chk = $pdo->prepare("
+                SELECT id, COALESCE(created_at, visited_at) AS first_seen, duration_sec
+                FROM analytics_visits
+                WHERE (session_id = :sid OR (ip_hash != '' AND ip_hash = :iph))
+                ORDER BY id ASC
+            ");
+            $chk->execute([':sid' => $session_id, ':iph' => $ip_hash]);
+            $rows = $chk->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!empty($rows)) {
+                $first_seen = $rows[0]['first_seen'] ?? '';
+                if ($first_seen !== '') {
+                    $first_ts = strtotime($first_seen);
+                    if ($first_ts !== false && $first_ts > 0) {
+                        $server_elapsed = max(1, min(7200, time() - $first_ts));
+                        $dur = max($dur, $server_elapsed);
+                    }
+                }
+                $upd = $pdo->prepare("
+                    UPDATE analytics_visits
+                    SET duration_sec = CASE WHEN duration_sec > :d1 THEN duration_sec ELSE :d2 END,
+                        updated_at = :now,
+                        session_id = CASE WHEN session_id = '' OR session_id IS NULL THEN :sid_set ELSE session_id END
+                    WHERE (session_id = :sid OR (ip_hash != '' AND ip_hash = :iph))
+                ");
+                $upd->execute([
+                    ':d1'      => $dur,
+                    ':d2'      => $dur,
+                    ':now'     => $now,
+                    ':sid_set' => $session_id,
+                    ':sid'     => $session_id,
+                    ':iph'     => $ip_hash
+                ]);
+                return $dur;
+            } else {
+                self::record_visit_telemetry($slug !== '' ? $slug : '__visit__', ['duration_sec' => $dur]);
+                return $dur;
+            }
+        } catch (Exception $e) {
+            return max(1, (int)$client_duration_sec);
+        }
+    }
+
     public static function get_visit_telemetry_stats() {
         $stats = [
-            'total_tracked' => 0,
+            'total_tracked'          => 0,
+            'total_tracked_visits'   => 0,
+            'active_sessions'        => 0,
+            'avg_duration_sec'       => 0,
+            'avg_duration_formatted' => '0s',
             'devices' => [
-                'mobile'  => ['count' => 0, 'percent' => 0],
-                'desktop' => ['count' => 0, 'percent' => 0],
-                'tablet'  => ['count' => 0, 'percent' => 0],
+                'mobile'  => ['count' => 0, 'percent' => 0, 'pct' => 0],
+                'desktop' => ['count' => 0, 'percent' => 0, 'pct' => 0],
+                'tablet'  => ['count' => 0, 'percent' => 0, 'pct' => 0],
             ],
             'channels' => [
-                'direct'  => ['count' => 0, 'percent' => 0],
-                'social'  => ['count' => 0, 'percent' => 0],
-                'organic' => ['count' => 0, 'percent' => 0],
+                'direct'   => ['count' => 0, 'percent' => 0, 'pct' => 0],
+                'social'   => ['count' => 0, 'percent' => 0, 'pct' => 0],
+                'organic'  => ['count' => 0, 'percent' => 0, 'pct' => 0],
+                'search'   => ['count' => 0, 'percent' => 0, 'pct' => 0],
+                'referral' => ['count' => 0, 'percent' => 0, 'pct' => 0],
             ],
             'countries' => []
         ];
@@ -460,16 +630,103 @@ class SLEA_Datastore {
             $total = (int)$pdo->query("SELECT COUNT(*) FROM analytics_visits")->fetchColumn();
 
             // If no visits have been logged yet in analytics_visits and this is a real browser HTTP request,
-            // record the current real HTTP request telemetry so real device/channel/country data is captured immediately.
+            // record the current real HTTP request telemetry so real session/duration/device/channel/country data is captured immediately.
             if ($total === 0 && !empty($_SERVER['HTTP_USER_AGENT'])) {
                 self::record_visit_telemetry('__visit__');
                 $total = (int)$pdo->query("SELECT COUNT(*) FROM analytics_visits")->fetchColumn();
+            } elseif ($total > 0 && !empty($_SERVER['HTTP_USER_AGENT'])) {
+                // Refresh current active session's elapsed duration if this browser session already has a visit row
+                $cur_sid = self::get_visitor_session_id();
+                $raw_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+                if (strpos($raw_ip, ',') !== false) {
+                    $raw_ip = trim(explode(',', $raw_ip)[0]);
+                }
+                $cur_iph = $raw_ip !== '' ? substr(hash('sha256', $raw_ip . date('Y-m')), 0, 24) : '';
+                $chk_cur = $pdo->prepare("SELECT COUNT(*) FROM analytics_visits WHERE session_id = :sid OR (ip_hash != '' AND ip_hash = :iph)");
+                $chk_cur->execute([':sid' => $cur_sid, ':iph' => $cur_iph]);
+                if ((int)$chk_cur->fetchColumn() > 0) {
+                    self::update_visit_duration('', 1);
+                }
             }
 
             $stats['total_tracked'] = $total;
+            $stats['total_tracked_visits'] = $total;
             if ($total <= 0) {
                 return $stats;
             }
+
+            // Compute 100% real Active Sessions and Avg Visit Duration from analytics_visits rows
+            $stmt_all = $pdo->query("
+                SELECT id, session_id, ip_hash, duration_sec, visited_at, created_at, updated_at
+                FROM analytics_visits
+                ORDER BY id ASC
+            ");
+            $session_map = [];
+            if ($stmt_all) {
+                while ($row = $stmt_all->fetch(PDO::FETCH_ASSOC)) {
+                    $skey = trim((string)($row['session_id'] ?? ''));
+                    if ($skey === '') {
+                        $skey = trim((string)($row['ip_hash'] ?? ''));
+                    }
+                    if ($skey === '') {
+                        $skey = 'row_' . ($row['id'] ?? uniqid());
+                    }
+
+                    $t_start_str = $row['created_at'] ?: ($row['visited_at'] ?: '');
+                    $t_end_str   = $row['updated_at'] ?: ($row['visited_at'] ?: $t_start_str);
+                    $t_start = $t_start_str !== '' ? (int)strtotime($t_start_str) : 0;
+                    $t_end   = $t_end_str !== '' ? (int)strtotime($t_end_str) : $t_start;
+                    $row_dur = max(0, (int)($row['duration_sec'] ?? 0));
+
+                    if (!isset($session_map[$skey])) {
+                        $session_map[$skey] = [
+                            'min_ts'  => $t_start,
+                            'max_ts'  => $t_end,
+                            'max_dur' => $row_dur,
+                            'hits'    => 1
+                        ];
+                    } else {
+                        if ($t_start > 0 && ($session_map[$skey]['min_ts'] === 0 || $t_start < $session_map[$skey]['min_ts'])) {
+                            $session_map[$skey]['min_ts'] = $t_start;
+                        }
+                        if ($t_end > $session_map[$skey]['max_ts']) {
+                            $session_map[$skey]['max_ts'] = $t_end;
+                        }
+                        if ($row_dur > $session_map[$skey]['max_dur']) {
+                            $session_map[$skey]['max_dur'] = $row_dur;
+                        }
+                        $session_map[$skey]['hits']++;
+                    }
+                }
+            }
+
+            $active_sessions = max(1, count($session_map));
+            $session_durations = [];
+            $now_ts = time();
+            $today_str = date('Y-m-d');
+
+            foreach ($session_map as $sinfo) {
+                $span = ($sinfo['max_ts'] > 0 && $sinfo['min_ts'] > 0 && $sinfo['max_ts'] >= $sinfo['min_ts'])
+                    ? min(7200, $sinfo['max_ts'] - $sinfo['min_ts'])
+                    : 0;
+                $d = max($sinfo['max_dur'], $span);
+                if ($d <= 0 && $sinfo['min_ts'] > 0) {
+                    if (date('Y-m-d', $sinfo['min_ts']) === $today_str && ($now_ts - $sinfo['min_ts']) >= 0) {
+                        $d = max(1, min(3600, $now_ts - $sinfo['min_ts']));
+                    } else {
+                        $d = 1;
+                    }
+                }
+                $session_durations[] = max(1, $d);
+            }
+
+            $avg_duration_sec = !empty($session_durations)
+                ? max(1, (int)round(array_sum($session_durations) / count($session_durations)))
+                : 1;
+
+            $stats['active_sessions']        = $active_sessions;
+            $stats['avg_duration_sec']       = $avg_duration_sec;
+            $stats['avg_duration_formatted'] = self::format_duration_label($avg_duration_sec);
 
             // Device breakdown
             $stmt_d = $pdo->query("SELECT device_type, COUNT(*) as cnt FROM analytics_visits GROUP BY device_type");
@@ -478,41 +735,59 @@ class SLEA_Datastore {
                     $dtype = strtolower(trim($r['device_type'] ?? ''));
                     $cnt = (int)($r['cnt'] ?? 0);
                     if (isset($stats['devices'][$dtype])) {
+                        $pct = (int)round(($cnt / $total) * 100);
                         $stats['devices'][$dtype]['count'] = $cnt;
-                        $stats['devices'][$dtype]['percent'] = (int)round(($cnt / $total) * 100);
+                        $stats['devices'][$dtype]['percent'] = $pct;
+                        $stats['devices'][$dtype]['pct'] = $pct;
                     }
                 }
             }
 
-            // Traffic channels breakdown
-            $stmt_c = $pdo->query("SELECT traffic_channel, COUNT(*) as cnt FROM analytics_visits GROUP BY traffic_channel");
+            // Traffic channels breakdown (supports both traffic_channel and channel columns)
+            $stmt_c = $pdo->query("
+                SELECT COALESCE(NULLIF(traffic_channel, ''), NULLIF(channel, ''), 'direct') AS ch_name, COUNT(*) as cnt
+                FROM analytics_visits
+                GROUP BY ch_name
+            ");
             if ($stmt_c) {
                 while ($r = $stmt_c->fetch(PDO::FETCH_ASSOC)) {
-                    $chan = strtolower(trim($r['traffic_channel'] ?? ''));
-                    $cnt = (int)($r['cnt'] ?? 0);
-                    if (isset($stats['channels'][$chan])) {
-                        $stats['channels'][$chan]['count'] = $cnt;
-                        $stats['channels'][$chan]['percent'] = (int)round(($cnt / $total) * 100);
+                    $chan = strtolower(trim($r['ch_name'] ?? 'direct'));
+                    if ($chan === 'search' || $chan === 'referral') {
+                        $chan_norm = 'organic';
+                    } else {
+                        $chan_norm = in_array($chan, ['direct', 'social', 'organic'], true) ? $chan : 'direct';
                     }
+                    $cnt = (int)($r['cnt'] ?? 0);
+                    $stats['channels'][$chan_norm]['count'] += $cnt;
+                    $stats['channels'][$chan_norm]['percent'] = (int)round(($stats['channels'][$chan_norm]['count'] / $total) * 100);
+                    $stats['channels'][$chan_norm]['pct'] = $stats['channels'][$chan_norm]['percent'];
                 }
+                $stats['channels']['search'] = $stats['channels']['organic'];
             }
 
-            // Top countries breakdown
+            // Top countries breakdown (supports both country_name and country columns)
             $stmt_loc = $pdo->query("
-                SELECT country_code, country_name, COUNT(*) as cnt
+                SELECT
+                    COALESCE(NULLIF(country_code, ''), 'UN') AS c_code,
+                    COALESCE(NULLIF(country_name, ''), NULLIF(country, ''), 'Unknown') AS c_name,
+                    COUNT(*) as cnt
                 FROM analytics_visits
-                GROUP BY country_code, country_name
+                GROUP BY c_code, c_name
                 ORDER BY cnt DESC
                 LIMIT 5
             ");
             if ($stmt_loc) {
                 while ($r = $stmt_loc->fetch(PDO::FETCH_ASSOC)) {
                     $cnt = (int)($r['cnt'] ?? 0);
+                    $pct = (int)round(($cnt / $total) * 100);
                     $stats['countries'][] = [
-                        'code'    => $r['country_code'] ?: 'UN',
-                        'name'    => $r['country_name'] ?: 'Unknown',
-                        'count'   => $cnt,
-                        'percent' => (int)round(($cnt / $total) * 100)
+                        'code'         => $r['c_code'] ?: 'UN',
+                        'country_code' => $r['c_code'] ?: 'UN',
+                        'name'         => $r['c_name'] ?: 'Unknown',
+                        'country'      => $r['c_name'] ?: 'Unknown',
+                        'count'        => $cnt,
+                        'percent'      => $pct,
+                        'pct'          => $pct
                     ];
                 }
             }
@@ -742,7 +1017,7 @@ class SLEA_Datastore {
         if (empty($clean)) {
             $clean = 'login';
         }
-        $reserved = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'api', 'logout', 'setup', 'view', 'index', 'p', 'page', '404', 'assets', 'data', 'includes', 'database'];
+        $reserved = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'api', 'logout', 'setup', 'view', 'index', 'p', 'page', '404', 'assets', 'data', 'includes', 'database', 'dmca', 'disclaimer', 'about-us', 'about', 'privacy-policy', 'privacy'];
         if (in_array($clean, $reserved, true)) {
             throw new Exception("The path '/{$clean}' is reserved by the system. Please choose a different login path.");
         }
@@ -875,6 +1150,111 @@ class SLEA_Datastore {
 
         self::save_raw_setting('share_settings', $clean);
         return $clean;
+    }
+
+    // -------------------------------------------------------------
+    // System Debug Mode & Public Error Handling Settings
+    // -------------------------------------------------------------
+
+    public static function get_debug_settings() {
+        $defaults = [
+            'enabled' => false,
+        ];
+
+        $raw = self::get_raw_setting('debug_settings');
+        if (!empty($raw)) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return [
+                    'enabled' => !empty($decoded['enabled']),
+                ];
+            }
+        }
+
+        return $defaults;
+    }
+
+    public static function save_debug_settings($data) {
+        $clean = [
+            'enabled' => !empty($data['enabled']),
+        ];
+        self::save_raw_setting('debug_settings', $clean);
+        return $clean;
+    }
+
+    public static function is_debug_mode() {
+        try {
+            $dbg = self::get_debug_settings();
+            return !empty($dbg['enabled']);
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public static function register_public_error_handler() {
+        $debug = self::is_debug_mode();
+        if ($debug) {
+            @ini_set('display_errors', '1');
+            @ini_set('display_startup_errors', '1');
+            @error_reporting(E_ALL);
+        } else {
+            @ini_set('display_errors', '0');
+            @ini_set('display_startup_errors', '0');
+            @error_reporting(0);
+        }
+
+        set_exception_handler(function ($ex) {
+            $msg = "Uncaught " . get_class($ex) . ": " . $ex->getMessage() . " in " . basename($ex->getFile()) . " on line " . $ex->getLine();
+            SLEA_Datastore::render_public_error(
+                '500 - Application Error',
+                $msg,
+                500,
+                'Something went wrong while loading this page. Please try again in a moment.'
+            );
+        });
+
+        register_shutdown_function(function () {
+            $err = error_get_last();
+            if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+                $msg = "Fatal Error [{$err['type']}]: {$err['message']} in " . basename($err['file']) . " on line {$err['line']}";
+                SLEA_Datastore::render_public_error(
+                    '500 - System Error',
+                    $msg,
+                    500,
+                    'Something went wrong while loading this page. Please try again in a moment.'
+                );
+            }
+        });
+    }
+
+    public static function render_public_error($actual_title, $actual_error_msg, $http_code = 404, $safe_public_msg = null) {
+        if (!headers_sent()) {
+            http_response_code(intval($http_code) ?: 404);
+            header('X-Robots-Tag: noindex, nofollow, noarchive');
+        }
+        $debug = self::is_debug_mode();
+        $req_uri = htmlspecialchars($_SERVER['REQUEST_URI'] ?? '/', ENT_QUOTES, 'UTF-8');
+        $safe_title = ($http_code === 404) ? 'Unable to Open Link' : 'Page Temporarily Unavailable';
+        $safe_desc = $safe_public_msg ?: 'We could not load this page right now. The link you followed may be unavailable, moved, or expired.';
+
+        $display_title = $debug ? htmlspecialchars($actual_title, ENT_QUOTES, 'UTF-8') : htmlspecialchars($safe_title, ENT_QUOTES, 'UTF-8');
+        $display_msg = $debug ? htmlspecialchars($actual_error_msg, ENT_QUOTES, 'UTF-8') : htmlspecialchars($safe_desc, ENT_QUOTES, 'UTF-8');
+
+        $debug_block = '';
+        if ($debug) {
+            $time_str = date('Y-m-d H:i:s T');
+            $debug_block = '<div style="margin-top:16px;text-align:left;background:#fef2f2;border:1px solid #fecaca;border-radius:16px;padding:14px;font-family:\'JetBrains Mono\',monospace;font-size:11px;color:#991b1b;line-height:1.5;">'
+                . '<div style="font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;color:#b91c1c;display:flex;align-items:center;justify-content:space-between;">'
+                . '<span>🛠️ Debug Mode: ON (Actual Error Details)</span>'
+                . '<span style="background:#fee2e2;padding:2px 6px;border-radius:6px;">HTTP ' . intval($http_code) . '</span>'
+                . '</div>'
+                . '<div><strong>Actual Error:</strong> ' . htmlspecialchars($actual_error_msg, ENT_QUOTES, 'UTF-8') . '</div>'
+                . '<div style="margin-top:4px;color:#7f1d1d;"><strong>Request URI:</strong> ' . $req_uri . '</div>'
+                . '<div style="color:#7f1d1d;"><strong>Timestamp:</strong> ' . htmlspecialchars($time_str, ENT_QUOTES, 'UTF-8') . '</div>'
+                . '</div>';
+        }
+
+        die('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="robots" content="noindex, nofollow, noarchive"><title>' . $display_title . '</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;box-sizing:border-box;"><div style="max-width:480px;width:100%;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><div style="width:48px;height:48px;border-radius:16px;background:#fce8e6;color:#d93025;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-weight:800;font-size:20px;">!</div><h1 style="color:#111827;font-size:20px;font-weight:800;margin:0 0 8px;">' . $display_title . '</h1><p style="font-size:13px;color:#5f6368;margin:0;line-height:1.6;">' . $display_msg . '</p>' . $debug_block . '</div></body></html>');
     }
 
     // -------------------------------------------------------------
@@ -1152,7 +1532,7 @@ class SLEA_Datastore {
             }
 
             // Sync visitor telemetry to data/analytics_visits_backup.json
-            $stmt_av = $pdo->query("SELECT page_slug, device_type, traffic_channel, country_code, country_name, ip_hash, visited_at FROM analytics_visits ORDER BY id ASC");
+            $stmt_av = $pdo->query("SELECT * FROM analytics_visits ORDER BY id ASC");
             $rows_av = $stmt_av ? $stmt_av->fetchAll(PDO::FETCH_ASSOC) : [];
             if (!empty($rows_av)) {
                 $data_dir = defined('DATA_DIR') ? DATA_DIR : (APP_ROOT . '/data');
@@ -1191,6 +1571,7 @@ class SLEA_Datastore {
                 'ad_settings'          => self::get_ad_settings(),
                 'maintenance_settings' => self::get_maintenance_settings(),
                 'share_settings'       => self::get_share_settings(),
+                'debug_settings'       => self::get_debug_settings(),
             ];
             // Also include any custom or raw settings in DB (e.g. update_config)
             try {
@@ -1240,7 +1621,7 @@ class SLEA_Datastore {
         return [
             'backup_format' => 'slea_backup_v2',
             'app_name'      => defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive',
-            'app_version'   => defined('APP_VERSION') ? APP_VERSION : '18.0',
+            'app_version'   => defined('APP_VERSION') ? APP_VERSION : '20.0',
             'scope'         => $scope,
             'created_at'    => date('Y-m-d H:i:s'),
             'counts'        => [
@@ -1289,7 +1670,7 @@ class SLEA_Datastore {
         if (!empty($data_block['settings']) && is_array($data_block['settings'])) {
             $detected_settings = $data_block['settings'];
         } else {
-            $known_setting_keys = ['site_identity', 'login_slug', 'menu_items', 'footer_copyright', 'ad_settings', 'maintenance_settings', 'share_settings', 'update_config'];
+            $known_setting_keys = ['site_identity', 'login_slug', 'menu_items', 'footer_copyright', 'ad_settings', 'maintenance_settings', 'share_settings', 'debug_settings', 'update_config'];
             $matched_settings = [];
             foreach ($known_setting_keys as $k) {
                 if (array_key_exists($k, $payload)) {

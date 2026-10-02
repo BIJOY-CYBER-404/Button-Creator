@@ -40,20 +40,37 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
 
   const sampleShortlinks = [
     { label: "Shortlink 1 (Ij03ndJ)", url: "https://shrt.sohojgyan.com/Ij03ndJ" },
-    { label: "Shortlink 2 (AAhg)", url: "https://shrt.sohojgyan.com/AAhg" },
-    { label: "Target 1 (flp-120926)", url: "https://mydverse02.blogspot.com/p/flp-120926.html" },
-    { label: "Target 2 (mbmb-030826)", url: "https://mydverse02.blogspot.com/p/mbmb-030826.html" },
-    { label: "Drama Post", url: "https://mydverse.com/2026/09/fanletter-please-korean-drama-in-hindi/" },
+    { label: "Shortlink 2 (Oh28Si)", url: "https://safe.sohojgyan.com/Oh28Si" },
+    { label: "Post URL (Princess & Werewolf)", url: "https://mydverse.com/2026/07/the-princess-and-the-werewolf-chinese-hindi/" },
+    { label: "Post URL (Fanletter Please)", url: "https://mydverse.com/2026/09/fanletter-please-korean-drama-in-hindi/" },
+    { label: "Target (flp-120926)", url: "https://mydverse02.blogspot.com/p/flp-120926.html" },
   ];
+
+  const isPostUrlInput = (u: string) => {
+    const trimmed = u.trim().toLowerCase();
+    if (!trimmed) return false;
+    if (trimmed.includes("blogspot.") && (trimmed.includes("/p/") || trimmed.endsWith(".html"))) return false;
+    if (
+      ["sohojgyan", "shrt.", "go.", "safe.", "bit.ly", "tinyurl", "ouo.io", "droplink", "gplinks", "shrinkme", "cutt.ly", "adlinkfly"].some((k) =>
+        trimmed.includes(k)
+      )
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const [activeInputWasPost, setActiveInputWasPost] = useState<boolean>(false);
 
   const handleGenerate = async (e?: React.FormEvent, overrideUrl?: string) => {
     if (e) e.preventDefault();
     const urlToProcess = overrideUrl || shortenUrl.trim();
     if (!urlToProcess) {
-      onNotify?.("Please paste a shortened URL first.", "error");
+      onNotify?.("Please paste a shortened URL or post URL first.", "error");
       return;
     }
 
+    setActiveInputWasPost(isPostUrlInput(urlToProcess));
     setLoading(true);
     setError(null);
     setCreatedResult(null);
@@ -254,10 +271,16 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
           <div className="bg-[#f8fafd] border border-[#c2e7ff] rounded-xl p-4 space-y-3 animate-pulse">
             <div className="flex items-center gap-2 text-xs font-bold text-[#0b57d0]">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              <span>Step 1/3: Resolving Shortened URL & Bypassing Gateway...</span>
+              <span>
+                {activeInputWasPost
+                  ? 'Post URL Flow: Identifying Shorten URL from "Episode Wise Links" → Resolving Shorten URL → Extracting Buttons...'
+                  : "Shorten URL Flow: Resolving Shortened URL & Bypassing Gateway..."}
+              </span>
             </div>
             <p className="text-xs text-[#5f6368]">
-              Following redirects, resolving AdLinkFly tokens, and verifying Blogspot destination structure...
+              {activeInputWasPost
+                ? 'Fetching Post URL, locating "Episode Wise Links" button shorten URL, resolving shortlink to Blogspot destination, and generating button page...'
+                : "Following redirects, resolving AdLinkFly tokens, and verifying Blogspot destination structure..."}
             </p>
           </div>
         )}
@@ -281,6 +304,11 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
                 <CheckCircle2 className="w-4 h-4 text-[#137333]" />
                 <span>Page Created & Ready to Share!</span>
               </div>
+              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-white text-[#137333] border border-[#a8dab5]">
+                {createdResult.input_type === "post_url"
+                  ? 'Post URL → "Episode Wise Links" Shortlink → Resolved → Generated'
+                  : "Shorten URL → Resolved → Extracted → Generated"}
+              </span>
             </div>
 
             {/* Public Link Box */}
@@ -324,6 +352,14 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
                 <span className="text-[#747775]">Extracted Buttons:</span>{" "}
                 <span className="font-bold text-[#137333] block">{createdResult.button_count} episodes</span>
               </div>
+              {createdResult.identified_shorten_url && createdResult.input_type === "post_url" && (
+                <div className="min-w-0 sm:col-span-2 pt-1 border-t border-[#f0f4f9]">
+                  <span className="text-[#747775]">Identified Shorten URL ("Episode Wise Links"):</span>{" "}
+                  <span className="font-mono font-semibold text-[#0b57d0] truncate block">
+                    {createdResult.identified_shorten_url}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Button Preview List */}

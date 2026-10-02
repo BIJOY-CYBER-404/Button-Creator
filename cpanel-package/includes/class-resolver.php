@@ -90,8 +90,8 @@ class SLEA_Resolver {
             }
         }
 
-        // 1. Any Blogspot page with /p/*.html or blog post path
-        if (strpos($host, 'blogspot.') !== false) {
+        // 1. Any Blogspot page with /p/*.html or blog post path (excluding mydriveverse safelink host)
+        if (strpos($host, 'blogspot.') !== false && strpos($host, 'mydriveverse') === false) {
             if (preg_match('#/p/[a-zA-Z0-9_-]+\.html#i', $path)) {
                 return true;
             }
@@ -103,19 +103,138 @@ class SLEA_Resolver {
             }
         }
 
-        // 2. Any domain matching mydverse, dramaverse, moviehub, or dverse
-        if (preg_match('/(?:mydverse|dramaverse|dverse|moviehub)/i', $host)) {
+        // 2. Any domain matching mydverse02 or explicit /p/*.html episode destination
+        if (preg_match('/(?:mydverse02|dramaverse02)/i', $host)) {
             if (substr($path, -5) === '.html' || strpos($path, '/p/') !== false) {
                 return true;
             }
         }
 
-        // 3. Any standard page ending in .html with valid path length
-        if (substr($path, -5) === '.html' && strlen($path) > 7) {
-            return true;
+        return false;
+    }
+
+    /**
+     * Check if a URL is a shortened URL / safelink gateway
+     */
+    public static function is_shortener_url($url) {
+        if (empty($url) || !is_string($url)) {
+            return false;
+        }
+        $host = strtolower(parse_url($url, PHP_URL_HOST) ?: '');
+        $path = trim(parse_url($url, PHP_URL_PATH) ?: '', '/');
+        $query = strtolower(parse_url($url, PHP_URL_QUERY) ?: '');
+
+        $shortener_hosts = [
+            'sohojgyan', 'shrt.', 'go.', 'safe.', 'adlinkfly', 'ouo.io', 'bit.ly',
+            'droplink', 'gplinks', 'shrinkme', 'tinyurl', 'teknosimple', 'mydriveverse',
+            'cutt.ly', 'is.gd', 'v.gd', 't.co'
+        ];
+        foreach ($shortener_hosts as $kw) {
+            if (strpos($host, $kw) !== false) {
+                return true;
+            }
+        }
+
+        if (!empty($query)) {
+            foreach (['url=', 'dest=', 'link=', 'token=', 'go=', 'safelink=', 'code='] as $qp) {
+                if (strpos($query, $qp) !== false) {
+                    return true;
+                }
+            }
+        }
+
+        // Single short alphanumeric code path on non-post domains
+        if ($path !== '' && strpos($path, '/') === false && preg_match('/^[a-zA-Z0-9_-]{3,12}$/', $path)) {
+            if (!preg_match('/^(?:dmca|disclaimer|privacy-policy|privacy|about|contact|login|admin|pages|settings)$/i', $path)) {
+                return true;
+            }
         }
 
         return false;
+    }
+
+    /**
+     * Check if a URL is a Post / Article URL (e.g. https://mydverse.com/2026/07/the-princess-and-the-werewolf-chinese-hindi/)
+     */
+    public static function is_post_url($url) {
+        if (empty($url) || !is_string($url)) {
+            return false;
+        }
+        if (self::is_target_destination($url)) {
+            return false;
+        }
+        if (self::is_shortener_url($url)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Identify the shortened URL from the "Episode Wise Links" button on a Post URL HTML page
+     */
+    public static function extract_episode_wise_shortlink($html, $base_url = '') {
+        if (empty($html)) {
+            return null;
+        }
+
+        $fallback_btn_slide = null;
+        $fallback_shortlink = null;
+
+        // 1. Parse all <a>...</a> tags safely without crossing </a> boundaries
+        if (preg_match_all('/<a\s+([^>]*?)href=[\'"]([^\'"]+)[\'"]([^>]*)>((?:(?!<\/a\b)[\s\S])*?)<\/a>/i', $html, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $m) {
+                $attrs = $m[1] . ' ' . $m[3];
+                $raw_href = trim($m[2]);
+                $inner_html = $m[4];
+
+                if ($raw_href === '' || preg_match('/^(?:javascript:|mailto:|tel:|sms:|#)/i', $raw_href)) {
+                    continue;
+                }
+                if (stripos($raw_href, '#respond') !== false || stripos($attrs, 'comment-reply') !== false) {
+                    continue;
+                }
+
+                $cand = self::normalize_url($raw_href, $base_url);
+                if (empty($cand) || $cand === $base_url) {
+                    continue;
+                }
+
+                $text = html_entity_decode(trim(strip_tags($inner_html)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $text = preg_replace('/\s+/', ' ', $text);
+
+                // Priority 1: Explicit "Episode Wise Links" / "Episode Wise" / "Download Episodes" button text
+                if (preg_match('/(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise|Download[\s_-]*Episodes?|Episode[\s_-]*Links?)/i', $text)) {
+                    return $cand;
+                }
+
+                // Priority 2: Button with class="btn-slide" (used on mydverse post pages for Episode Wise Links)
+                if (stripos($attrs, 'btn-slide') !== false && $fallback_btn_slide === null) {
+                    $fallback_btn_slide = $cand;
+                }
+
+                // Priority 3: Direct shortener link (safe.sohojgyan.com, shrt.sohojgyan.com, go.sohojgyan.com) or target Blogspot link
+                if ($fallback_shortlink === null && (self::is_shortener_url($cand) || self::is_target_destination($cand))) {
+                    $fallback_shortlink = $cand;
+                }
+            }
+        }
+
+        // 2. Check contextual proximity ("Episode Wise Links" text near an <a> tag)
+        if (preg_match('/(?:Episode[\s_-]*Wise[\s_-]*Links?|Episode[\s_-]*Wise)(?:(?!<\/a\b)[\s\S]){0,350}?<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]/i', $html, $near_m)) {
+            $cand = self::normalize_url(trim($near_m[1]), $base_url);
+            if (!empty($cand) && $cand !== $base_url && !preg_match('/^(?:javascript:|mailto:|tel:|#)/i', $near_m[1])) {
+                return $cand;
+            }
+        }
+
+        if ($fallback_btn_slide !== null) {
+            return $fallback_btn_slide;
+        }
+        if ($fallback_shortlink !== null) {
+            return $fallback_shortlink;
+        }
+
+        return null;
     }
 
     /**
@@ -942,7 +1061,13 @@ class SLEA_Resolver {
     private static function extract_target_link_from_html($html, $base_url) {
         if (empty($html)) return null;
 
-        // 1. Any Blogspot /p/*.html or episode link in anchor tags
+        // 1. Check for "Episode Wise Links" button or shortlink on post pages first
+        $ew_link = self::extract_episode_wise_shortlink($html, $base_url);
+        if (!empty($ew_link) && $ew_link !== $base_url) {
+            return $ew_link;
+        }
+
+        // 2. Any Blogspot /p/*.html or episode link in anchor tags
         if (preg_match_all('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"]/i', $html, $matches)) {
             foreach ($matches[1] as $cand) {
                 $cand = self::normalize_url($cand, $base_url);
@@ -952,7 +1077,7 @@ class SLEA_Resolver {
             }
         }
 
-        // 2. Look inside script tags or JavaScript variables for target destination URL
+        // 3. Look inside script tags or JavaScript variables for target destination URL
         if (preg_match_all('/[\'"](https?:\/\/[a-zA-Z0-9.-]+\.blogspot\.[a-z.]+\/p\/[a-zA-Z0-9_-]+\.html)[\'"]/i', $html, $smatches)) {
             foreach ($smatches[1] as $cand) {
                 if (self::is_target_destination($cand) && $cand !== $base_url) {
@@ -961,8 +1086,8 @@ class SLEA_Resolver {
             }
         }
 
-        // 3. Look for Episode Wise Links anchor (shortlink candidate to resolve next)
-        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>[\s\S]*?(?:Episode[\s_-]*Wise|Download[\s_-]*Episodes?|Click\s+Here|Get\s+Link)[\s\S]*?<\/a>/i', $html, $ewm)) {
+        // 4. Look for Click Here / Get Link button without crossing </a> boundaries
+        if (preg_match('/<a\s+[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>((?:(?!<\/a\b)[\s\S])*?(?:Episode[\s_-]*Wise|Download[\s_-]*Episodes?|Click\s+Here|Get\s+Link)(?:(?!<\/a\b)[\s\S])*?)<\/a>/i', $html, $ewm)) {
             $cand = self::normalize_url($ewm[1], $base_url);
             if (stripos($cand, 'mydriveverse') === false && $cand !== $base_url) {
                 return $cand;

@@ -24,6 +24,8 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("slug") || params.get("p")) return true;
     const path = window.location.pathname;
+    const cleanPath = path.replace(/\/$/, "").toLowerCase();
+    if (["/dmca", "/disclaimer", "/about-us", "/about", "/privacy-policy", "/privacy"].includes(cleanPath)) return true;
     return path.startsWith("/p/") || path.startsWith("/page/");
   };
 
@@ -80,6 +82,17 @@ export default function App() {
     }
 
     const path = window.location.pathname;
+    const cleanPath = path.replace(/\/$/, "").toLowerCase();
+    if (["/dmca", "/disclaimer", "/about-us", "/about", "/privacy-policy", "/privacy"].includes(cleanPath)) {
+      const legalSlug =
+        cleanPath === "/privacy"
+          ? "privacy-policy"
+          : cleanPath === "/about"
+          ? "about-us"
+          : cleanPath.substring(1);
+      setActiveSlugView(legalSlug);
+      return;
+    }
     if (path.startsWith("/p/") || path.startsWith("/page/")) {
       const prefixLen = path.startsWith("/page/") ? 6 : 3;
       const slugFromPath = path.substring(prefixLen).replace(/\/$/, "");
@@ -138,6 +151,16 @@ export default function App() {
             if (window.history.pushState) {
               window.history.pushState({}, "", "/");
             }
+          }}
+          onNavigateSlug={(nextSlug) => {
+            setActiveSlugView(nextSlug);
+            if (window.history.pushState) {
+              const targetPath = ["dmca", "disclaimer", "about-us", "privacy-policy"].includes(nextSlug)
+                ? `/${nextSlug}`
+                : `/p/${nextSlug}`;
+              window.history.pushState({}, "", targetPath);
+            }
+            window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           onNotify={addToast}
         />
@@ -289,14 +312,65 @@ export default function App() {
 
         {/* Footer */}
         <footer className="mt-auto border-t border-[#e1e7f0] bg-white py-3.5 px-6 text-[11px] text-[#5f6368]">
-          <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-[#1f1f1f]">Movie Hub HQ Drive</span>
-              <span>•</span>
-              <span>Non-Indexable Episode Link System</span>
+          <div className="max-w-5xl mx-auto flex flex-col items-center gap-2">
+            <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-[#1f1f1f]">Movie Hub HQ Drive</span>
+                <span>•</span>
+                <span>Non-Indexable Episode Link System</span>
+              </div>
+              <div className="font-mono text-[#747775]">
+                Public Route: <span className="text-[#0b57d0]">/p/&#123;slug&#125;</span> • Protected Admin Mode
+              </div>
             </div>
-            <div className="font-mono text-[#747775]">
-              Public Route: <span className="text-[#0b57d0]">/p/&#123;slug&#125;</span> • Protected Admin Mode
+            <div className="w-full pt-2 border-t border-[#f0f4f9] flex items-center justify-center flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-[#5f6368]">
+              <a
+                href="/dmca"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveSlugView("dmca");
+                  if (window.history.pushState) window.history.pushState({}, "", "/dmca");
+                }}
+                className="hover:text-[#0b57d0] hover:underline transition-colors"
+              >
+                DMCA
+              </a>
+              <span className="text-[#c4c7c5] select-none">•</span>
+              <a
+                href="/disclaimer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveSlugView("disclaimer");
+                  if (window.history.pushState) window.history.pushState({}, "", "/disclaimer");
+                }}
+                className="hover:text-[#0b57d0] hover:underline transition-colors"
+              >
+                Disclaimer
+              </a>
+              <span className="text-[#c4c7c5] select-none">•</span>
+              <a
+                href="/about-us"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveSlugView("about-us");
+                  if (window.history.pushState) window.history.pushState({}, "", "/about-us");
+                }}
+                className="hover:text-[#0b57d0] hover:underline transition-colors"
+              >
+                About Us
+              </a>
+              <span className="text-[#c4c7c5] select-none">•</span>
+              <a
+                href="/privacy-policy"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveSlugView("privacy-policy");
+                  if (window.history.pushState) window.history.pushState({}, "", "/privacy-policy");
+                }}
+                className="hover:text-[#0b57d0] hover:underline transition-colors"
+              >
+                Privacy Policy
+              </a>
             </div>
           </div>
         </footer>

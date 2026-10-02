@@ -212,20 +212,51 @@ class SLEA_DB {
         self::$pdo->exec("
             CREATE TABLE IF NOT EXISTS analytics_visits (
                 id {$auto_inc},
-                session_id VARCHAR(64) NOT NULL,
+                session_id VARCHAR(64) DEFAULT '',
                 page_slug VARCHAR(120) DEFAULT '',
-                device_type VARCHAR(30) NOT NULL,
-                channel VARCHAR(40) NOT NULL,
+                device_type VARCHAR(30) DEFAULT 'desktop',
+                channel VARCHAR(40) DEFAULT 'direct',
+                traffic_channel VARCHAR(40) DEFAULT 'direct',
                 referrer_host VARCHAR(190) DEFAULT '',
-                country VARCHAR(100) NOT NULL,
-                country_code VARCHAR(10) DEFAULT '',
+                country VARCHAR(100) DEFAULT 'Unknown',
+                country_name VARCHAR(100) DEFAULT 'Unknown',
+                country_code VARCHAR(10) DEFAULT 'UN',
+                ip_hash VARCHAR(64) DEFAULT '',
                 duration_sec INT DEFAULT 0,
-                visit_date VARCHAR(10) NOT NULL,
-                year_month VARCHAR(7) NOT NULL,
+                visit_date VARCHAR(10) DEFAULT '',
+                year_month VARCHAR(7) DEFAULT '',
+                visited_at DATETIME,
                 created_at DATETIME,
                 updated_at DATETIME
             ) {$table_engine}
         ");
+
+        // Ensure all telemetry columns exist on existing analytics_visits tables across upgrades
+        $visit_alter_cols = [
+            "session_id VARCHAR(64) DEFAULT ''",
+            "page_slug VARCHAR(120) DEFAULT ''",
+            "device_type VARCHAR(30) DEFAULT 'desktop'",
+            "channel VARCHAR(40) DEFAULT 'direct'",
+            "traffic_channel VARCHAR(40) DEFAULT 'direct'",
+            "referrer_host VARCHAR(190) DEFAULT ''",
+            "country VARCHAR(100) DEFAULT 'Unknown'",
+            "country_name VARCHAR(100) DEFAULT 'Unknown'",
+            "country_code VARCHAR(10) DEFAULT 'UN'",
+            "ip_hash VARCHAR(64) DEFAULT ''",
+            "duration_sec INT DEFAULT 0",
+            "visit_date VARCHAR(10) DEFAULT ''",
+            "year_month VARCHAR(7) DEFAULT ''",
+            "visited_at DATETIME",
+            "created_at DATETIME",
+            "updated_at DATETIME"
+        ];
+        foreach ($visit_alter_cols as $col_def) {
+            try {
+                self::$pdo->exec("ALTER TABLE analytics_visits ADD COLUMN {$col_def}");
+            } catch (Exception $e) {
+                // Column already exists
+            }
+        }
 
         // Self-Heal Settings, Users, Pages, and Analytics from persistent JSON backups in /data before seeding defaults
         self::auto_heal_from_data_backups();

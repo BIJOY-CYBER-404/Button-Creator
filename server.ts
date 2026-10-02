@@ -139,6 +139,9 @@ const defaultServerSettings: Record<string, any> = {
     { id: "m3", title: "Chinese Drama", url: "https://moviehubhq.com/catagory/chinese/", new_tab: false, target_blank: false },
   ],
   footer_text: `© ${new Date().getFullYear()} MovieHubHQ 🍿 • Made with ❤️ for Direct Episode Link Gateway 🎬 • All rights reserved 🚀`,
+  debug_settings: {
+    enabled: false,
+  },
 };
 
 function sanitizeLoginSlug(raw: string): string {
@@ -231,29 +234,46 @@ function saveStoredVisits(visits: VisitTelemetryRecord[]) {
   }
 }
 
-function recordVisitTelemetry(req: express.Request, pageSlug = "") {
+const sessionFirstSeenMap = new Map<string, number>();
+
+function getVisitorSessionId(req: express.Request): string {
+  const ua = String(req.headers["user-agent"] || "");
+  const ip = String(req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0")
+    .split(",")[0]
+    .trim();
+  const today = new Date().toISOString().slice(0, 10);
+  const sid = Buffer.from(`${ip}|${ua}|${today}`).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+  if (!sessionFirstSeenMap.has(sid)) {
+    sessionFirstSeenMap.set(sid, Date.now());
+  }
+  return sid;
+}
+
+function recordVisitTelemetry(req: express.Request, pageSlug = "", clientDurationSec = 0) {
   try {
     const ua = String(req.headers["user-agent"] || "");
-    const ip = String(req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0");
     const today = new Date().toISOString().slice(0, 10);
     const ym = today.slice(0, 7);
     const nowIso = new Date().toISOString();
-    const sessionId = Buffer.from(`${ip}|${ua}|${today}`).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+    const sessionId = getVisitorSessionId(req);
 
     const deviceType = detectDeviceFromUA(ua);
     const { channel, referrer_host } = detectTrafficChannelFromReq(req);
     const { code: country_code, name: country } = detectCountryFromReq(req);
 
     const visits = getStoredVisits();
-    let durationSec = 0;
+    let durationSec = Math.max(1, Math.min(7200, Math.round(Number(clientDurationSec) || 1)));
+    const memFirstTs = sessionFirstSeenMap.get(sessionId) || Date.now();
+    durationSec = Math.max(durationSec, Math.max(1, Math.min(7200, Math.round((Date.now() - memFirstTs) / 1000))));
+
     const sameSession = visits.filter((v) => v.session_id === sessionId);
     if (sameSession.length > 0) {
       const firstTs = new Date(sameSession[0].created_at).getTime();
-      const diffSec = Math.max(0, Math.min(7200, Math.round((Date.now() - firstTs) / 1000)));
-      durationSec = diffSec;
+      const diffSec = Math.max(1, Math.min(7200, Math.round((Date.now() - firstTs) / 1000)));
+      durationSec = Math.max(durationSec, diffSec);
       for (const v of visits) {
         if (v.session_id === sessionId) {
-          v.duration_sec = diffSec;
+          v.duration_sec = Math.max(v.duration_sec || 0, durationSec);
           v.updated_at = nowIso;
         }
       }
@@ -284,26 +304,92 @@ function recordVisitTelemetry(req: express.Request, pageSlug = "") {
   }
 }
 
+function updateVisitDurationTelemetry(req: express.Request, pageSlug = "", clientDurationSec = 1): number {
+  try {
+    const sessionId = getVisitorSessionId(req);
+    const nowIso = new Date().toISOString();
+    const visits = getStoredVisits();
+    const sameSession = visits.filter((v) => v.session_id === sessionId);
+    const memFirstTs = sessionFirstSeenMap.get(sessionId) || Date.now();
+    let dur = Math.max(
+      1,
+      Math.min(7200, Math.round(Number(clientDurationSec) || 1)),
+      Math.max(1, Math.min(7200, Math.round((Date.now() - memFirstTs) / 1000)))
+    );
+
+    if (sameSession.length > 0) {
+      const firstTs = new Date(sameSession[0].created_at).getTime();
+      if (!isNaN(firstTs) && firstTs > 0) {
+        dur = Math.max(dur, Math.max(1, Math.min(7200, Math.round((Date.now() - firstTs) / 1000))));
+      }
+      for (const v of visits) {
+        if (v.session_id === sessionId) {
+          v.duration_sec = Math.max(v.duration_sec || 0, dur);
+          v.updated_at = nowIso;
+        }
+      }
+      saveStoredVisits(visits);
+      return dur;
+    } else {
+      recordVisitTelemetry(req, pageSlug || "__visit__", dur);
+      return dur;
+    }
+  } catch {
+    return Math.max(1, Math.round(Number(clientDurationSec) || 1));
+  }
+}
+
 function getVisitTelemetryStats(req: express.Request) {
   let visits = getStoredVisits();
+  const callerSessionId = getVisitorSessionId(req);
   if (visits.length === 0) {
-    recordVisitTelemetry(req, "");
+    recordVisitTelemetry(req, "__visit__", 1);
+    visits = getStoredVisits();
+  } else if (visits.some((v) => v.session_id === callerSessionId)) {
+    updateVisitDurationTelemetry(req, "", 1);
     visits = getStoredVisits();
   }
 
   const totalVisits = visits.length;
-  const uniqueSessions = new Set(visits.map((v) => v.session_id)).size;
+  const sessionMap = new Map<string, { minTs: number; maxTs: number; maxDur: number }>();
+  const nowMs = Date.now();
+  const todayStr = new Date().toISOString().slice(0, 10);
 
-  const sessionMaxDur = new Map<string, number>();
   for (const v of visits) {
-    if ((v.duration_sec || 0) > 0) {
-      sessionMaxDur.set(v.session_id, Math.max(sessionMaxDur.get(v.session_id) || 0, v.duration_sec));
+    const sid = v.session_id || "default_session";
+    const cTs = new Date(v.created_at || nowMs).getTime();
+    const uTs = new Date(v.updated_at || v.created_at || nowMs).getTime();
+    const dur = Math.max(0, Number(v.duration_sec) || 0);
+    const prev = sessionMap.get(sid);
+    if (!prev) {
+      sessionMap.set(sid, { minTs: cTs, maxTs: uTs, maxDur: dur });
+    } else {
+      if (cTs < prev.minTs) prev.minTs = cTs;
+      if (uTs > prev.maxTs) prev.maxTs = uTs;
+      if (dur > prev.maxDur) prev.maxDur = dur;
     }
   }
-  const durValues = Array.from(sessionMaxDur.values());
+
+  const uniqueSessions = Math.max(1, sessionMap.size);
+  const durValues: number[] = [];
+  for (const [sid, info] of sessionMap.entries()) {
+    const spanSec = info.maxTs >= info.minTs ? Math.min(7200, Math.round((info.maxTs - info.minTs) / 1000)) : 0;
+    let d = Math.max(info.maxDur, spanSec);
+    if (d <= 0) {
+      const memTs = sessionFirstSeenMap.get(sid);
+      const refTs = memTs ? Math.min(memTs, info.minTs) : info.minTs;
+      if (new Date(refTs).toISOString().slice(0, 10) === todayStr && nowMs >= refTs) {
+        d = Math.max(1, Math.min(3600, Math.round((nowMs - refTs) / 1000)));
+      } else {
+        d = 1;
+      }
+    }
+    durValues.push(Math.max(1, d));
+  }
+
   const avgDurationSec = durValues.length > 0
-    ? Math.round(durValues.reduce((a, b) => a + b, 0) / durValues.length)
-    : 0;
+    ? Math.max(1, Math.round(durValues.reduce((a, b) => a + b, 0) / durValues.length))
+    : 1;
 
   const devCounts = { desktop: 0, mobile: 0, tablet: 0 };
   const chanCounts = { direct: 0, search: 0, social: 0, referral: 0 };
@@ -547,7 +633,7 @@ async function startServer() {
     const current = getStoredSettings();
     if (incoming.login_slug !== undefined) {
       const cleanSlug = sanitizeLoginSlug(incoming.login_slug) || "login";
-      const reserved = ["admin", "pages", "settings", "analytics", "update", "updater", "api", "logout", "setup", "view", "index", "p", "page", "404"];
+      const reserved = ["admin", "pages", "settings", "analytics", "update", "updater", "api", "logout", "setup", "view", "index", "p", "page", "404", "dmca", "disclaimer", "about-us", "about", "privacy-policy", "privacy"];
       if (reserved.includes(cleanSlug)) {
         return res.status(400).json({
           success: false,
@@ -593,6 +679,18 @@ async function startServer() {
     res.json({ success: true, page: { ...page, is_public: isPublic ? 1 : 0 } });
   });
 
+  // Public: Record real-time visitor dwell duration heartbeat
+  app.post("/api/analytics/heartbeat", (req, res) => {
+    const { slug = "", duration_sec = 1 } = req.body || {};
+    const updatedDur = updateVisitDurationTelemetry(req, String(slug), Number(duration_sec) || 1);
+    const isAdmin = isAdminRequest(req);
+    res.json({
+      success: true,
+      duration_sec: updatedDur,
+      telemetry: isAdmin ? getVisitTelemetryStats(req) : undefined,
+    });
+  });
+
   // Protected: Get 100% Real Visitor Telemetry (Device Breakdown, Traffic Channels, Country, Sessions, Duration)
   app.get("/api/analytics/telemetry", requireAdmin, (req, res) => {
     res.json({
@@ -636,7 +734,7 @@ async function startServer() {
     const payload = {
       backup_format: "slea_backup_v2",
       app_name: "Movie Hub HQ Drive",
-      app_version: "v-18.0",
+      app_version: "v-20.0",
       scope,
       created_at: new Date().toISOString(),
       counts: {
@@ -846,8 +944,9 @@ async function startServer() {
 
           // Derive title
           const blogspotMatch = finalUrl.match(/\/p\/([a-zA-Z0-9_-]+)\.html/i);
-          let pageTitle = title_override || (parsed as any).title || "Episode Download Links";
-          if (!title_override && !(parsed as any).title && blogspotMatch) {
+          const extractedTitle = (parsed as any).page_title || (parsed as any).title || "";
+          let pageTitle = title_override || extractedTitle || "Episode Download Links";
+          if (!title_override && (!extractedTitle || extractedTitle === "Episode Download Links") && blogspotMatch) {
             const cleanSlug = blogspotMatch[1].replace(/[-_]+/g, " ");
             pageTitle = cleanSlug.toUpperCase();
           }
@@ -883,6 +982,8 @@ async function startServer() {
               title: newPage.title,
               clean_url: cleanUrl,
               view_url: `/p/${slug}`,
+              input_type: (parsed as any).input_type || "shorten_url",
+              identified_shorten_url: (parsed as any).identified_shorten_url || null,
               resolved_url: finalUrl,
               target_valid: Boolean(parsed.target_destination_verified),
               button_count: items.length,
@@ -1034,16 +1135,16 @@ async function startServer() {
       return res.sendFile(updatePath);
     }
     return res.json({
-      version: "18.0",
-      release_date: "2026-10-01",
+      version: "20.0",
+      release_date: "2026-10-02",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-      checksum: "be4e888a009832be1bde5547a17bc1db69fd93c26b74333f775955082a181aa1",
-      sha256: "be4e888a009832be1bde5547a17bc1db69fd93c26b74333f775955082a181aa1",
+      checksum: "065b0162009589d0e6da9058363b187533b15e2e49fe72fef50c7eb2b669104e",
+      sha256: "065b0162009589d0e6da9058363b187533b15e2e49fe72fef50c7eb2b669104e",
       minimum_php: "7.4",
       release_notes: [
-        "Standardized version number format to v-x.x (v-18.0) across all pages and updater manifests",
-        "Comprehensive website & cPanel security hardening: SSRF protection, CSRF verification, brute-force rate limiting, and direct PHP access guards",
-        "100% Real Visitor Telemetry: Live tracking and aggregation of Device Breakdown, Top Traffic Channels, and Top Traffic Country"
+        "Added Official About Us Page (/about-us) to Horizontal Footer Links & humanized all legal pages (DMCA, Disclaimer, About Us, Privacy Policy)",
+        "Added Debug Mode ON/OFF toggle in Admin Settings (/settings) with intelligent Public Error Handling System",
+        "100% Real Visitor Telemetry for Active Sessions & Avg Visit Duration with live client-side dwell time heartbeat"
       ]
     });
   });

@@ -108,6 +108,8 @@ export interface CreatePageResponse {
     title: string;
     clean_url: string;
     view_url: string;
+    input_type?: "shorten_url" | "post_url" | "target_url";
+    identified_shorten_url?: string | null;
     resolved_url: string;
     target_valid: boolean;
     button_count: number;

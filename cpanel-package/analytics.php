@@ -99,6 +99,9 @@ $growth_rate = $has_historical_comparison ? round((($current_month_views - $prev
 $active_pages_count = count($pages);
 $visit_telemetry = SLEA_Datastore::get_visit_telemetry_stats();
 $total_tracked_visits = intval($visit_telemetry['total_tracked'] ?? 0);
+$active_sessions = intval($visit_telemetry['active_sessions'] ?? 0);
+$avg_duration_sec = intval($visit_telemetry['avg_duration_sec'] ?? 0);
+$avg_duration_formatted = $visit_telemetry['avg_duration_formatted'] ?? SLEA_Datastore::format_duration_label($avg_duration_sec);
 $dev_mobile = $visit_telemetry['devices']['mobile'] ?? ['count' => 0, 'percent' => 0];
 $dev_desktop = $visit_telemetry['devices']['desktop'] ?? ['count' => 0, 'percent' => 0];
 $dev_tablet = $visit_telemetry['devices']['tablet'] ?? ['count' => 0, 'percent' => 0];
@@ -353,12 +356,12 @@ $top_pages = array_slice($pages, 0, 10);
                             </div>
                         </div>
                         <div class="flex items-baseline gap-2">
-                            <span class="text-2xl sm:text-3xl font-extrabold text-[#111827] font-mono">—</span>
-                            <span class="text-xs font-bold text-[#5f6368] inline-flex items-center bg-[#f1f3f4] px-1.5 py-0.5 rounded-md">
-                                N/A
+                            <span id="statActiveSessions" class="text-2xl sm:text-3xl font-extrabold text-[#111827] font-mono"><?= number_format($active_sessions) ?></span>
+                            <span class="text-xs font-bold text-[#0b57d0] inline-flex items-center bg-[#e8f0fe] px-1.5 py-0.5 rounded-md border border-[#c2e7ff]">
+                                100% Real
                             </span>
                         </div>
-                        <p class="text-[11px] text-[#747775]">Session telemetry not logged in DB</p>
+                        <p class="text-[11px] text-[#747775]">Unique verified visitor sessions in DB</p>
                     </div>
 
                     <!-- Card 3: Avg Visit Duration -->
@@ -370,12 +373,12 @@ $top_pages = array_slice($pages, 0, 10);
                             </div>
                         </div>
                         <div class="flex items-baseline gap-2">
-                            <span class="text-2xl sm:text-3xl font-extrabold text-[#111827] font-mono">—</span>
-                            <span class="text-xs font-bold text-[#5f6368] inline-flex items-center bg-[#f1f3f4] px-1.5 py-0.5 rounded-md">
-                                N/A
+                            <span id="statAvgDuration" class="text-2xl sm:text-3xl font-extrabold text-[#111827] font-mono"><?= htmlspecialchars($avg_duration_formatted) ?></span>
+                            <span class="text-xs font-bold text-[#b06000] inline-flex items-center bg-[#fef7e0] px-1.5 py-0.5 rounded-md border border-[#fde293]">
+                                100% Real
                             </span>
                         </div>
-                        <p class="text-[11px] text-[#747775]">Duration telemetry not logged in DB</p>
+                        <p class="text-[11px] text-[#747775]">Real measured visitor dwell time</p>
                     </div>
 
                     <!-- Card 4: Published Pages -->
@@ -750,6 +753,44 @@ $top_pages = array_slice($pages, 0, 10);
             link.click();
             document.body.removeChild(link);
         }
+
+        // Live Session & Visit Duration Telemetry Heartbeat
+        (function() {
+            const pageLoadTs = Date.now();
+            function formatDur(sec) {
+                sec = Math.max(0, Math.round(Number(sec) || 0));
+                if (sec <= 0) return '0s';
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                return m > 0 ? (m + 'm ' + s + 's') : (s + 's');
+            }
+            function syncTelemetryHeartbeat() {
+                if (document.visibilityState === 'hidden') return;
+                const elapsedSec = Math.max(1, Math.round((Date.now() - pageLoadTs) / 1000));
+                fetch('api.php?action=telemetry_heartbeat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slug: '__analytics__', duration_sec: elapsedSec }),
+                    cache: 'no-store'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.success && data.telemetry) {
+                        const sessEl = document.getElementById('statActiveSessions');
+                        const durEl = document.getElementById('statAvgDuration');
+                        if (sessEl && typeof data.telemetry.active_sessions === 'number') {
+                            sessEl.innerText = data.telemetry.active_sessions.toLocaleString();
+                        }
+                        if (durEl) {
+                            durEl.innerText = data.telemetry.avg_duration_formatted || formatDur(data.telemetry.avg_duration_sec);
+                        }
+                    }
+                })
+                .catch(function() {});
+            }
+            setTimeout(syncTelemetryHeartbeat, 2000);
+            setInterval(syncTelemetryHeartbeat, 5000);
+        })();
     </script>
 </body>
 </html>

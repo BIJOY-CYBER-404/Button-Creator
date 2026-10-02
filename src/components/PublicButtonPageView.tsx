@@ -7,6 +7,7 @@ interface PublicButtonPageViewProps {
   isAdmin?: boolean;
   onBackToAdmin?: () => void;
   onEditPage?: (pageId: string) => void;
+  onNavigateSlug?: (slug: string) => void;
   onNotify?: (text: string, type: "success" | "error" | "info") => void;
 }
 
@@ -24,11 +25,27 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   isAdmin: propIsAdmin,
   onBackToAdmin,
   onEditPage,
+  onNavigateSlug,
   onNotify,
 }) => {
+  const rawLower = slug.trim().toLowerCase();
+  const normalizedSlugLower =
+    rawLower === "privacy" ? "privacy-policy" : rawLower === "about" ? "about-us" : rawLower;
+  const legalSlug = ["dmca", "disclaimer", "about-us", "privacy-policy"].includes(normalizedSlugLower)
+    ? (normalizedSlugLower as "dmca" | "disclaimer" | "about-us" | "privacy-policy")
+    : null;
   const [page, setPage] = useState<ButtonPage | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [debugMode, setDebugMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("slea_debug_settings");
+      if (saved) return Boolean(JSON.parse(saved)?.enabled);
+    } catch {
+      // ignore
+    }
+    return false;
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [qrModalOpen, setQrModalOpen] = useState<boolean>(false);
@@ -128,6 +145,11 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
           if (s.footer_text) {
             setFooterText(s.footer_text);
           }
+          if (s.debug_settings && typeof s.debug_settings === "object") {
+            const dbgEnabled = Boolean(s.debug_settings.enabled);
+            setDebugMode(dbgEnabled);
+            localStorage.setItem("slea_debug_settings", JSON.stringify({ enabled: dbgEnabled }));
+          }
         }
       })
       .catch(() => {});
@@ -224,6 +246,31 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     robotsMeta.setAttribute("content", "noindex, nofollow, noarchive, nosnippet, noimageindex");
 
     const fetchPage = async () => {
+      if (legalSlug) {
+        const legalTitles: Record<string, string> = {
+          dmca: "DMCA Copyright Policy – Movie Hub HQ",
+          disclaimer: "Site Disclaimer – Movie Hub HQ",
+          "about-us": "About Us – Movie Hub HQ",
+          "privacy-policy": "Privacy Policy – Movie Hub HQ",
+        };
+        setPage({
+          id: `legal_${legalSlug}`,
+          slug: legalSlug,
+          title: legalTitles[legalSlug] || "Official Information – Movie Hub HQ",
+          description: "Official information and policies for Movie Hub HQ (moviehubhq.com)",
+          source_url: "",
+          resolved_url: "",
+          theme: "indigo",
+          buttons: [],
+          views: 0,
+          is_public: 1,
+          created_at: new Date().toISOString(),
+        });
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
       try {
@@ -237,17 +284,22 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         if (res.ok && data.success && data.page) {
           const isPub = data.page.is_public === undefined ? true : Boolean(Number(data.page.is_public));
           if (!isPub && !isAdmin) {
-            setError("This episode page is either private or does not exist.");
+            setError(
+              `Actual Error [Private Page]: Episode page '${slug}' exists in datastore, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`
+            );
             setPage(null);
           } else {
             setPage(data.page);
           }
         } else {
-          setError(data.error || "This episode page is either private or does not exist.");
+          setError(
+            data.error ||
+              `Actual Error [HTTP ${res.status || 404}]: No episode page record matched slug '${slug}' in the database.`
+          );
           setPage(null);
         }
       } catch (err: any) {
-        setError(err.message || "Failed to load episode page.");
+        setError(`Actual Error [Network/Runtime]: ${err.message || "Failed to load episode page."}`);
       } finally {
         setLoading(false);
       }
@@ -255,6 +307,35 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
 
     fetchPage();
   }, [slug, effectiveToken, isAdmin]);
+
+  // Real-time visitor dwell duration heartbeat
+  useEffect(() => {
+    const startTs = Date.now();
+    const targetSlug = legalSlug || page?.slug || slug;
+    const sendHeartbeat = () => {
+      const elapsedSec = Math.max(1, Math.round((Date.now() - startTs) / 1000));
+      const payload = JSON.stringify({ slug: targetSlug, duration_sec: elapsedSec });
+      fetch("/api/analytics/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
+    };
+    const initTimer = setTimeout(sendHeartbeat, 1500);
+    const intervalTimer = setInterval(sendHeartbeat, 5000);
+    const onVisChange = () => {
+      if (document.visibilityState === "hidden") sendHeartbeat();
+    };
+    document.addEventListener("visibilitychange", onVisChange);
+    window.addEventListener("pagehide", sendHeartbeat);
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(intervalTimer);
+      document.removeEventListener("visibilitychange", onVisChange);
+      window.removeEventListener("pagehide", sendHeartbeat);
+    };
+  }, [slug, legalSlug, page?.slug]);
 
   const [maintenanceSettings] = useState<{
     enabled: boolean;
@@ -575,31 +656,58 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     );
   }
 
-  // Exact 404 screen matching cpanel-package/view.php (lines 286-289)
-  if (error || !page) {
+  const renderPublicErrorScreen = (actualTitle: string, actualErrorMsg: string) => {
+    const safeTitle = "Unable to Open Link";
+    const safeDesc =
+      "We could not load this page right now. The link you followed may be unavailable, moved, or expired.";
+    const displayTitle = debugMode ? actualTitle : safeTitle;
+    const displayMsg = debugMode ? actualErrorMsg : safeDesc;
+
     return (
-      <div className="min-h-screen bg-[#f8fafd] text-[#1f1f1f] text-center py-[60px] px-[20px]">
-        <div className="max-w-[440px] mx-auto bg-white p-8 rounded-[24px] border border-[#e0e4eb] shadow-xs">
-          <h2 className="text-[#d93025] text-xl font-bold mt-0 mb-2">404 - Page Not Available</h2>
-          <p className="text-[13px] text-[#5f6368] m-0">
-            {error || "This episode page is either private or does not exist."}
-          </p>
+      <div className="min-h-screen bg-[#f8fafd] text-[#1f1f1f] text-center py-[60px] px-[20px] flex items-center justify-center">
+        <div className="max-w-[480px] w-full mx-auto bg-white p-8 rounded-[24px] border border-[#e0e4eb] shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-[#fce8e6] text-[#d93025] flex items-center justify-center mx-auto mb-3.5 font-extrabold text-xl">
+            !
+          </div>
+          <h1 className="text-[#111827] text-xl font-extrabold mt-0 mb-2">{displayTitle}</h1>
+          <p className="text-[13px] text-[#5f6368] m-0 leading-relaxed">{displayMsg}</p>
+
+          {debugMode && (
+            <div className="mt-4 text-left bg-rose-50 border border-rose-200 rounded-2xl p-3.5 font-mono text-[11px] text-rose-900 leading-relaxed space-y-1">
+              <div className="font-bold uppercase tracking-wider text-rose-700 flex items-center justify-between">
+                <span>🛠️ Debug Mode: ON (Actual Error Details)</span>
+                <span className="bg-rose-100 px-1.5 py-0.5 rounded">HTTP 404</span>
+              </div>
+              <div>
+                <strong>Actual Error:</strong> {actualErrorMsg}
+              </div>
+              <div className="text-rose-800">
+                <strong>Request URI:</strong>{" "}
+                {typeof window !== "undefined" ? window.location.pathname + window.location.search : `/p/${slug}`}
+              </div>
+              <div className="text-rose-800">
+                <strong>Timestamp:</strong> {new Date().toISOString()}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+    );
+  };
+
+  // Error screen controlled by Debug Mode (Off = generic safe message, On = actual error reason)
+  if (error || !page) {
+    return renderPublicErrorScreen(
+      "404 - Episode Page Not Found in Database",
+      error || `Actual Error [HTTP 404]: No episode page record matched slug '${slug}' in the database.`
     );
   }
 
   const isPublic = page.is_public === undefined ? true : Boolean(Number(page.is_public));
   if (!isPublic && !isAdmin) {
-    return (
-      <div className="min-h-screen bg-[#f8fafd] text-[#1f1f1f] text-center py-[60px] px-[20px]">
-        <div className="max-w-[440px] mx-auto bg-white p-8 rounded-[24px] border border-[#e0e4eb] shadow-xs">
-          <h2 className="text-[#d93025] text-xl font-bold mt-0 mb-2">404 - Page Not Available</h2>
-          <p className="text-[13px] text-[#5f6368] m-0">
-            This episode page is either private or does not exist.
-          </p>
-        </div>
-      </div>
+    return renderPublicErrorScreen(
+      "403 / 404 - Private Episode Page Restricted",
+      `Actual Error [Private Page]: Episode page '${slug}' exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`
     );
   }
 
@@ -616,7 +724,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
       style={{ backgroundColor: themeObj.bg, color: "#1f1f1f" }}
     >
       {/* Admin Quick Controls Bar (Only shown when active admin account logged-in state is found) */}
-      {isAdmin && (
+      {isAdmin && !legalSlug && (
         <div className="w-full bg-white text-[#1f1f1f] border-b border-[#e0e4eb] px-3 sm:px-4 py-2 text-xs z-50 shadow-xs">
           <div className="max-w-4xl mx-auto flex flex-row flex-nowrap items-center justify-between gap-3 overflow-x-auto whitespace-nowrap">
             <div className="flex flex-row flex-nowrap items-center gap-2.5 sm:gap-3 shrink-0">
@@ -794,8 +902,374 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
 
       {/* Main Episode Content Area (Google Material M3 Light Theme - Matches cpanel-package/view.php lines 539-788) */}
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
-        {/* Private Page Notice Banner for Admin */}
-        {isAdmin && !isPublic && (
+        {legalSlug === "dmca" ? (
+          <article className="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
+            <div className="space-y-2 border-b border-[#f0f4f9] pb-4">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
+                DMCA COPYRIGHT POLICY
+              </span>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">
+                Movie Hub HQ – DMCA Policy
+              </h1>
+              <p className="text-xs text-[#5f6368]">
+                We respect creative work and respond promptly to valid copyright removal requests.
+              </p>
+            </div>
+
+            <div className="space-y-4 text-xs sm:text-sm text-[#444746] leading-relaxed">
+              <p>
+                At <strong className="text-[#111827]">Movie Hub HQ</strong> (
+                <a href="https://moviehubhq.com" className="text-[#0b57d0] hover:underline font-medium">
+                  https://moviehubhq.com
+                </a>
+                ), we deeply respect the hard work of content creators, studios, and copyright holders around the world.
+                We comply fully with the Digital Millennium Copyright Act (17 U.S.C. § 512) and promptly investigate
+                every legitimate copyright notice we receive.
+              </p>
+              <p>
+                Please note that <strong className="text-[#111827]">Movie Hub HQ</strong> does not host media files on
+                its own servers; our pages only index and organize publicly available third-party links. However, if you
+                are a copyright owner (or authorized representative) and believe that any link or content on our website
+                points to material that infringes your copyright, simply reach out to us and we will remove it as
+                quickly as possible.
+              </p>
+              <div className="space-y-2">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">
+                  What to include in your takedown request:
+                </h2>
+                <p className="text-xs text-[#5f6368]">
+                  To help us locate and remove the content right away, please include these details in your email:
+                </p>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>
+                    <strong className="text-[#111827]">Who you are:</strong> Your full name, organization (if
+                    applicable), mailing address, and a valid email address where we can reply to you.
+                  </li>
+                  <li>
+                    <strong className="text-[#111827]">Proof of authority:</strong> A brief confirmation that you are
+                    the copyright owner or are legally authorized to act on the owner’s behalf.
+                  </li>
+                  <li>
+                    <strong className="text-[#111827]">Exact link(s) to remove:</strong> The specific URL(s) or search
+                    terms on <strong className="text-[#111827]">Movie Hub HQ</strong> (
+                    <span className="font-mono text-xs">moviehubhq.com</span>) where the material appears.
+                  </li>
+                  <li>
+                    <strong className="text-[#111827]">Good-faith statement:</strong> A statement confirming that you
+                    believe in good faith that the disputed use is not authorized by the copyright owner, its agent, or
+                    the law.
+                  </li>
+                  <li>
+                    <strong className="text-[#111827]">Accuracy confirmation:</strong> A statement that the information
+                    in your notice is accurate and, under penalty of perjury, that you are authorized to act for the
+                    copyright owner, along with your physical or electronic signature.
+                  </li>
+                </ul>
+              </div>
+              <div className="bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 space-y-1.5">
+                <p className="font-bold text-[#111827]">
+                  📧 Send DMCA notices directly to:{" "}
+                  <a href="mailto:contact@moviehubhq.com" className="text-[#0b57d0] hover:underline font-mono">
+                    contact@moviehubhq.com
+                  </a>
+                </p>
+                <p className="text-xs text-[#5f6368]">
+                  We review all requests personally and typically respond within <strong>1 to 3 business days</strong>.
+                  Sending your notice directly to this email is the fastest way to get a link removed.
+                </p>
+              </div>
+            </div>
+          </article>
+        ) : legalSlug === "disclaimer" ? (
+          <article className="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
+            <div className="space-y-2 border-b border-[#f0f4f9] pb-4">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
+                DISCLAIMER
+              </span>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">
+                Disclaimer for Movie Hub HQ
+              </h1>
+              <p className="text-xs text-[#5f6368]">
+                Clear, plain-English information about how our site works and what to expect.
+              </p>
+            </div>
+
+            <div className="space-y-4 text-xs sm:text-sm text-[#444746] leading-relaxed">
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">1. General Information</h2>
+                <p>
+                  Everything shared on <strong className="text-[#111827]">Movie Hub HQ</strong> (
+                  <a href="https://moviehubhq.com" className="text-[#0b57d0] hover:underline font-medium">
+                    https://moviehubhq.com
+                  </a>
+                  ) is provided in good faith for general entertainment and informational purposes. While we work hard
+                  to keep episode guides and links organized and up to date, we cannot guarantee that every piece of
+                  information on the site is always 100% complete, accurate, or available at all times.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">
+                  2. External Links &amp; Third-Party Servers
+                </h2>
+                <p>
+                  Our pages include links that take you to external cloud drives, video mirrors, or third-party
+                  websites. We do not own, control, or host those external servers. Because third-party sites can change
+                  their content or policies at any time without notice,{" "}
+                  <strong className="text-[#111827]">Movie Hub HQ</strong> cannot endorse or take responsibility for the
+                  content, privacy practices, or availability of any external website you visit after leaving our page.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">3. No Professional or Legal Advice</h2>
+                <p>
+                  The content on this site is meant purely for entertainment and general reference. Nothing on{" "}
+                  <strong className="text-[#111827]">Movie Hub HQ</strong> should be taken as legal, financial, or
+                  professional advice. Any action you take based on the information found on our website is strictly at
+                  your own discretion and risk.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">4. Advertising &amp; Affiliate Links</h2>
+                <p>
+                  To keep <strong className="text-[#111827]">Movie Hub HQ</strong> free for drama fans, our pages may
+                  display third-party advertisements or occasional affiliate links. If you click on an advertiser’s link
+                  or make a purchase on a partner site, we may earn a small commission at no extra cost to you.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">5. Errors, Omissions &amp; Fair Use</h2>
+                <p>
+                  Even though we double-check our posts, broken links or typos can occasionally happen. All content on{" "}
+                  <strong className="text-[#111827]">Movie Hub HQ</strong> is provided on an “as-is” basis without
+                  warranties of any kind. Any poster thumbnails, titles, or drama descriptions belong to their
+                  respective copyright owners and are used strictly for identification and review commentary under fair
+                  use principles.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">6. Limitation of Liability</h2>
+                <p>
+                  Under no circumstances shall <strong className="text-[#111827]">Movie Hub HQ</strong> or its team be
+                  held liable for any direct, indirect, or incidental damages resulting from your use of the website or
+                  reliance on any external links shared here.
+                </p>
+              </div>
+
+              <div className="bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 space-y-1">
+                <h2 className="text-sm font-bold text-[#111827]">7. Have a Question?</h2>
+                <p className="text-xs sm:text-sm text-[#444746]">
+                  If you ever have questions about this Disclaimer or want to report a broken link, feel free to email
+                  us anytime at:{" "}
+                  <a href="mailto:contact@moviehubhq.com" className="text-[#0b57d0] hover:underline font-mono font-bold">
+                    contact@moviehubhq.com
+                  </a>
+                </p>
+              </div>
+            </div>
+          </article>
+        ) : legalSlug === "about-us" ? (
+          <article className="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
+            <div className="space-y-2 border-b border-[#f0f4f9] pb-4">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
+                ABOUT US
+              </span>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">
+                About Us – Movie Hub HQ
+              </h1>
+              <p className="text-xs text-[#5f6368]">
+                Your friendly destination for Hindi &amp; Urdu dubbed Asian and international dramas.
+              </p>
+            </div>
+
+            <div className="space-y-4 text-xs sm:text-sm text-[#444746] leading-relaxed">
+              <p>
+                Welcome to <strong className="text-[#111827]">Movie Hub HQ</strong> (
+                <a href="https://moviehubhq.com" className="text-[#0b57d0] hover:underline font-medium">
+                  https://moviehubhq.com
+                </a>
+                )! <strong className="text-[#111827]">Movie Hub HQ</strong> shares{" "}
+                <strong className="text-[#111827]">Korean Drama</strong>,{" "}
+                <strong className="text-[#111827]">Chinese Drama</strong>,{" "}
+                <strong className="text-[#111827]">Turkish Drama</strong>, and other popular international dramas in{" "}
+                <strong className="text-[#111827]">Urdu and Hindi Dubbed</strong>. You can easily watch and enjoy any
+                drama in clear Hindi Dubbed voice without complicated steps.
+              </p>
+
+              <p>
+                We created <strong className="text-[#111827]">Movie Hub HQ</strong> for drama lovers who want a clean,
+                fast, and mobile-friendly way to find their favorite episodes. Whether you love romantic K-Dramas,
+                historical C-Dramas, thrilling Turkish series, or action-packed mini-dramas, we organize episode links
+                by quality (480p, 720p, and 1080p HD) across reliable servers so you can start watching in seconds.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="p-4 rounded-2xl bg-[#f8fafd] border border-[#e0e4eb] space-y-1">
+                  <div className="text-xs font-extrabold text-[#0b57d0]">🎬 Dubbed Dramas</div>
+                  <p className="text-[11px] text-[#5f6368] leading-normal">
+                    Korean, Chinese, Turkish &amp; global series in Hindi and Urdu dubbed audio.
+                  </p>
+                </div>
+                <div className="p-4 rounded-2xl bg-[#f8fafd] border border-[#e0e4eb] space-y-1">
+                  <div className="text-xs font-extrabold text-[#0b57d0]">⚡ Fast Episode Links</div>
+                  <p className="text-[11px] text-[#5f6368] leading-normal">
+                    Clean, clutter-free episode button pages that work smoothly on any phone or PC.
+                  </p>
+                </div>
+                <div className="p-4 rounded-2xl bg-[#f8fafd] border border-[#e0e4eb] space-y-1">
+                  <div className="text-xs font-extrabold text-[#0b57d0]">💬 Viewer First</div>
+                  <p className="text-[11px] text-[#5f6368] leading-normal">
+                    We listen to our community and keep episode links updated and easy to access.
+                  </p>
+                </div>
+              </div>
+
+              <p>
+                If you have any queries regarding the site, content, advertisements, broken links, or any other issues,
+                please feel free to contact us anytime. We’re always happy to hear from our visitors!
+              </p>
+
+              <div className="bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 space-y-1.5">
+                <p className="font-bold text-[#111827]">
+                  📬 Contact Mail:{" "}
+                  <a href="mailto:contact@moviehubhq.com" className="text-[#0b57d0] hover:underline font-mono">
+                    contact@moviehubhq.com
+                  </a>
+                </p>
+                <p className="text-xs text-[#5f6368]">
+                  Thank you for visiting <strong className="text-[#111827]">Movie Hub HQ</strong> and being part of our
+                  drama-loving community!
+                </p>
+              </div>
+            </div>
+          </article>
+        ) : legalSlug === "privacy-policy" ? (
+          <article className="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
+            <div className="space-y-2 border-b border-[#f0f4f9] pb-4">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
+                PRIVACY POLICY
+              </span>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">
+                Privacy Policy for Movie Hub HQ
+              </h1>
+              <p className="text-xs text-[#5f6368]">
+                How we protect your privacy and keep your browsing experience safe.
+              </p>
+            </div>
+
+            <div className="space-y-4 text-xs sm:text-sm text-[#444746] leading-relaxed">
+              <p>
+                At <strong className="text-[#111827]">Movie Hub HQ</strong> (
+                <a href="https://moviehubhq.com" className="text-[#0b57d0] hover:underline font-medium">
+                  https://moviehubhq.com
+                </a>
+                ), your privacy matters to us. We believe you shouldn’t have to give up your personal life just to watch
+                your favorite dramas. This Privacy Policy explains in plain, simple language what basic information is
+                collected when you visit our site and how it is used.
+              </p>
+              <p>
+                If you ever have any questions about your privacy or anything in this policy, you can reach out to us
+                directly at{" "}
+                <a href="mailto:contact@moviehubhq.com" className="text-[#0b57d0] hover:underline font-mono font-bold">
+                  contact@moviehubhq.com
+                </a>
+                .
+              </p>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">
+                  1. No Account Required &amp; Minimal Data
+                </h2>
+                <p>
+                  You do not need to create an account or give us your name, phone number, or home address to use{" "}
+                  <strong className="text-[#111827]">Movie Hub HQ</strong>. Like virtually all websites, our server
+                  automatically logs basic, non-personal technical details—such as browser type, device type (mobile or
+                  desktop), approximate country, and which episode page was viewed—solely to keep the site running
+                  smoothly and fix broken pages.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">2. Cookies and Web Beacons</h2>
+                <p>
+                  Like most websites, <strong className="text-[#111827]">Movie Hub HQ</strong> uses small browser files
+                  called “cookies” to remember basic preferences and understand which pages are most helpful to our
+                  visitors. You are always in full control and can disable or clear cookies at any time in your browser
+                  settings.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">
+                  3. Google DoubleClick DART Cookie &amp; Ads
+                </h2>
+                <p>
+                  Google and other third-party advertising partners may serve ads on our site using cookies (such as
+                  DART cookies) to show relevant advertisements based on your visit to{" "}
+                  <span className="font-mono text-xs">moviehubhq.com</span> and other sites across the web. You can
+                  easily opt out of personalized DART cookies anytime by visiting Google’s Ad Settings Policy at:{" "}
+                  <a
+                    href="https://policies.google.com/technologies/ads"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#0b57d0] hover:underline break-all"
+                  >
+                    https://policies.google.com/technologies/ads
+                  </a>
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">4. Third-Party Links &amp; Advertisers</h2>
+                <p>
+                  Our episode buttons link to external video hosts and cloud storage providers, and our pages may
+                  display third-party banners. Please keep in mind that{" "}
+                  <strong className="text-[#111827]">Movie Hub HQ</strong> has no control over cookies or data collected
+                  by external websites once you leave our domain. We recommend checking the privacy policies of any
+                  third-party sites you visit.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">5. Children’s Privacy</h2>
+                <p>
+                  Protecting children online is very important to us.{" "}
+                  <strong className="text-[#111827]">Movie Hub HQ</strong> does not knowingly collect any personal
+                  information from children under the age of 13. If you are a parent or guardian and believe your child
+                  has shared personal details with us, please email us at{" "}
+                  <a href="mailto:contact@moviehubhq.com" className="text-[#0b57d0] hover:underline font-mono">
+                    contact@moviehubhq.com
+                  </a>{" "}
+                  and we will remove it immediately.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-sm sm:text-base font-bold text-[#111827]">6. Online Privacy Policy Scope</h2>
+                <p>
+                  This Privacy Policy applies only to online activities on{" "}
+                  <strong className="text-[#111827]">Movie Hub HQ</strong> (
+                  <span className="font-mono text-xs">moviehubhq.com</span>) and does not apply to information collected
+                  offline or on other websites.
+                </p>
+              </div>
+
+              <div className="bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 space-y-1">
+                <h2 className="text-sm font-bold text-[#111827]">Your Consent</h2>
+                <p className="text-xs sm:text-sm text-[#444746]">
+                  By using our website, you consent to this Privacy Policy and agree to its terms.
+                </p>
+              </div>
+            </div>
+          </article>
+        ) : (
+          <>
+            {/* Private Page Notice Banner for Admin */}
+            {isAdmin && !isPublic && (
           <div className="rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-3.5 flex items-center justify-between gap-3 text-xs text-[#7c5e10] shadow-2xs">
             <div className="flex items-center gap-2">
               <span className="text-base">🔒</span>
@@ -1098,12 +1572,76 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
             )}
           </div>
         )}
+          </>
+        )}
       </main>
 
       {/* Public Footer (Google Material M3 Light Theme - Matches cpanel-package/view.php lines 791-798) */}
       <footer className="w-full bg-white border-t border-[#e1e7f0] mt-auto py-6 px-4">
         <div className="max-w-4xl mx-auto text-center text-xs text-[#5f6368]">
           <div className="leading-relaxed" dangerouslySetInnerHTML={{ __html: footerText }} />
+          {/* Horizontal Legal Page Links below copyright text */}
+          <div className="mt-2.5 pt-2.5 border-t border-[#f0f4f9] flex items-center justify-center flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-[#5f6368]">
+            <a
+              href="/dmca"
+              onClick={(e) => {
+                if (onNavigateSlug) {
+                  e.preventDefault();
+                  onNavigateSlug("dmca");
+                }
+              }}
+              className={`hover:text-[#0b57d0] hover:underline transition-colors ${
+                legalSlug === "dmca" ? "text-[#0b57d0] font-bold" : ""
+              }`}
+            >
+              DMCA
+            </a>
+            <span className="text-[#c4c7c5] select-none">•</span>
+            <a
+              href="/disclaimer"
+              onClick={(e) => {
+                if (onNavigateSlug) {
+                  e.preventDefault();
+                  onNavigateSlug("disclaimer");
+                }
+              }}
+              className={`hover:text-[#0b57d0] hover:underline transition-colors ${
+                legalSlug === "disclaimer" ? "text-[#0b57d0] font-bold" : ""
+              }`}
+            >
+              Disclaimer
+            </a>
+            <span className="text-[#c4c7c5] select-none">•</span>
+            <a
+              href="/about-us"
+              onClick={(e) => {
+                if (onNavigateSlug) {
+                  e.preventDefault();
+                  onNavigateSlug("about-us");
+                }
+              }}
+              className={`hover:text-[#0b57d0] hover:underline transition-colors ${
+                legalSlug === "about-us" ? "text-[#0b57d0] font-bold" : ""
+              }`}
+            >
+              About Us
+            </a>
+            <span className="text-[#c4c7c5] select-none">•</span>
+            <a
+              href="/privacy-policy"
+              onClick={(e) => {
+                if (onNavigateSlug) {
+                  e.preventDefault();
+                  onNavigateSlug("privacy-policy");
+                }
+              }}
+              className={`hover:text-[#0b57d0] hover:underline transition-colors ${
+                legalSlug === "privacy-policy" ? "text-[#0b57d0] font-bold" : ""
+              }`}
+            >
+              Privacy Policy
+            </a>
+          </div>
         </div>
       </footer>
 

@@ -211,6 +211,15 @@ class SLEA_Auth {
     }
 
     public static function render_404($title = '404 Not Found', $message = 'The requested page does not exist or has been removed.') {
+        if (class_exists('SLEA_Datastore') && method_exists('SLEA_Datastore', 'render_public_error')) {
+            $req_uri = $_SERVER['REQUEST_URI'] ?? '/';
+            SLEA_Datastore::render_public_error(
+                $title,
+                "Actual Error [HTTP 404]: {$message} (Request URI: {$req_uri})",
+                404,
+                'We could not load this page right now. The link you followed may be unavailable, moved, or expired.'
+            );
+        }
         header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
@@ -224,18 +233,18 @@ class SLEA_Auth {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <meta name="robots" content="noindex, nofollow">
-            <title><?= htmlspecialchars($title) ?></title>
+            <title>Unable to Open Link</title>
             <style>
                 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafd; color: #1f1f1f; text-align: center; padding: 60px 20px; margin: 0; }
                 .box { max-width: 440px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 24px; border: 1px solid #e0e4eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-                h1 { color: #d93025; font-size: 20px; margin-top: 0; margin-bottom: 8px; }
+                h1 { color: #111827; font-size: 20px; margin-top: 0; margin-bottom: 8px; }
                 p { font-size: 13px; color: #5f6368; margin: 0; }
             </style>
         </head>
         <body>
             <div class="box">
-                <h1><?= htmlspecialchars($title) ?></h1>
-                <p><?= htmlspecialchars($message) ?></p>
+                <h1>Unable to Open Link</h1>
+                <p>We could not load this page right now. The link you followed may be unavailable, moved, or expired.</p>
             </div>
         </body>
         </html>

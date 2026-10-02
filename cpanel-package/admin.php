@@ -239,17 +239,17 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                             <button type="button" onclick="setSample('https://shrt.sohojgyan.com/Ij03ndJ')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
                                 Shortlink 1 (Ij03ndJ)
                             </button>
-                            <button type="button" onclick="setSample('https://shrt.sohojgyan.com/AAhg')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Shortlink 2 (AAhg)
+                            <button type="button" onclick="setSample('https://safe.sohojgyan.com/Oh28Si')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
+                                Shortlink 2 (Oh28Si)
                             </button>
-                            <button type="button" onclick="setSample('https://mydverse02.blogspot.com/p/flp-120926.html')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Target 1 (flp-120926)
-                            </button>
-                            <button type="button" onclick="setSample('https://mydverse02.blogspot.com/p/mbmb-030826.html')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Target 2 (mbmb-030826)
+                            <button type="button" onclick="setSample('https://mydverse.com/2026/07/the-princess-and-the-werewolf-chinese-hindi/')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
+                                Post URL (Princess &amp; Werewolf)
                             </button>
                             <button type="button" onclick="setSample('https://mydverse.com/2026/09/fanletter-please-korean-drama-in-hindi/')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
-                                Drama Post
+                                Post URL (Fanletter Please)
+                            </button>
+                            <button type="button" onclick="setSample('https://mydverse02.blogspot.com/p/flp-120926.html')" class="px-2.5 py-1 rounded-full bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#041e49] border border-[#e1e7f0] cursor-pointer transition-colors text-[11px]">
+                                Target (flp-120926)
                             </button>
                         </div>
 
@@ -382,6 +382,10 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                                 <span class="text-[#747775]">Extracted Buttons:</span>
                                 <span id="resBtnCountText" class="font-bold text-[#137333] block"></span>
                             </div>
+                            <div id="resIdentifiedShortlinkRow" class="hidden min-w-0 sm:col-span-2 pt-1 border-t border-[#f0f4f9]">
+                                <span class="text-[#747775]">Identified Shorten URL ("Episode Wise Links"):</span>
+                                <span id="resIdentifiedShortlinkText" class="font-mono font-semibold text-[#0b57d0] truncate block"></span>
+                            </div>
                         </div>
 
                         <!-- Button Preview List -->
@@ -508,22 +512,37 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
             errorBox.classList.add('hidden');
             successBox.classList.add('hidden');
 
-            statusStepTitle.innerText = 'Step 1/3: Resolving Shortened URL & Bypassing Gateway...';
-            statusStepDesc.innerText = 'Following redirects, resolving AdLinkFly tokens, and verifying Blogspot destination structure...';
+            const lowerUrl = url.toLowerCase();
+            const isShortenerInput = ['sohojgyan', 'shrt.', 'go.', 'safe.', 'bit.ly', 'tinyurl', 'ouo.io', 'droplink', 'gplinks', 'shrinkme', 'cutt.ly', 'adlinkfly'].some(k => lowerUrl.includes(k));
+            const isTargetInput = lowerUrl.includes('blogspot.') && (lowerUrl.includes('/p/') || lowerUrl.endsWith('.html'));
+            const isPostInput = !isShortenerInput && !isTargetInput;
+
+            if (isPostInput) {
+                statusStepTitle.innerText = 'Step 1/4: Identifying Shorten URL from "Episode Wise Links" button...';
+                statusStepDesc.innerText = 'Fetching Post URL page and locating the shortened URL inside the "Episode Wise Links" button...';
+            } else {
+                statusStepTitle.innerText = 'Step 1/3: Resolving Shortened URL & Bypassing Gateway...';
+                statusStepDesc.innerText = 'Following redirects, resolving AdLinkFly tokens, and verifying Blogspot destination structure...';
+            }
 
             const stepTimers = [];
             stepTimers.push(setTimeout(() => {
                 if (submitBtn.disabled) {
-                    statusStepTitle.innerText = 'Step 2/3: Bypassing Intermediate Gateway...';
-                    statusStepDesc.innerText = 'Bypassing gateway hops to reach target Blogspot destination...';
+                    if (isPostInput) {
+                        statusStepTitle.innerText = 'Step 2/4: Resolving Identified Shorten URL...';
+                        statusStepDesc.innerText = 'Bypassing shortener gateway to reach target Blogspot episode destination...';
+                    } else {
+                        statusStepTitle.innerText = 'Step 2/3: Bypassing Intermediate Gateway...';
+                        statusStepDesc.innerText = 'Bypassing gateway hops to reach target Blogspot destination...';
+                    }
                 }
             }, 3000));
             stepTimers.push(setTimeout(() => {
                 if (submitBtn.disabled) {
-                    statusStepTitle.innerText = 'Step 3/3: Extracting Episode Buttons...';
+                    statusStepTitle.innerText = isPostInput ? 'Step 3/4: Extracting Buttons & Generating Button Page...' : 'Step 3/3: Extracting Episode Buttons...';
                     statusStepDesc.innerText = 'Target reached! Parsing and extracting verified download links...';
                 }
-            }, 8000));
+            }, 7000));
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => {
@@ -573,6 +592,18 @@ $base_url = rtrim($protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF
                 document.getElementById('pageEditLink').href = 'pages.php?edit=' + data.data.id;
                 document.getElementById('resTitleText').innerText = data.data.title || 'Episode Page';
                 document.getElementById('resBtnCountText').innerText = (data.data.button_count || 0) + ' episodes';
+
+                const shortlinkRow = document.getElementById('resIdentifiedShortlinkRow');
+                const shortlinkText = document.getElementById('resIdentifiedShortlinkText');
+                if (shortlinkRow && shortlinkText) {
+                    if (data.data.identified_shorten_url && data.data.input_type === 'post_url') {
+                        shortlinkText.innerText = data.data.identified_shorten_url;
+                        shortlinkRow.classList.remove('hidden');
+                    } else {
+                        shortlinkText.innerText = '';
+                        shortlinkRow.classList.add('hidden');
+                    }
+                }
 
                 const buttons = Array.isArray(data.data.buttons) ? data.data.buttons : [];
                 document.getElementById('previewListHeader').innerText = `Extracted Buttons Preview (${buttons.length}):`;

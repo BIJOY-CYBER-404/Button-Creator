@@ -10,6 +10,8 @@ require_once __DIR__ . '/includes/class-db.php';
 require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-datastore.php';
 
+SLEA_Datastore::register_public_error_handler();
+
 if (isset($_GET['maintenance_asset']) && $_GET['maintenance_asset'] === '1') {
     $img_file = __DIR__ . '/assets/images/maintenance_illustration.jpg';
     if (file_exists($img_file)) {
@@ -38,17 +40,27 @@ if (!empty($slug) && strtolower($slug) === $configured_login_slug && !preg_match
     exit;
 }
 
-// Fallback extraction from /p/{slug} path if empty
+// Fallback extraction from /p/{slug} or direct legal slug path if empty
 if (empty($slug)) {
-    $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
     if (preg_match('#/p/([a-zA-Z0-9_-]+)#', $path, $m)) {
         $slug = trim($m[1]);
+    } elseif (preg_match('#/(dmca|disclaimer|about-us|about|privacy-policy|privacy)/?$#i', $path, $lm)) {
+        $slug = strtolower(trim($lm[1]));
     }
 }
 
+$normalized_slug_lower = strtolower(trim($slug));
+if ($normalized_slug_lower === 'privacy') {
+    $normalized_slug_lower = 'privacy-policy';
+} elseif ($normalized_slug_lower === 'about') {
+    $normalized_slug_lower = 'about-us';
+}
+$legal_slug = in_array($normalized_slug_lower, ['dmca', 'disclaimer', 'about-us', 'privacy-policy'], true) ? $normalized_slug_lower : null;
+
 // Seamless 301 redirect if accessed via direct view.php?slug=... to modern /p/{slug} clean structure
 $request_uri = $_SERVER['REQUEST_URI'] ?? '';
-if (strpos($request_uri, 'view.php') !== false && !empty($slug)) {
+if (strpos($request_uri, 'view.php') !== false && !empty($slug) && !$legal_slug) {
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $base_dir = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
@@ -280,30 +292,70 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
 }
 
 if (empty($slug)) {
-    http_response_code(404);
-    die('<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Page Not Found</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;"><div style="max-width:440px;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><h2 style="color:#d93025;margin:0 0 8px;">404 - Page Not Found</h2><p style="font-size:13px;color:#5f6368;margin:0;">The requested episode link page could not be located.</p></div></body></html>');
+    SLEA_Datastore::render_public_error(
+        '404 - Page Not Found (Missing Slug Parameter)',
+        "Actual Error [HTTP 404]: Request to view.php failed because no episode page slug (?slug= or /p/{slug}) was provided in the request URL.",
+        404,
+        'We could not load this page right now. The link you followed may be incomplete or unavailable.'
+    );
 }
 
-// Lookup page by slug with bi-directional fallback (supports both clean slug and legacy ep- prefix)
-$page = SLEA_Datastore::get_page_by_slug($slug, !$is_admin);
-if (!$page) {
-    if (strpos($slug, 'ep-') === 0) {
-        $alt_slug = substr($slug, 3);
-        $page = SLEA_Datastore::get_page_by_slug($alt_slug, !$is_admin);
-    } else {
-        $alt_slug = 'ep-' . $slug;
-        $page = SLEA_Datastore::get_page_by_slug($alt_slug, !$is_admin);
+if ($legal_slug) {
+    $legal_titles = [
+        'dmca'           => 'DMCA Copyright Policy – Movie Hub HQ',
+        'disclaimer'     => 'Site Disclaimer – Movie Hub HQ',
+        'about-us'       => 'About Us – Movie Hub HQ',
+        'privacy-policy' => 'Privacy Policy – Movie Hub HQ',
+    ];
+    $page = [
+        'id'           => 0,
+        'slug'         => $legal_slug,
+        'title'        => $legal_titles[$legal_slug] ?? 'Official Information – Movie Hub HQ',
+        'description'  => 'Official information and policies for Movie Hub HQ (moviehubhq.com)',
+        'buttons'      => [],
+        'theme'        => 'indigo',
+        'resolved_url' => '',
+        'is_public'    => 1,
+        'views'        => 0
+    ];
+    if (defined('AUTO_INCREMENT_VIEWS') && AUTO_INCREMENT_VIEWS) {
+        SLEA_Datastore::record_visit_telemetry($legal_slug);
     }
-}
+} else {
+    // Lookup page by slug with bi-directional fallback (supports both clean slug and legacy ep- prefix)
+    $page = SLEA_Datastore::get_page_by_slug($slug, !$is_admin);
+    if (!$page) {
+        if (strpos($slug, 'ep-') === 0) {
+            $alt_slug = substr($slug, 3);
+            $page = SLEA_Datastore::get_page_by_slug($alt_slug, !$is_admin);
+        } else {
+            $alt_slug = 'ep-' . $slug;
+            $page = SLEA_Datastore::get_page_by_slug($alt_slug, !$is_admin);
+        }
+    }
 
-if (!$page || (!$is_admin && isset($page['is_public']) && intval($page['is_public']) === 0)) {
-    http_response_code(404);
-    die('<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Page Not Available</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;text-align:center;padding:60px 20px;background:#f8fafd;color:#1f1f1f;"><div style="max-width:440px;margin:0 auto;background:#ffffff;padding:32px;border-radius:24px;border:1px solid #e0e4eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);"><h2 style="color:#d93025;margin:0 0 8px;">404 - Page Not Available</h2><p style="font-size:13px;color:#5f6368;margin:0;">This episode page is either private or does not exist.</p></div></body></html>');
-}
+    if (!$page) {
+        SLEA_Datastore::render_public_error(
+            '404 - Episode Page Not Found in Database',
+            "Actual Error [HTTP 404]: No episode page record matched slug '{$slug}' (or fallback '{$alt_slug}') in the database.",
+            404,
+            'We could not load this page right now. The link you followed may be unavailable, moved, or expired.'
+        );
+    }
 
-// Increment view counter
-if (defined('AUTO_INCREMENT_VIEWS') && AUTO_INCREMENT_VIEWS) {
-    SLEA_Datastore::increment_views($page['slug'] ?? $slug);
+    if (!$is_admin && isset($page['is_public']) && intval($page['is_public']) === 0) {
+        SLEA_Datastore::render_public_error(
+            '403 / 404 - Private Episode Page Restricted',
+            "Actual Error [Private Page]: Episode page '{$slug}' (ID #{$page['id']}) exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.",
+            404,
+            'We could not load this page right now. The link you followed may be unavailable, moved, or expired.'
+        );
+    }
+
+    // Increment view counter
+    if (defined('AUTO_INCREMENT_VIEWS') && AUTO_INCREMENT_VIEWS) {
+        SLEA_Datastore::increment_views($page['slug'] ?? $slug);
+    }
 }
 
 $title = htmlspecialchars($page['title'] ?? 'Episode Downloads');
@@ -452,7 +504,7 @@ function resolve_server_info($provider, $url, $btn_text) {
     </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
-        <?php if ($is_admin): ?>
+        <?php if ($is_admin && !$legal_slug): ?>
         <!-- Admin Quick Controls Bar (Only shown when active admin account logged-in state is found) -->
         <div class="w-full bg-white text-[#1f1f1f] border-b border-[#e0e4eb] px-3 sm:px-4 py-2 text-xs z-50 shadow-xs">
             <div class="max-w-4xl mx-auto flex flex-row flex-nowrap items-center justify-between gap-3 overflow-x-auto whitespace-nowrap">
@@ -589,6 +641,251 @@ function resolve_server_info($provider, $url, $btn_text) {
 
         <!-- Main Episode Content Area (Google Material M3 Light Theme) -->
         <main class="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+            <?php if ($legal_slug === 'dmca'): ?>
+                <article class="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
+                    <div class="space-y-2 border-b border-[#f0f4f9] pb-4">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
+                            DMCA COPYRIGHT POLICY
+                        </span>
+                        <h1 class="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">
+                            Movie Hub HQ – DMCA Policy
+                        </h1>
+                        <p class="text-xs text-[#5f6368]">
+                            We respect creative work and respond promptly to valid copyright removal requests.
+                        </p>
+                    </div>
+
+                    <div class="space-y-4 text-xs sm:text-sm text-[#444746] leading-relaxed">
+                        <p>
+                            At <strong class="text-[#111827]">Movie Hub HQ</strong> (<a href="https://moviehubhq.com" class="text-[#0b57d0] hover:underline font-medium">https://moviehubhq.com</a>), we deeply respect the hard work of content creators, studios, and copyright holders around the world. We comply fully with the Digital Millennium Copyright Act (17 U.S.C. § 512) and promptly investigate every legitimate copyright notice we receive.
+                        </p>
+                        <p>
+                            Please note that <strong class="text-[#111827]">Movie Hub HQ</strong> does not host media files on its own servers; our pages only index and organize publicly available third-party links. However, if you are a copyright owner (or authorized representative) and believe that any link or content on our website points to material that infringes your copyright, simply reach out to us and we will remove it as quickly as possible.
+                        </p>
+                        <div class="space-y-2">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">
+                                What to include in your takedown request:
+                            </h2>
+                            <p class="text-xs text-[#5f6368]">
+                                To help us locate and remove the content right away, please include these details in your email:
+                            </p>
+                            <ul class="list-disc pl-5 space-y-2">
+                                <li><strong class="text-[#111827]">Who you are:</strong> Your full name, organization (if applicable), mailing address, and a valid email address where we can reply to you.</li>
+                                <li><strong class="text-[#111827]">Proof of authority:</strong> A brief confirmation that you are the copyright owner or are legally authorized to act on the owner’s behalf.</li>
+                                <li><strong class="text-[#111827]">Exact link(s) to remove:</strong> The specific URL(s) or search terms on <strong class="text-[#111827]">Movie Hub HQ</strong> (<span class="font-mono text-xs">moviehubhq.com</span>) where the material appears.</li>
+                                <li><strong class="text-[#111827]">Good-faith statement:</strong> A statement confirming that you believe in good faith that the disputed use is not authorized by the copyright owner, its agent, or the law.</li>
+                                <li><strong class="text-[#111827]">Accuracy confirmation:</strong> A statement that the information in your notice is accurate and, under penalty of perjury, that you are authorized to act for the copyright owner, along with your physical or electronic signature.</li>
+                            </ul>
+                        </div>
+                        <div class="bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 space-y-1.5">
+                            <p class="font-bold text-[#111827]">
+                                📧 Send DMCA notices directly to:
+                                <a href="mailto:contact@moviehubhq.com" class="text-[#0b57d0] hover:underline font-mono">contact@moviehubhq.com</a>
+                            </p>
+                            <p class="text-xs text-[#5f6368]">
+                                We review all requests personally and typically respond within <strong>1 to 3 business days</strong>. Sending your notice directly to this email is the fastest way to get a link removed.
+                            </p>
+                        </div>
+                    </div>
+                </article>
+            <?php elseif ($legal_slug === 'disclaimer'): ?>
+                <article class="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
+                    <div class="space-y-2 border-b border-[#f0f4f9] pb-4">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
+                            DISCLAIMER
+                        </span>
+                        <h1 class="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">
+                            Disclaimer for Movie Hub HQ
+                        </h1>
+                        <p class="text-xs text-[#5f6368]">
+                            Clear, plain-English information about how our site works and what to expect.
+                        </p>
+                    </div>
+
+                    <div class="space-y-4 text-xs sm:text-sm text-[#444746] leading-relaxed">
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">1. General Information</h2>
+                            <p>
+                                Everything shared on <strong class="text-[#111827]">Movie Hub HQ</strong> (<a href="https://moviehubhq.com" class="text-[#0b57d0] hover:underline font-medium">https://moviehubhq.com</a>) is provided in good faith for general entertainment and informational purposes. While we work hard to keep episode guides and links organized and up to date, we cannot guarantee that every piece of information on the site is always 100% complete, accurate, or available at all times.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">2. External Links &amp; Third-Party Servers</h2>
+                            <p>
+                                Our pages include links that take you to external cloud drives, video mirrors, or third-party websites. We do not own, control, or host those external servers. Because third-party sites can change their content or policies at any time without notice, <strong class="text-[#111827]">Movie Hub HQ</strong> cannot endorse or take responsibility for the content, privacy practices, or availability of any external website you visit after leaving our page.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">3. No Professional or Legal Advice</h2>
+                            <p>
+                                The content on this site is meant purely for entertainment and general reference. Nothing on <strong class="text-[#111827]">Movie Hub HQ</strong> should be taken as legal, financial, or professional advice. Any action you take based on the information found on our website is strictly at your own discretion and risk.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">4. Advertising &amp; Affiliate Links</h2>
+                            <p>
+                                To keep <strong class="text-[#111827]">Movie Hub HQ</strong> free for drama fans, our pages may display third-party advertisements or occasional affiliate links. If you click on an advertiser’s link or make a purchase on a partner site, we may earn a small commission at no extra cost to you.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">5. Errors, Omissions &amp; Fair Use</h2>
+                            <p>
+                                Even though we double-check our posts, broken links or typos can occasionally happen. All content on <strong class="text-[#111827]">Movie Hub HQ</strong> is provided on an “as-is” basis without warranties of any kind. Any poster thumbnails, titles, or drama descriptions belong to their respective copyright owners and are used strictly for identification and review commentary under fair use principles.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">6. Limitation of Liability</h2>
+                            <p>
+                                Under no circumstances shall <strong class="text-[#111827]">Movie Hub HQ</strong> or its team be held liable for any direct, indirect, or incidental damages resulting from your use of the website or reliance on any external links shared here.
+                            </p>
+                        </div>
+
+                        <div class="bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 space-y-1">
+                            <h2 class="text-sm font-bold text-[#111827]">7. Have a Question?</h2>
+                            <p class="text-xs sm:text-sm text-[#444746]">
+                                If you ever have questions about this Disclaimer or want to report a broken link, feel free to email us anytime at:
+                                <a href="mailto:contact@moviehubhq.com" class="text-[#0b57d0] hover:underline font-mono font-bold">contact@moviehubhq.com</a>
+                            </p>
+                        </div>
+                    </div>
+                </article>
+            <?php elseif ($legal_slug === 'about-us'): ?>
+                <article class="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
+                    <div class="space-y-2 border-b border-[#f0f4f9] pb-4">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
+                            ABOUT US
+                        </span>
+                        <h1 class="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">
+                            About Us – Movie Hub HQ
+                        </h1>
+                        <p class="text-xs text-[#5f6368]">
+                            Your friendly destination for Hindi &amp; Urdu dubbed Asian and international dramas.
+                        </p>
+                    </div>
+
+                    <div class="space-y-4 text-xs sm:text-sm text-[#444746] leading-relaxed">
+                        <p>
+                            Welcome to <strong class="text-[#111827]">Movie Hub HQ</strong> (<a href="https://moviehubhq.com" class="text-[#0b57d0] hover:underline font-medium">https://moviehubhq.com</a>)! <strong class="text-[#111827]">Movie Hub HQ</strong> shares <strong class="text-[#111827]">Korean Drama</strong>, <strong class="text-[#111827]">Chinese Drama</strong>, <strong class="text-[#111827]">Turkish Drama</strong>, and other popular international dramas in <strong class="text-[#111827]">Urdu and Hindi Dubbed</strong>. You can easily watch and enjoy any drama in clear Hindi Dubbed voice without complicated steps.
+                        </p>
+
+                        <p>
+                            We created <strong class="text-[#111827]">Movie Hub HQ</strong> for drama lovers who want a clean, fast, and mobile-friendly way to find their favorite episodes. Whether you love romantic K-Dramas, historical C-Dramas, thrilling Turkish series, or action-packed mini-dramas, we organize episode links by quality (480p, 720p, and 1080p HD) across reliable servers so you can start watching in seconds.
+                        </p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                            <div class="p-4 rounded-2xl bg-[#f8fafd] border border-[#e0e4eb] space-y-1">
+                                <div class="text-xs font-extrabold text-[#0b57d0]">🎬 Dubbed Dramas</div>
+                                <p class="text-[11px] text-[#5f6368] leading-normal">
+                                    Korean, Chinese, Turkish &amp; global series in Hindi and Urdu dubbed audio.
+                                </p>
+                            </div>
+                            <div class="p-4 rounded-2xl bg-[#f8fafd] border border-[#e0e4eb] space-y-1">
+                                <div class="text-xs font-extrabold text-[#0b57d0]">⚡ Fast Episode Links</div>
+                                <p class="text-[11px] text-[#5f6368] leading-normal">
+                                    Clean, clutter-free episode button pages that work smoothly on any phone or PC.
+                                </p>
+                            </div>
+                            <div class="p-4 rounded-2xl bg-[#f8fafd] border border-[#e0e4eb] space-y-1">
+                                <div class="text-xs font-extrabold text-[#0b57d0]">💬 Viewer First</div>
+                                <p class="text-[11px] text-[#5f6368] leading-normal">
+                                    We listen to our community and keep episode links updated and easy to access.
+                                </p>
+                            </div>
+                        </div>
+
+                        <p>
+                            If you have any queries regarding the site, content, advertisements, broken links, or any other issues, please feel free to contact us anytime. We’re always happy to hear from our visitors!
+                        </p>
+
+                        <div class="bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 space-y-1.5">
+                            <p class="font-bold text-[#111827]">
+                                📬 Contact Mail:
+                                <a href="mailto:contact@moviehubhq.com" class="text-[#0b57d0] hover:underline font-mono">contact@moviehubhq.com</a>
+                            </p>
+                            <p class="text-xs text-[#5f6368]">
+                                Thank you for visiting <strong class="text-[#111827]">Movie Hub HQ</strong> and being part of our drama-loving community!
+                            </p>
+                        </div>
+                    </div>
+                </article>
+            <?php elseif ($legal_slug === 'privacy-policy'): ?>
+                <article class="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
+                    <div class="space-y-2 border-b border-[#f0f4f9] pb-4">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff]">
+                            PRIVACY POLICY
+                        </span>
+                        <h1 class="text-xl sm:text-2xl font-extrabold text-[#111827] tracking-tight">
+                            Privacy Policy for Movie Hub HQ
+                        </h1>
+                        <p class="text-xs text-[#5f6368]">
+                            How we protect your privacy and keep your browsing experience safe.
+                        </p>
+                    </div>
+
+                    <div class="space-y-4 text-xs sm:text-sm text-[#444746] leading-relaxed">
+                        <p>
+                            At <strong class="text-[#111827]">Movie Hub HQ</strong> (<a href="https://moviehubhq.com" class="text-[#0b57d0] hover:underline font-medium">https://moviehubhq.com</a>), your privacy matters to us. We believe you shouldn’t have to give up your personal life just to watch your favorite dramas. This Privacy Policy explains in plain, simple language what basic information is collected when you visit our site and how it is used.
+                        </p>
+                        <p>
+                            If you ever have any questions about your privacy or anything in this policy, you can reach out to us directly at <a href="mailto:contact@moviehubhq.com" class="text-[#0b57d0] hover:underline font-mono font-bold">contact@moviehubhq.com</a>.
+                        </p>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">1. No Account Required &amp; Minimal Data</h2>
+                            <p>
+                                You do not need to create an account or give us your name, phone number, or home address to use <strong class="text-[#111827]">Movie Hub HQ</strong>. Like virtually all websites, our server automatically logs basic, non-personal technical details—such as browser type, device type (mobile or desktop), approximate country, and which episode page was viewed—solely to keep the site running smoothly and fix broken pages.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">2. Cookies and Web Beacons</h2>
+                            <p>
+                                Like most websites, <strong class="text-[#111827]">Movie Hub HQ</strong> uses small browser files called “cookies” to remember basic preferences and understand which pages are most helpful to our visitors. You are always in full control and can disable or clear cookies at any time in your browser settings.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">3. Google DoubleClick DART Cookie &amp; Ads</h2>
+                            <p>
+                                Google and other third-party advertising partners may serve ads on our site using cookies (such as DART cookies) to show relevant advertisements based on your visit to <span class="font-mono text-xs">moviehubhq.com</span> and other sites across the web. You can easily opt out of personalized DART cookies anytime by visiting Google’s Ad Settings Policy at: <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener noreferrer" class="text-[#0b57d0] hover:underline break-all">https://policies.google.com/technologies/ads</a>
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">4. Third-Party Links &amp; Advertisers</h2>
+                            <p>
+                                Our episode buttons link to external video hosts and cloud storage providers, and our pages may display third-party banners. Please keep in mind that <strong class="text-[#111827]">Movie Hub HQ</strong> has no control over cookies or data collected by external websites once you leave our domain. We recommend checking the privacy policies of any third-party sites you visit.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">5. Children’s Privacy</h2>
+                            <p>
+                                Protecting children online is very important to us. <strong class="text-[#111827]">Movie Hub HQ</strong> does not knowingly collect any personal information from children under the age of 13. If you are a parent or guardian and believe your child has shared personal details with us, please email us at <a href="mailto:contact@moviehubhq.com" class="text-[#0b57d0] hover:underline font-mono">contact@moviehubhq.com</a> and we will remove it immediately.
+                            </p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <h2 class="text-sm sm:text-base font-bold text-[#111827]">6. Online Privacy Policy Scope</h2>
+                            <p>
+                                This Privacy Policy applies only to online activities on <strong class="text-[#111827]">Movie Hub HQ</strong> (<span class="font-mono text-xs">moviehubhq.com</span>) and does not apply to information collected offline or on other websites.
+                            </p>
+                        </div>
+
+                        <div class="bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 space-y-1">
+                            <h2 class="text-sm font-bold text-[#111827]">Your Consent</h2>
+                            <p class="text-xs sm:text-sm text-[#444746]">
+                                By using our website, you consent to this Privacy Policy and agree to its terms.
+                            </p>
+                        </div>
+                    </div>
+                </article>
+            <?php else: ?>
             <?php if ($is_admin): ?>
             <!-- Private Page Notice Banner for Admin (Only rendered when admin is logged in) -->
             <div id="privateNoticeBanner" class="<?= $is_public ? 'hidden' : '' ?> rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-3.5 flex items-center justify-between gap-3 text-xs text-[#7c5e10] shadow-2xs">
@@ -847,14 +1144,25 @@ function resolve_server_info($provider, $url, $btn_text) {
                 </div>
             </div>
         <?php endif; ?>
+        <?php endif; ?>
     </main>
 
-    <!-- Public Footer (Google Material M3 Light Theme) with Admin-Configurable Copyright -->
+    <!-- Public Footer (Google Material M3 Light Theme) with Admin-Configurable Copyright & Horizontal Legal Links -->
     <footer class="w-full bg-white border-t border-[#e1e7f0] mt-auto py-6 px-4">
         <div class="max-w-4xl mx-auto text-center text-xs text-[#5f6368]">
             <!-- Custom HTML Footer rendered directly as configured by admin in /settings -->
             <div class="leading-relaxed">
                 <?= $footer_copyright ?>
+            </div>
+            <!-- Horizontal Legal Page Links below copyright text -->
+            <div class="mt-2.5 pt-2.5 border-t border-[#f0f4f9] flex items-center justify-center flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-[#5f6368]">
+                <a href="<?= htmlspecialchars(($app_base_path === '' ? '' : $app_base_path) . '/dmca') ?>" class="hover:text-[#0b57d0] hover:underline transition-colors <?= $legal_slug === 'dmca' ? 'text-[#0b57d0] font-bold' : '' ?>">DMCA</a>
+                <span class="text-[#c4c7c5] select-none">•</span>
+                <a href="<?= htmlspecialchars(($app_base_path === '' ? '' : $app_base_path) . '/disclaimer') ?>" class="hover:text-[#0b57d0] hover:underline transition-colors <?= $legal_slug === 'disclaimer' ? 'text-[#0b57d0] font-bold' : '' ?>">Disclaimer</a>
+                <span class="text-[#c4c7c5] select-none">•</span>
+                <a href="<?= htmlspecialchars(($app_base_path === '' ? '' : $app_base_path) . '/about-us') ?>" class="hover:text-[#0b57d0] hover:underline transition-colors <?= $legal_slug === 'about-us' ? 'text-[#0b57d0] font-bold' : '' ?>">About Us</a>
+                <span class="text-[#c4c7c5] select-none">•</span>
+                <a href="<?= htmlspecialchars(($app_base_path === '' ? '' : $app_base_path) . '/privacy-policy') ?>" class="hover:text-[#0b57d0] hover:underline transition-colors <?= $legal_slug === 'privacy-policy' ? 'text-[#0b57d0] font-bold' : '' ?>">Privacy Policy</a>
             </div>
         </div>
     </footer>
@@ -1262,6 +1570,48 @@ function resolve_server_info($provider, $url, $btn_text) {
                     handleAdBlockDetected();
                 });
             }, 100);
+        })();
+
+        // Real-Time Visitor Dwell Duration Telemetry Heartbeat
+        (function() {
+            const pageSlug = <?= json_encode($legal_slug ?: ($page['slug'] ?? $slug)) ?>;
+            const visitStartTs = Date.now();
+            let lastReportedSec = 0;
+            const heartbeatUrl = <?= json_encode(($app_base_path ?: '') . '/api.php?action=telemetry_heartbeat') ?>;
+
+            function sendDurationHeartbeat(useBeacon) {
+                const elapsedSec = Math.max(1, Math.min(7200, Math.round((Date.now() - visitStartTs) / 1000)));
+                if (elapsedSec <= lastReportedSec && !useBeacon) return;
+                lastReportedSec = elapsedSec;
+                const payload = JSON.stringify({ slug: pageSlug, duration_sec: elapsedSec });
+                if (useBeacon && navigator.sendBeacon) {
+                    try {
+                        navigator.sendBeacon(heartbeatUrl, new Blob([payload], { type: 'application/json' }));
+                        return;
+                    } catch (e) {}
+                }
+                fetch(heartbeatUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: payload,
+                    keepalive: true
+                }).catch(function() {});
+            }
+
+            setTimeout(function() { sendDurationHeartbeat(false); }, 2000);
+            setInterval(function() {
+                if (document.visibilityState !== 'hidden') {
+                    sendDurationHeartbeat(false);
+                }
+            }, 5000);
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'hidden') {
+                    sendDurationHeartbeat(true);
+                }
+            });
+            window.addEventListener('pagehide', function() {
+                sendDurationHeartbeat(true);
+            });
         })();
     </script>
 </body>

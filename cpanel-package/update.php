@@ -22,7 +22,7 @@ $current_user = SLEA_Auth::get_current_user();
 // Check and abort any interrupted updates if page was refreshed / navigated away
 SLEA_Updater::check_and_abort_interrupted_updates();
 
-$current_version = defined('APP_VERSION') ? SLEA_Updater::normalize_version(APP_VERSION) : '18.0';
+$current_version = defined('APP_VERSION') ? SLEA_Updater::normalize_version(APP_VERSION) : '20.0';
 $updater_config = SLEA_Updater::get_config();
 $update_check = SLEA_Updater::check_for_updates();
 $update_history = SLEA_Updater::get_update_history();

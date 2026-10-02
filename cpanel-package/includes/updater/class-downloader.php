@@ -131,7 +131,7 @@ class SLEA_Downloader {
                 }
                 curl_setopt($ch, CURLOPT_TIMEOUT, 180);
                 curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);
-                curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/18.0');
+                curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/19.0');
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
                 curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
@@ -162,7 +162,7 @@ class SLEA_Downloader {
                     'method'          => 'GET',
                     'timeout'         => 180,
                     'follow_location' => 1,
-                    'header'          => "User-Agent: MovieHubHQ-Updater/18.0\r\n" .
+                    'header'          => "User-Agent: MovieHubHQ-Updater/19.0\r\n" .
                                          "Cache-Control: no-cache, no-store, must-revalidate, max-age=0\r\n" .
                                          "Pragma: no-cache\r\n" .
                                          "Expires: 0\r\n" .
@@ -203,7 +203,7 @@ class SLEA_Downloader {
             }
             curl_setopt($ch, CURLOPT_TIMEOUT, 25);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 12);
-            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/18.0');
+            curl_setopt($ch, CURLOPT_USERAGENT, 'MovieHubHQ-Updater/19.0');
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
@@ -235,7 +235,7 @@ class SLEA_Downloader {
                 'method'          => 'GET',
                 'timeout'         => 25,
                 'follow_location' => 1,
-                'header'          => "User-Agent: MovieHubHQ-Updater/3.9\r\n" .
+                'header'          => "User-Agent: MovieHubHQ-Updater/19.0\r\n" .
                                      "Cache-Control: no-cache, no-store, must-revalidate, max-age=0\r\n" .
                                      "Pragma: no-cache\r\n" .
                                      "Expires: 0\r\n" .
