@@ -59,26 +59,26 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [logs, setLogs] = useState<string[]>([]);
 
   const formatVer = (v: string) => {
-    const clean = String(v || "23.0").replace(/^[vV-]+/, "");
+    const clean = String(v || "24.0").replace(/^[vV-]+/, "");
     return clean.replace(/^(\d+\.\d+)\.0$/, "$1");
   };
 
   const [checkInfo, setCheckInfo] = useState<UpdateCheckInfo>({
     success: true,
-    current_version: "23.0",
-    remote_version: "23.0",
+    current_version: "24.0",
+    remote_version: "24.0",
     update_available: false,
     release_date: "2026-10-02",
     download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
     release_notes: [
-      "Removed Built-in Live Error Test Buttons from Settings (cPanel & React) and removed Quick Samples from the Generator.",
-      "Redesigned the 404 Gateway Route Not Found page with a dark slate header monument, full site navigation, working Direct Episode Slug/Link Resolver, and recovery actions.",
-      "Comprehensive cPanel Security Hardening: Persistent IP + Session brute-force login rate limiting, User-Agent session fingerprinting, idle timeout, and live user verification.",
-      "Cryptographic CSRF token auto-injection and enforcement across all state-changing Admin API actions, setup.php, login.php, and logout.php.",
-      "Added strict .htaccess and index.php guards to data/, backups/, temp/, includes/, and database/ directories, plus per-hop SSRF redirect validation and anti-cache headers for private pages."
+      "Removed Admin Login text, links, and buttons from all public pages and sign-in pages to keep the system protected and private.",
+      "Redesigned the 404 Page Not Found view with Google Material M3 design matching the website theme, removing unwanted buttons and links.",
+      "Unified the Google Material M3 header, mobile hamburger navigation drawer, and footer across all public pages (Episode Pages, Legal Pages, 404 Error Page, Maintenance Screen, and Sign In Page).",
+      "Removed Built-in Live Error Test Buttons from Settings and Quick Samples from the Generator.",
+      "Comprehensive cPanel security hardening: brute-force rate limiting, session fingerprinting, CSRF token enforcement, and directory guards."
     ],
     minimum_php: "7.4",
-    checksum: "cf25da669119ecb6cfc6e75b84ffa1a715b31395eb2b518fb49aca5116857ebf"
+    checksum: "3cafc4abac1cee66df5762e55557735e95891aa424db4f18b26f71c9a0b5d20f"
   });
 
   const [manifestUrl, setManifestUrl] = useState<string>("https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/releases/update.json");
@@ -89,14 +89,14 @@ export const OneClickUpdaterHub: React.FC<OneClickUpdaterHubProps> = ({ onNotify
   const [history, setHistory] = useState<UpdateHistoryItem[]>([
     {
       id: 1,
-      update_id: "update_20261002_041500_b23f",
-      old_version: "22.0",
-      new_version: "23.0",
+      update_id: "update_20261002_050000_b24f",
+      old_version: "23.0",
+      new_version: "24.0",
       status: "success",
       step: "Finalizing update",
       rollback_status: "not_needed",
-      started_at: "2026-10-02 03:30:00",
-      completed_at: "2026-10-02 03:30:11"
+      started_at: "2026-10-02 04:55:00",
+      completed_at: "2026-10-02 04:55:09"
     }
   ]);
 

@@ -76,7 +76,7 @@ $setup_csrf = $_SESSION['slea_setup_csrf'];
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow, noarchive">
-    <title>One-Time Administrator Setup - <?= htmlspecialchars($site_name) ?></title>
+    <title>Initial Account Setup - <?= htmlspecialchars($site_name) ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -86,16 +86,16 @@ $setup_csrf = $_SESSION['slea_setup_csrf'];
         .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
     </style>
 </head>
-<body class="w-full min-h-screen bg-[#f0f4f9] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
+<body class="w-full min-h-screen bg-[#f8fafd] text-[#1f1f1f] flex flex-col font-sans antialiased overflow-x-hidden selection:bg-[#d3e3fd] selection:text-[#041e49]">
 
     <div class="min-h-screen flex flex-col flex-1">
         <!-- Navigation Bar -->
-        <header id="app-header" class="w-full bg-[#fdfcff] text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 transition-colors">
-            <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+        <header id="app-header" class="w-full bg-white/95 text-[#1f1f1f] border-b border-[#e1e7f0] shadow-2xs select-none sticky top-0 z-30 backdrop-blur-md transition-colors">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
                 <div class="flex items-center gap-2.5 min-w-0 flex-1">
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                            <h1 class="font-bold text-sm sm:text-base leading-snug text-[#1f1f1f] tracking-tight truncate">
+                            <h1 class="font-bold text-base sm:text-lg leading-snug text-[#111827] tracking-tight truncate">
                                 <?= htmlspecialchars($site_name) ?>
                             </h1>
                         </div>
@@ -107,15 +107,15 @@ $setup_csrf = $_SESSION['slea_setup_csrf'];
         <!-- Main Workspace -->
         <main class="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7 flex items-center justify-center">
             <div class="w-full max-w-md mx-auto py-8 px-4">
-                <div class="bg-white rounded-2xl p-7 border border-[#d3e3fd] shadow-md space-y-6">
+                <div class="bg-white rounded-3xl p-7 border border-[#e0e4eb] shadow-xs space-y-6">
                     <!-- Header -->
                     <div class="text-center space-y-2">
-                        <div class="w-12 h-12 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center mx-auto shadow-2xs">
+                        <div class="w-12 h-12 rounded-2xl bg-[#e8f0fe] border border-[#c2e7ff] text-[#0b57d0] flex items-center justify-center mx-auto shadow-2xs">
                             <svg class="w-6 h-6 text-[#0b57d0]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
                         </div>
-                        <h2 class="text-lg font-bold text-[#1f1f1f]">One-Time Administrator Setup</h2>
+                        <h2 class="text-xl font-extrabold text-[#111827] tracking-tight">Initial Account Setup</h2>
                         <p class="text-xs text-[#5f6368] max-w-xs mx-auto">
-                            Create your primary administrator account to complete initial setup.
+                            Create your primary account to complete initial setup.
                         </p>
                     </div>
 

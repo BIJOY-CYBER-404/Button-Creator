@@ -53,13 +53,6 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   const [qrModalOpen, setQrModalOpen] = useState<boolean>(false);
   const [mobileShareSheetOpen, setMobileShareSheetOpen] = useState<boolean>(false);
   const [adBlocked, setAdBlocked] = useState<boolean>(false);
-  const [jumpSlugInput, setJumpSlugInput] = useState<string>(() =>
-    slug && !slug.startsWith("__") ? slug : ""
-  );
-
-  useEffect(() => {
-    setJumpSlugInput(slug && !slug.startsWith("__") ? slug : "");
-  }, [slug]);
 
   const effectiveToken = propAdminToken !== undefined ? propAdminToken : localStorage.getItem("slea_admin_token") || "";
   const isPreviewVisitor =
@@ -103,6 +96,8 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
       loginSlug.toLowerCase(),
     ]);
     return items.filter((item) => {
+      const t = String(item?.title || "").trim().toLowerCase();
+      if (/admin|login|dashboard|cpanel|setup/.test(t)) return false;
       const u = String(item?.url || "").trim();
       if (!u || u === "#") return true;
       try {
@@ -660,472 +655,11 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
     return { name, icon };
   };
 
-  if (maintenanceSettings.enabled && !isAdmin) {
-    return (
-      <div className="bg-[#f8fafd] text-[#1f1f1f] min-h-screen flex items-center justify-center p-4 sm:p-6 selection:bg-[#d3e3fd] select-none">
-        <div className="max-w-lg w-full bg-white rounded-3xl border border-[#e0e4eb] p-6 sm:p-8 shadow-xs text-center space-y-6 relative overflow-hidden">
-          <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9]">
-            <img
-              src="/assets/images/maintenance_illustration.jpg"
-              alt="Under Maintenance"
-              className="relative z-10 w-full h-full object-cover bg-[#fafbfc] transition-transform hover:scale-105 duration-700"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#fef7e0] border border-[#feebc8] text-[#b06000] text-xs font-bold font-mono">
-            <span className="w-2 h-2 rounded-full bg-[#b06000] animate-ping"></span>
-            <span>SYSTEM MAINTENANCE</span>
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#111827]">
-              We'll Be Right Back
-            </h1>
-            <p className="text-xs sm:text-sm text-[#444746] leading-relaxed max-w-md mx-auto">
-              {maintenanceSettings.message ||
-                "The website is currently undergoing scheduled maintenance. We will be back shortly!"}
-            </p>
-          </div>
-
-          <div className="bg-[#f8fafd] rounded-2xl p-4 sm:p-5 border border-[#e1e7f0] space-y-3 shadow-2xs">
-            <div className="flex items-center justify-between text-xs font-semibold text-[#5f6368]">
-              <span className="flex items-center gap-1.5 text-[#0b57d0] font-bold">
-                <svg className="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" strokeWidth="2" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2" />
-                </svg>
-                <span>Estimated Time Remaining</span>
-              </span>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0]">
-                LIVE COUNTDOWN
-              </span>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2 text-center font-mono">
-              <div className="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
-                <div className="text-lg sm:text-2xl font-black text-[#0b57d0]">{maintCountdown.days}</div>
-                <div className="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Days</div>
-              </div>
-              <div className="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
-                <div className="text-lg sm:text-2xl font-black text-[#0b57d0]">{maintCountdown.hours}</div>
-                <div className="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Hours</div>
-              </div>
-              <div className="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
-                <div className="text-lg sm:text-2xl font-black text-[#0b57d0]">{maintCountdown.mins}</div>
-                <div className="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Minutes</div>
-              </div>
-              <div className="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
-                <div className="text-lg sm:text-2xl font-black text-[#0b57d0]">{maintCountdown.secs}</div>
-                <div className="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Seconds</div>
-              </div>
-            </div>
-
-            <div className="text-[11px] text-[#5f6368] font-medium text-center">
-              Target End Time: <span className="font-bold text-[#1f1f1f]">{maintCountdown.formattedTarget}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#f8fafd] flex items-center justify-center p-6">
-        <div className="text-center space-y-3">
-          <div className="inline-block w-8 h-8 border-3 border-[#0b57d0] border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-medium text-[#444746]">Loading episode buttons...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const renderPublicErrorScreen = (actualTitle: string, actualErrorMsg: string, httpCode = 404) => {
-    const safeTitle = httpCode === 404 ? "Episode Link Not Found" : "Service Temporarily Unavailable";
-    const safeDesc =
-      httpCode === 404
-        ? "The episode link you followed does not exist, may have been moved or expired, or is currently set to private."
-        : "Something went wrong while loading this page. Please try again in a moment.";
-    const displayTitle = debugMode ? actualTitle : safeTitle;
-    const displayMsg = safeDesc;
-    const siteNameStr = siteIdentity.site_name || "Movie Hub HQ Drive";
-    const homeUrl = menuItems[0]?.url && menuItems[0].url !== "#" ? menuItems[0].url : "https://moviehubhq.com/";
-    const reqPath =
-      typeof window !== "undefined" ? window.location.pathname + window.location.search : `/p/${slug}`;
-    const statusKicker =
-      httpCode === 404 ? "HTTP 404 · GATEWAY ROUTE NOT FOUND" : `HTTP ${httpCode} · GATEWAY RUNTIME ERROR`;
-
-    const handleEpisodeJumpSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      const raw = jumpSlugInput.trim();
-      if (!raw) return;
-      let targetSlug = raw;
-      const pMatch = raw.match(/\/(?:p|page)\/([a-zA-Z0-9_-]+)/i);
-      const qMatch = raw.match(/[?&](?:slug|p)=([a-zA-Z0-9_-]+)/i);
-      if (pMatch && pMatch[1]) {
-        targetSlug = pMatch[1];
-      } else if (qMatch && qMatch[1]) {
-        targetSlug = qMatch[1];
-      } else {
-        targetSlug = raw
-          .replace(/^https?:\/\/[^/]+\/?/i, "")
-          .replace(/^\/+|\/+$/g, "")
-          .replace(/[^a-zA-Z0-9_-]/g, "");
-      }
-      if (!targetSlug) return;
-      if (onNavigateSlug) {
-        onNavigateSlug(targetSlug);
-      } else {
-        window.location.href = `/p/${encodeURIComponent(targetSlug)}`;
-      }
-    };
-
-    const navigateLegal = (e: React.MouseEvent, targetLegal: string) => {
-      if (onNavigateSlug) {
-        e.preventDefault();
-        onNavigateSlug(targetLegal);
-      }
-    };
-
-    return (
-      <div className="min-h-screen flex flex-col bg-[#f4f6fb] text-[#0f172a] font-sans antialiased">
-        {/* Admin Session Bar (Only shown when logged in as admin) */}
-        {isAdmin && onBackToAdmin && (
-          <div className="bg-[#0f172a] text-[#f8fafc] px-4 py-2 text-xs border-b border-[#1e293b]">
-            <div className="max-w-[980px] mx-auto flex items-center justify-between gap-3 flex-wrap">
-              <span className="font-mono text-[11px] text-[#94a3b8]">
-                Admin Session Active · HTTP {httpCode} Response
-              </span>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={onBackToAdmin}
-                  className="text-[#f8fafc] bg-[#1e293b] hover:bg-[#334155] px-2.5 py-1 rounded-md border border-[#334155] font-semibold cursor-pointer transition-colors"
-                >
-                  ← Admin Dashboard
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Site Header */}
-        <header className="bg-white border-b border-[#e2e8f0] sticky top-0 z-30">
-          <div className="max-w-[980px] mx-auto px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
-            <a href={homeUrl} className="flex items-center gap-2.5 text-[#0f172a] font-extrabold text-[15px] no-underline">
-              <div className="w-9 h-9 rounded-[10px] bg-[#0f172a] text-white flex items-center justify-center text-xs font-extrabold overflow-hidden shrink-0">
-                {siteIdentity.site_logo_url ? (
-                  <img
-                    src={siteIdentity.site_logo_url}
-                    alt={siteNameStr}
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <span>{(siteIdentity.site_logo_text || "MHQ").slice(0, 3)}</span>
-                )}
-              </div>
-              <span>{siteNameStr}</span>
-            </a>
-            <nav className="flex items-center gap-4 flex-wrap">
-              {menuItems.map((item, idx) => (
-                <a
-                  key={idx}
-                  href={item.url || "#"}
-                  target={item.new_tab || item.target_blank ? "_blank" : undefined}
-                  rel={item.new_tab || item.target_blank ? "noopener noreferrer" : undefined}
-                  className="text-[#475569] hover:text-[#0b57d0] text-[13px] font-semibold transition-colors"
-                >
-                  {item.title}
-                </a>
-              ))}
-            </nav>
-          </div>
-        </header>
-
-        {/* Main 404 Content Area */}
-        <main className="flex-1 flex items-center justify-center px-5 py-9">
-          <div className="max-w-[760px] w-full bg-white border border-[#dce3f0] rounded-[20px] overflow-hidden shadow-[0_12px_32px_-12px_rgba(15,23,42,0.08)]">
-            {/* Dark Hero Banner */}
-            <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] text-[#f8fafc] px-6 sm:px-8 py-7 flex items-center justify-between gap-5 flex-wrap border-b border-[#1e293b]">
-              <div className="flex-1 min-w-[240px]">
-                <div
-                  className={`font-mono text-[11px] font-bold tracking-wider mb-2 flex items-center gap-2 ${
-                    httpCode === 404 ? "text-[#38bdf8]" : "text-[#fb7185]"
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full inline-block ${
-                      httpCode === 404 ? "bg-[#38bdf8]" : "bg-[#fb7185]"
-                    }`}
-                  />
-                  <span>{statusKicker}</span>
-                </div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight leading-snug mb-1.5">
-                  {displayTitle}
-                </h1>
-                <div className="font-mono text-xs text-[#94a3b8] break-all">
-                  Requested Path: {reqPath}
-                </div>
-              </div>
-              <div className="font-mono text-4xl sm:text-[54px] font-extrabold leading-none tracking-tighter text-[#38bdf8] bg-[#38bdf8]/10 border border-[#38bdf8]/25 px-5 py-3.5 rounded-2xl select-none">
-                {httpCode}
-              </div>
-            </div>
-
-            {/* Functional Body Area */}
-            <div className="p-6 sm:p-8">
-              <p className="text-sm leading-relaxed text-[#475569] mb-6">{displayMsg}</p>
-
-              {/* Direct Episode Lookup Form */}
-              <form
-                onSubmit={handleEpisodeJumpSubmit}
-                className="bg-[#f8fafc] border border-[#e2e8f0] rounded-[14px] p-4 sm:p-5 mb-6"
-              >
-                <label
-                  htmlFor="epCodeInputReact"
-                  className="block text-xs font-bold text-[#1e293b] mb-2"
-                >
-                  Open Episode Page by Slug or Link
-                </label>
-                <div className="flex gap-2.5 flex-wrap">
-                  <input
-                    id="epCodeInputReact"
-                    type="text"
-                    value={jumpSlugInput}
-                    onChange={(e) => setJumpSlugInput(e.target.value)}
-                    placeholder="Enter episode slug (e.g. flp-120926) or paste /p/ link..."
-                    autoComplete="off"
-                    className="flex-1 min-w-[200px] px-3.5 py-2.5 rounded-[10px] border border-[#cbd5e1] bg-white font-mono text-[13px] text-[#0f172a] outline-none focus:border-[#0b57d0] focus:ring-2 focus:ring-[#0b57d0]/15 transition-all"
-                  />
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 rounded-[10px] bg-[#0b57d0] hover:bg-[#0842a0] text-white text-[13px] font-bold cursor-pointer transition-colors whitespace-nowrap"
-                  >
-                    Open Episode →
-                  </button>
-                </div>
-                <div className="text-[11px] text-[#64748b] mt-2">
-                  If you have a valid episode code or mistyped the URL, enter it above to jump directly to the download page.
-                </div>
-              </form>
-
-              {/* Navigation & Recovery Actions */}
-              <div className="flex items-center gap-2.5 flex-wrap pb-5 border-b border-[#f1f5f9]">
-                <a
-                  href={homeUrl}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] bg-[#0f172a] hover:bg-[#1e293b] text-white text-[13px] font-bold transition-colors"
-                >
-                  <span>Return to Main Website</span>
-                  <span aria-hidden="true">↗</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.history.length > 1) {
-                      window.history.back();
-                    } else {
-                      window.location.href = homeUrl;
-                    }
-                  }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[10px] bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#334155] hover:text-[#0f172a] border border-[#e2e8f0] text-[13px] font-semibold cursor-pointer transition-colors"
-                >
-                  <span>← Go Back</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[10px] bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#334155] hover:text-[#0f172a] border border-[#e2e8f0] text-[13px] font-semibold cursor-pointer transition-colors"
-                >
-                  <span>↻ Try Again</span>
-                </button>
-              </div>
-
-              {/* Browse Website Sections */}
-              <div className="mt-5">
-                <div className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider mb-2.5">
-                  Browse Website Sections
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {menuItems.map((item, idx) => (
-                    <a
-                      key={idx}
-                      href={item.url || "#"}
-                      target={item.new_tab || item.target_blank ? "_blank" : undefined}
-                      rel={item.new_tab || item.target_blank ? "noopener noreferrer" : undefined}
-                      className="flex items-center justify-between px-3.5 py-2.5 rounded-[10px] bg-[#f8fafc] border border-[#e2e8f0] hover:border-[#0b57d0] hover:bg-[#f0f6ff] text-[#1e293b] hover:text-[#0b57d0] text-xs font-semibold transition-all"
-                    >
-                      <span>{item.title}</span>
-                      <span aria-hidden="true">→</span>
-                    </a>
-                  ))}
-                </div>
-              </div>
-
-              {/* Developer Diagnostics (Debug Mode ON) */}
-              {debugMode && (
-                <div className="mt-6 bg-[#0f172a] border border-[#334155] rounded-[14px] p-4 text-[#e2e8f0] font-mono text-[11px] leading-relaxed text-left space-y-2">
-                  <div className="flex items-center justify-between gap-2 flex-wrap font-bold text-[#fda4af] uppercase tracking-wider">
-                    <span>Developer Diagnostics (Debug Mode: ON)</span>
-                    <span className="bg-[#ef4444] text-white px-2 py-0.5 rounded text-[10px]">
-                      HTTP {httpCode}
-                    </span>
-                  </div>
-                  <div className="bg-[#1e293b] border border-[#475569] rounded-lg px-3 py-2.5 text-[#fecdd3] break-words">
-                    <strong>Actual Error:</strong> {actualErrorMsg}
-                  </div>
-                  <div className="text-[#94a3b8] space-y-1">
-                    <div>
-                      <strong className="text-[#cbd5e1]">Request:</strong> GET {reqPath}
-                    </div>
-                    <div>
-                      <strong className="text-[#cbd5e1]">Handler:</strong> view.php ·{" "}
-                      <strong className="text-[#cbd5e1]">Debug Mode:</strong> Enabled
-                    </div>
-                    <div>
-                      <strong className="text-[#cbd5e1]">Timestamp:</strong> {new Date().toISOString()}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
-
-        {/* Site Footer */}
-        <footer className="p-5 text-center text-xs text-[#64748b] border-t border-[#e2e8f0] bg-white">
-          <div className="flex items-center justify-center gap-3.5 flex-wrap mb-2">
-            <a
-              href="/dmca"
-              onClick={(e) => navigateLegal(e, "dmca")}
-              className="text-[#475569] hover:text-[#0b57d0] font-medium"
-            >
-              DMCA
-            </a>
-            <span>·</span>
-            <a
-              href="/disclaimer"
-              onClick={(e) => navigateLegal(e, "disclaimer")}
-              className="text-[#475569] hover:text-[#0b57d0] font-medium"
-            >
-              Disclaimer
-            </a>
-            <span>·</span>
-            <a
-              href="/about-us"
-              onClick={(e) => navigateLegal(e, "about-us")}
-              className="text-[#475569] hover:text-[#0b57d0] font-medium"
-            >
-              About Us
-            </a>
-            <span>·</span>
-            <a
-              href="/privacy-policy"
-              onClick={(e) => navigateLegal(e, "privacy-policy")}
-              className="text-[#475569] hover:text-[#0b57d0] font-medium"
-            >
-              Privacy Policy
-            </a>
-          </div>
-          <div dangerouslySetInnerHTML={{ __html: footerText }} />
-        </footer>
-      </div>
-    );
-  };
-
-  // Error screen controlled by Debug Mode (Off = generic safe message, On = actual error reason)
-  if (error || !page) {
-    return renderPublicErrorScreen(
-      errorTitle,
-      error || `Actual Error [HTTP 404]: No episode page record matched slug '${slug}' in the database.`,
-      errorHttpCode
-    );
-  }
-
-  const isPublic = page.is_public === undefined ? true : Boolean(Number(page.is_public));
-  if (!isPublic && !isAdmin) {
-    return renderPublicErrorScreen(
-      "403 / 404 - Private Episode Page Restricted",
-      `Actual Error [Private Page]: Episode page '${slug}' exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`,
-      404
-    );
-  }
-
-  const themeObj = THEMES[page.theme || "indigo"] || THEMES.indigo;
   const siteName = siteIdentity.site_name || "Movie Hub HQ Drive";
-  const canonicalUrl = getCanonicalUrl();
-  const shareEncodedUrl = encodeURIComponent(canonicalUrl);
-  const shareEncodedTitle = encodeURIComponent(page.title || "Watch & Download Episodes");
-  const shareEncodedMsg = encodeURIComponent(`${page.title || "Watch & Download"} - Fast Episode Links: ${canonicalUrl}`);
 
-  return (
-    <div
-      className="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]"
-      style={{ backgroundColor: themeObj.bg, color: "#1f1f1f" }}
-    >
-      {/* Admin Quick Controls Bar (Only shown when active admin account logged-in state is found) */}
-      {isAdmin && !legalSlug && (
-        <div className="w-full bg-white text-[#1f1f1f] border-b border-[#e0e4eb] px-3 sm:px-4 py-2 text-xs z-50 shadow-xs">
-          <div className="max-w-4xl mx-auto flex flex-row flex-nowrap items-center justify-between gap-3 overflow-x-auto whitespace-nowrap">
-            <div className="flex flex-row flex-nowrap items-center gap-2.5 sm:gap-3 shrink-0">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] uppercase tracking-wider shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
-                Admin View
-              </span>
-              <div className="flex items-center gap-1.5 sm:gap-2 bg-[#f8fafd] px-2.5 py-1 rounded-xl border border-[#e0e4eb] shrink-0">
-                <span className="text-[11px] text-[#444746] font-semibold">Visibility:</span>
-                <button
-                  type="button"
-                  onClick={toggleAdminStatus}
-                  role="switch"
-                  aria-checked={isPublic}
-                  title="Click to toggle Public / Private visibility"
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    isPublic ? "bg-[#137333]" : "bg-slate-300"
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      isPublic ? "translate-x-4" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-                <span
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    isPublic
-                      ? "bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]"
-                      : "bg-[#fff0d4] text-[#b06000] border border-[#ffd599]"
-                  }`}
-                >
-                  {isPublic ? "Public" : "Private"}
-                </span>
-              </div>
-              <span className="text-[#c4c7c5]">•</span>
-              <span className="text-[#444746] font-mono text-[11px] font-medium shrink-0">
-                👁️ {Number(page.views || 0).toLocaleString()} views
-              </span>
-            </div>
-            <div className="flex flex-row flex-nowrap items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => (onEditPage ? onEditPage(page.id) : onBackToAdmin?.())}
-                className="px-3 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold text-xs transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
-              >
-                <span>✏️ Edit Page</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => (onBackToAdmin ? onBackToAdmin() : (window.location.href = "/"))}
-                className="px-3 py-1.5 rounded-xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#1f1f1f] hover:text-[#0b57d0] font-semibold text-xs transition-colors border border-[#e0e4eb] cursor-pointer shadow-2xs"
-              >
-                Pages Manager
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Public Header Navigation Bar (Google Material M3 Light Theme - No links or buttons to admin/private pages) */}
+  const renderPublicHeaderAndDrawer = () => (
+    <>
+      {/* Public Header Navigation Bar (Google Material M3 Light Theme) */}
       <header className="w-full bg-white/95 border-b border-[#e1e7f0] sticky top-0 z-40 backdrop-blur-md shadow-2xs">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
           {/* Left Header: Mobile 3-Line Hamburger Button + Site Logo/Name */}
@@ -1176,7 +710,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         </div>
       </header>
 
-      {/* Mobile Sidebar Drawer (Opens from Left Side, Occupies Half of the Page - Matches cpanel-package/view.php lines 494-536) */}
+      {/* Mobile Sidebar Drawer (Opens from Left Side, Occupies Half of the Page) */}
       {mobileMenuOpen && (
         <div
           onClick={() => setMobileMenuOpen(false)}
@@ -1239,8 +773,473 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
           {siteName}
         </div>
       </aside>
+    </>
+  );
 
-      {/* Main Episode Content Area (Google Material M3 Light Theme - Matches cpanel-package/view.php lines 539-788) */}
+  const renderPublicFooter = () => (
+    <footer className="w-full bg-white border-t border-[#e1e7f0] mt-auto py-6 px-4">
+      <div className="max-w-4xl mx-auto text-center text-xs text-[#5f6368]">
+        <div className="leading-relaxed" dangerouslySetInnerHTML={{ __html: footerText }} />
+        <div className="mt-2.5 pt-2.5 border-t border-[#f0f4f9] flex items-center justify-center flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-[#5f6368]">
+          <a
+            href="/dmca"
+            onClick={(e) => {
+              if (onNavigateSlug) {
+                e.preventDefault();
+                onNavigateSlug("dmca");
+              }
+            }}
+            className={`hover:text-[#0b57d0] hover:underline transition-colors ${
+              legalSlug === "dmca" ? "text-[#0b57d0] font-bold" : ""
+            }`}
+          >
+            DMCA
+          </a>
+          <span className="text-[#c4c7c5] select-none">•</span>
+          <a
+            href="/disclaimer"
+            onClick={(e) => {
+              if (onNavigateSlug) {
+                e.preventDefault();
+                onNavigateSlug("disclaimer");
+              }
+            }}
+            className={`hover:text-[#0b57d0] hover:underline transition-colors ${
+              legalSlug === "disclaimer" ? "text-[#0b57d0] font-bold" : ""
+            }`}
+          >
+            Disclaimer
+          </a>
+          <span className="text-[#c4c7c5] select-none">•</span>
+          <a
+            href="/about-us"
+            onClick={(e) => {
+              if (onNavigateSlug) {
+                e.preventDefault();
+                onNavigateSlug("about-us");
+              }
+            }}
+            className={`hover:text-[#0b57d0] hover:underline transition-colors ${
+              legalSlug === "about-us" ? "text-[#0b57d0] font-bold" : ""
+            }`}
+          >
+            About Us
+          </a>
+          <span className="text-[#c4c7c5] select-none">•</span>
+          <a
+            href="/privacy-policy"
+            onClick={(e) => {
+              if (onNavigateSlug) {
+                e.preventDefault();
+                onNavigateSlug("privacy-policy");
+              }
+            }}
+            className={`hover:text-[#0b57d0] hover:underline transition-colors ${
+              legalSlug === "privacy-policy" ? "text-[#0b57d0] font-bold" : ""
+            }`}
+          >
+            Privacy Policy
+          </a>
+        </div>
+      </div>
+    </footer>
+  );
+
+  if (maintenanceSettings.enabled && !isAdmin) {
+    return (
+      <div className="bg-[#f8fafd] text-[#1f1f1f] min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49] select-none">
+        {renderPublicHeaderAndDrawer()}
+        <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex items-center justify-center">
+          <div className="max-w-lg w-full bg-white rounded-3xl border border-[#e0e4eb] p-6 sm:p-8 shadow-xs text-center space-y-6 relative overflow-hidden">
+            <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9]">
+              <img
+                src="/assets/images/maintenance_illustration.jpg"
+                alt="Under Maintenance"
+                className="relative z-10 w-full h-full object-cover bg-[#fafbfc] transition-transform hover:scale-105 duration-700"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#fef7e0] border border-[#feebc8] text-[#b06000] text-xs font-bold font-mono">
+              <span className="w-2 h-2 rounded-full bg-[#b06000] animate-ping"></span>
+              <span>SYSTEM MAINTENANCE</span>
+            </div>
+
+            <div className="space-y-2">
+              <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#111827]">
+                We'll Be Right Back
+              </h1>
+              <p className="text-xs sm:text-sm text-[#444746] leading-relaxed max-w-md mx-auto">
+                {maintenanceSettings.message ||
+                  "The website is currently undergoing scheduled maintenance. We will be back shortly!"}
+              </p>
+            </div>
+
+            <div className="bg-[#f8fafd] rounded-2xl p-4 sm:p-5 border border-[#e1e7f0] space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between text-xs font-semibold text-[#5f6368]">
+                <span className="flex items-center gap-1.5 text-[#0b57d0] font-bold">
+                  <svg className="w-4 h-4 text-[#0b57d0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" strokeWidth="2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2" />
+                  </svg>
+                  <span>Estimated Time Remaining</span>
+                </span>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#e8f0fe] text-[#0b57d0]">
+                  LIVE COUNTDOWN
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 text-center font-mono">
+                <div className="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
+                  <div className="text-lg sm:text-2xl font-black text-[#0b57d0]">{maintCountdown.days}</div>
+                  <div className="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Days</div>
+                </div>
+                <div className="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
+                  <div className="text-lg sm:text-2xl font-black text-[#0b57d0]">{maintCountdown.hours}</div>
+                  <div className="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Hours</div>
+                </div>
+                <div className="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
+                  <div className="text-lg sm:text-2xl font-black text-[#0b57d0]">{maintCountdown.mins}</div>
+                  <div className="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Minutes</div>
+                </div>
+                <div className="bg-white rounded-xl p-2 sm:p-3 border border-[#dadce0] shadow-2xs">
+                  <div className="text-lg sm:text-2xl font-black text-[#0b57d0]">{maintCountdown.secs}</div>
+                  <div className="text-[9px] sm:text-[10px] text-[#5f6368] font-sans font-semibold uppercase mt-0.5">Seconds</div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-[#5f6368] font-medium text-center">
+                Target End Time: <span className="font-bold text-[#1f1f1f]">{maintCountdown.formattedTarget}</span>
+              </div>
+            </div>
+          </div>
+        </main>
+        {renderPublicFooter()}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f8fafd] flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
+        {renderPublicHeaderAndDrawer()}
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center space-y-3">
+            <div className="inline-block w-8 h-8 border-3 border-[#0b57d0] border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm font-medium text-[#444746]">Loading episode buttons...</p>
+          </div>
+        </main>
+        {renderPublicFooter()}
+      </div>
+    );
+  }
+
+  const renderPublicErrorScreen = (actualTitle: string, actualErrorMsg: string, httpCode = 404) => {
+    const safeTitle = "Something's wrong here...";
+    const safeDesc =
+      "It looks like nothing was found at this location. The page you were looking for does not exist or was loading incorrectly.";
+    const displayTitle = debugMode ? actualTitle : safeTitle;
+    const displayMsg = safeDesc;
+    const reqPath =
+      typeof window !== "undefined" ? window.location.pathname + window.location.search : `/p/${slug}`;
+
+    const homeMenuItem = menuItems.find(
+      (item) => item.title?.trim().toLowerCase() === "home" && item.url && item.url.trim() !== "#"
+    );
+    const homeHref = homeMenuItem?.url?.trim() || "/";
+
+    return (
+      <div className="min-h-screen flex flex-col bg-white text-[#1f1f1f] font-sans antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
+        <style>{`
+          @keyframes s404CloudLeft {
+            0%, 100% { transform: translate(0px, 0px); }
+            50% { transform: translate(-8px, -4px); }
+          }
+          @keyframes s404CloudRight {
+            0%, 100% { transform: translate(0px, 0px); }
+            50% { transform: translate(8px, -5px); }
+          }
+          @keyframes s404CharBounce {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-6px) rotate(2deg); }
+          }
+          @keyframes s404ArmLeft {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-14deg); }
+          }
+          @keyframes s404ArmRight {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(16deg); }
+          }
+          @keyframes s404LegRight {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-12deg); }
+          }
+          @keyframes s404Blink {
+            0%, 45%, 49%, 100% { transform: scaleY(1); }
+            47% { transform: scaleY(0.12); }
+          }
+          .s404-cloud-left {
+            animation: s404CloudLeft 5s ease-in-out infinite;
+          }
+          .s404-cloud-right {
+            animation: s404CloudRight 6s ease-in-out infinite;
+          }
+          .s404-char {
+            animation: s404CharBounce 2.8s ease-in-out infinite;
+            transform-origin: 196px 155px;
+          }
+          .s404-arm-left {
+            animation: s404ArmLeft 1.8s ease-in-out infinite;
+            transform-origin: 176px 92px;
+          }
+          .s404-arm-right {
+            animation: s404ArmRight 1.8s ease-in-out infinite;
+            transform-origin: 218px 78px;
+          }
+          .s404-leg-right {
+            animation: s404LegRight 2.8s ease-in-out infinite;
+            transform-origin: 220px 121px;
+          }
+          .s404-eye {
+            animation: s404Blink 4s infinite;
+            transform-box: fill-box;
+            transform-origin: center;
+          }
+        `}</style>
+
+        {renderPublicHeaderAndDrawer()}
+
+        {/* Main 404 Content Area matching screenshot */}
+        <main className="flex-1 w-full max-w-xl mx-auto px-6 py-12 sm:py-16 flex flex-col items-center justify-center text-center">
+          {/* Animated 404 Icon Illustration */}
+          <div className="w-full max-w-[300px] sm:max-w-[340px] mx-auto select-none">
+            <svg
+              viewBox="0 0 420 250"
+              className="w-full h-auto overflow-visible"
+              role="img"
+              aria-label="404 Page Not Found Illustration"
+            >
+              {/* Floating Left Cloud */}
+              <g className="s404-cloud-left">
+                <path
+                  d="M 118 44 H 144 C 147.5 44 150 41.5 150 38.2 C 150 35.2 147.8 32.8 144.8 32.5 C 144.2 27.2 139.6 23 134 23 C 129.2 23 125.1 26.1 123.6 30.5 C 122.7 30.1 121.6 29.8 120.5 29.8 C 116.4 29.8 113 33.1 113 37.2 C 113 41 115.2 44 118 44 Z"
+                  fill="#ffffff"
+                  stroke="#737373"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </g>
+
+              {/* Floating Right Cloud */}
+              <g className="s404-cloud-right">
+                <path
+                  d="M 278 44 H 304 C 307.5 44 310 41.5 310 38.2 C 310 35.2 307.8 32.8 304.8 32.5 C 304.2 27.2 299.6 23 294 23 C 289.2 23 285.1 26.1 283.6 30.5 C 282.7 30.1 281.6 29.8 280.5 29.8 C 276.4 29.8 273 33.1 273 37.2 C 273 41 275.2 44 278 44 Z"
+                  fill="#ffffff"
+                  stroke="#737373"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </g>
+
+              {/* Left "4" emerging from horizon */}
+              <polygon points="88,222 118,148 139,156 110,222" fill="#737373" />
+              <polygon points="131,222 129,189 151,187 153,222" fill="#737373" />
+
+              {/* Center "0" Dome emerging from horizon */}
+              <path
+                d="M 161 222 C 161 170 177 152 201 152 C 225 152 241 170 241 222 Z"
+                fill="#ffffff"
+                stroke="#737373"
+                strokeWidth="1.8"
+              />
+              {/* Subtle Moon Craters on top of "0" */}
+              <ellipse cx="196" cy="159" rx="10" ry="3.6" fill="#d4d4d4" />
+              <ellipse cx="215" cy="164" rx="5.5" ry="2.2" fill="#d4d4d4" transform="rotate(14 215 164)" />
+              <ellipse cx="180" cy="166" rx="4" ry="1.6" fill="#e0e0e0" transform="rotate(-15 180 166)" />
+              {/* Inner cutout of "0" */}
+              <path
+                d="M 183 222 C 183 186 190 175 201 175 C 212 175 219 186 219 222 Z"
+                fill="#ffffff"
+                stroke="#737373"
+                strokeWidth="1.8"
+              />
+
+              {/* Right "4" emerging from horizon */}
+              <polygon points="249,222 284,138 304,146 268,222" fill="#737373" />
+              <polygon points="258,210 293,207 291,176 314,174 316,205 327,204 329,222 258,222" fill="#737373" />
+
+              {/* Animated Cute Page Character balancing on the "0" */}
+              <g className="s404-char">
+                {/* Left Leg standing on "0" */}
+                <path
+                  d="M 189 131 L 194 156 L 188 158"
+                  fill="none"
+                  stroke="#737373"
+                  strokeWidth="3.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {/* Right Kicking Leg */}
+                <g className="s404-leg-right">
+                  <path
+                    d="M 220 121 L 226 133 C 227 136 225 139 221 140"
+                    fill="none"
+                    stroke="#737373"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </g>
+
+                {/* Left Waving Arm */}
+                <g className="s404-arm-left">
+                  <path
+                    d="M 176 92 L 152 88"
+                    fill="none"
+                    stroke="#737373"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                  />
+                </g>
+
+                {/* Right Raised Waving Arm */}
+                <g className="s404-arm-right">
+                  <path
+                    d="M 218 78 L 231 53"
+                    fill="none"
+                    stroke="#737373"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                  />
+                </g>
+
+                {/* Tilted Document Sheet Body with Folded Corner */}
+                <g transform="rotate(-17 199 98)">
+                  <polygon
+                    points="174,77 186,65 224,65 224,128 174,128"
+                    fill="#ffffff"
+                    stroke="#737373"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
+                  <polygon
+                    points="174,77 186,77 186,65"
+                    fill="#ffffff"
+                    stroke="#737373"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
+                  {/* Eyes */}
+                  <circle className="s404-eye" cx="192" cy="89" r="2.3" fill="#555555" />
+                  <circle className="s404-eye" cx="207" cy="89" r="2.3" fill="#555555" />
+                  {/* Happy Open Mouth */}
+                  <path d="M 195 95 C 195 104 205 104 205 95 Z" fill="#555555" />
+                  <path
+                    d="M 197 100.5 Q 200 98.5 203 100.5"
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                  />
+                </g>
+              </g>
+
+              {/* Horizon Line & Ground Dashes */}
+              <line x1="68" y1="222" x2="76" y2="222" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="82" y1="222" x2="334" y2="222" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="340" y1="222" x2="348" y2="222" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+
+              <line x1="100" y1="232" x2="108" y2="232" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="118" y1="232" x2="134" y2="232" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="90" y1="240" x2="96" y2="240" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+
+              <line x1="286" y1="232" x2="292" y2="232" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="302" y1="232" x2="328" y2="232" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="332" y1="240" x2="338" y2="240" stroke="#737373" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </div>
+
+          {/* Title & Description matching screenshot */}
+          <h1 className="mt-6 text-2xl sm:text-[28px] font-extrabold text-[#2b2b2b] tracking-tight leading-snug">
+            {displayTitle}
+          </h1>
+          <p className="mt-3 text-sm sm:text-[15px] text-[#757575] max-w-md mx-auto leading-relaxed">
+            {displayMsg}
+          </p>
+
+          {/* Return to Home Button matching screenshot */}
+          <div className="mt-12 sm:mt-16">
+            <a
+              href={homeHref}
+              className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-[#f4f4f5] hover:bg-[#e7e8ea] text-[#222222] font-bold text-xs sm:text-sm transition-all shadow-2xs active:scale-95 cursor-pointer"
+            >
+              Return to Home
+            </a>
+          </div>
+
+          {/* Developer Diagnostics (Debug Mode ON) */}
+          {debugMode && (
+            <div className="mt-8 w-full bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 text-[#1f1f1f] font-mono text-[11px] leading-relaxed text-left space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap font-bold text-[#c5221f] uppercase tracking-wider">
+                <span>Developer Diagnostics (Debug Mode: ON)</span>
+                <span className="bg-[#fce8e6] text-[#c5221f] border border-[#fad2cf] px-2 py-0.5 rounded-full text-[10px]">
+                  HTTP {httpCode}
+                </span>
+              </div>
+              <div className="bg-[#fce8e6]/60 border border-[#fad2cf] rounded-xl px-3 py-2.5 text-[#c5221f] break-words">
+                <strong>Actual Error:</strong> {actualErrorMsg}
+              </div>
+              <div className="text-[#5f6368] space-y-1">
+                <div>
+                  <strong className="text-[#111827]">Request:</strong> GET {reqPath}
+                </div>
+                <div>
+                  <strong className="text-[#111827]">Handler:</strong> view.php ·{" "}
+                  <strong className="text-[#111827]">Debug Mode:</strong> Enabled
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+
+        {renderPublicFooter()}
+      </div>
+    );
+  };
+
+  // Error screen controlled by Debug Mode (Off = generic safe message, On = actual error reason)
+  if (error || !page) {
+    return renderPublicErrorScreen(
+      errorTitle,
+      error || `Actual Error [HTTP 404]: No episode page record matched slug '${slug}' in the database.`,
+      errorHttpCode
+    );
+  }
+
+  const isPublic = page.is_public === undefined ? true : Boolean(Number(page.is_public));
+  if (!isPublic && !isAdmin) {
+    return renderPublicErrorScreen(
+      "403 / 404 - Private Episode Page Restricted",
+      `Actual Error [Private Page]: Episode page '${slug}' exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`,
+      404
+    );
+  }
+
+  const themeObj = THEMES[page.theme || "indigo"] || THEMES.indigo;
+  const canonicalUrl = getCanonicalUrl();
+  const shareEncodedUrl = encodeURIComponent(canonicalUrl);
+  const shareEncodedTitle = encodeURIComponent(page.title || "Watch & Download Episodes");
+  const shareEncodedMsg = encodeURIComponent(`${page.title || "Watch & Download"} - Fast Episode Links: ${canonicalUrl}`);
+
+  return (
+    <div
+      className="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]"
+      style={{ backgroundColor: themeObj.bg, color: "#1f1f1f" }}
+    >
+      {renderPublicHeaderAndDrawer()}
+
+      {/* Main Episode Content Area (Google Material M3 Light Theme - Matches cpanel-package/view.php) */}
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
         {legalSlug === "dmca" ? (
           <article className="bg-white border border-[#e0e4eb] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5 text-[#1f1f1f]">
@@ -1933,74 +1932,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
         )}
       </main>
 
-      {/* Public Footer (Google Material M3 Light Theme - Matches cpanel-package/view.php lines 791-798) */}
-      <footer className="w-full bg-white border-t border-[#e1e7f0] mt-auto py-6 px-4">
-        <div className="max-w-4xl mx-auto text-center text-xs text-[#5f6368]">
-          <div className="leading-relaxed" dangerouslySetInnerHTML={{ __html: footerText }} />
-          {/* Horizontal Legal Page Links below copyright text */}
-          <div className="mt-2.5 pt-2.5 border-t border-[#f0f4f9] flex items-center justify-center flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-[#5f6368]">
-            <a
-              href="/dmca"
-              onClick={(e) => {
-                if (onNavigateSlug) {
-                  e.preventDefault();
-                  onNavigateSlug("dmca");
-                }
-              }}
-              className={`hover:text-[#0b57d0] hover:underline transition-colors ${
-                legalSlug === "dmca" ? "text-[#0b57d0] font-bold" : ""
-              }`}
-            >
-              DMCA
-            </a>
-            <span className="text-[#c4c7c5] select-none">•</span>
-            <a
-              href="/disclaimer"
-              onClick={(e) => {
-                if (onNavigateSlug) {
-                  e.preventDefault();
-                  onNavigateSlug("disclaimer");
-                }
-              }}
-              className={`hover:text-[#0b57d0] hover:underline transition-colors ${
-                legalSlug === "disclaimer" ? "text-[#0b57d0] font-bold" : ""
-              }`}
-            >
-              Disclaimer
-            </a>
-            <span className="text-[#c4c7c5] select-none">•</span>
-            <a
-              href="/about-us"
-              onClick={(e) => {
-                if (onNavigateSlug) {
-                  e.preventDefault();
-                  onNavigateSlug("about-us");
-                }
-              }}
-              className={`hover:text-[#0b57d0] hover:underline transition-colors ${
-                legalSlug === "about-us" ? "text-[#0b57d0] font-bold" : ""
-              }`}
-            >
-              About Us
-            </a>
-            <span className="text-[#c4c7c5] select-none">•</span>
-            <a
-              href="/privacy-policy"
-              onClick={(e) => {
-                if (onNavigateSlug) {
-                  e.preventDefault();
-                  onNavigateSlug("privacy-policy");
-                }
-              }}
-              className={`hover:text-[#0b57d0] hover:underline transition-colors ${
-                legalSlug === "privacy-policy" ? "text-[#0b57d0] font-bold" : ""
-              }`}
-            >
-              Privacy Policy
-            </a>
-          </div>
-        </div>
-      </footer>
+      {renderPublicFooter()}
 
       {/* QR Code Display Modal (Matches cpanel-package/view.php lines 815-843) */}
       {qrModalOpen && (

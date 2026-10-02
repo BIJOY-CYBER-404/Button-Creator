@@ -31,11 +31,11 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({
       if (data.success && data.token) {
         localStorage.setItem("slea_admin_token", data.token);
         localStorage.setItem("slea_admin_user", data.username || "admin");
-        onNotify?.("Welcome back, Administrator!", "success");
+        onNotify?.("Signed in successfully", "success");
         onLoginSuccess(data.token, data.username || "admin");
       } else {
-        setError(data.error || "Invalid administrator credentials.");
-        onNotify?.(data.error || "Login failed", "error");
+        setError(data.error || "Invalid username or password.");
+        onNotify?.(data.error || "Sign in failed", "error");
       }
     } catch (err: any) {
       setError(err.message || "Failed to reach authentication server.");
@@ -45,16 +45,16 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-md mx-auto py-8 px-4">
-      <div className="bg-white rounded-2xl p-7 border border-[#d3e3fd] shadow-md space-y-6">
+    <div className="w-full max-w-md mx-auto py-6 px-4">
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#e0e4eb] shadow-xs space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-[#c2e7ff] text-[#001d35] flex items-center justify-center mx-auto shadow-2xs">
+          <div className="w-12 h-12 rounded-2xl bg-[#e8f0fe] border border-[#c2e7ff] text-[#0b57d0] flex items-center justify-center mx-auto shadow-2xs">
             <Lock className="w-6 h-6 text-[#0b57d0]" />
           </div>
-          <h2 className="text-lg font-bold text-[#1f1f1f]">Admin Access Required</h2>
-          <p className="text-xs text-[#5f6368] max-w-xs mx-auto">
-            Sign in with your administrator credentials to continue.
+          <h2 className="text-xl font-extrabold text-[#111827] tracking-tight">Sign In</h2>
+          <p className="text-xs text-[#5f6368] max-w-xs mx-auto leading-relaxed">
+            Enter your credentials to continue.
           </p>
         </div>
 

@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, Lock, ChevronRight } from "lucide-react";
+import { ShieldCheck, ChevronRight } from "lucide-react";
 import { ViewTab, SiteIdentity } from "../types";
 
 interface AppHeaderProps {
   currentTab: ViewTab;
   isAdmin: boolean;
   onLogout: () => void;
-  onShowLogin: () => void;
+  onShowLogin?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
   currentTab,
   isAdmin,
-  onShowLogin,
 }) => {
   const [siteIdentity, setSiteIdentity] = useState<SiteIdentity>(() => {
     const saved = localStorage.getItem("slea_site_identity");
@@ -76,31 +75,25 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 </div>
               ) : null}
             </div>
-            <p className="text-[11px] text-[#5f6368] truncate hidden sm:block">
-              Shortlink Bypass • Episode Button Pages
-            </p>
+            {isAdmin && (
+              <p className="text-[11px] text-[#5f6368] truncate hidden sm:block">
+                Shortlink Bypass • Episode Button Pages
+              </p>
+            )}
           </div>
         </div>
 
         {/* Status / Quick Action */}
-        <div className="flex items-center gap-3 shrink-0">
-          {isAdmin ? (
+        {isAdmin && (
+          <div className="flex items-center gap-3 shrink-0">
             <div className="flex items-center gap-2.5">
               <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] border border-[#a8dab5] tracking-wide shrink-0 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Admin Active</span>
               </span>
             </div>
-          ) : (
-            <button
-              onClick={onShowLogin}
-              className="h-9 px-3.5 rounded-lg text-xs font-bold bg-[#0b57d0] text-white hover:bg-[#0842a0] flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Admin Login</span>
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </header>
   );

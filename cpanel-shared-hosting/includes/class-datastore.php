@@ -1415,6 +1415,8 @@ class SLEA_Datastore {
                 $login_slug_cfg = strtolower(self::get_login_slug());
                 $blocked_routes = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'login', 'logout', 'setup', 'api', $login_slug_cfg];
                 $filtered_menu = array_values(array_filter($loaded_menu, function($item) use ($blocked_routes) {
+                    $t = strtolower(trim($item['title'] ?? ''));
+                    if (preg_match('/admin|login|dashboard|cpanel|setup/i', $t)) return false;
                     $u = strtolower(trim($item['url'] ?? ''));
                     if ($u === '' || $u === '#') return true;
                     $path = trim(parse_url($u, PHP_URL_PATH) ?: '', '/');
@@ -1429,23 +1431,11 @@ class SLEA_Datastore {
             if (!empty($loaded_footer)) {
                 $footer_html = $loaded_footer;
             }
-            if (class_exists('SLEA_Auth')) {
-                $is_admin_logged_in = SLEA_Auth::is_logged_in() && empty($_GET['preview_visitor']);
-            }
         } catch (Throwable $e) {
             // Safe fallback if DB is unreachable
         }
 
-        $home_url = 'https://moviehubhq.com/';
-        foreach ($menu_items as $mi) {
-            $u = self::sanitize_safe_href($mi['url'] ?? '');
-            if ($u !== '' && $u !== '#') {
-                $home_url = $u;
-                break;
-            }
-        }
-
-        // Compute base path for /p/{slug} lookup form and legal links
+        // Compute base path for legal links
         $script_path = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
         $base_dir = rtrim(dirname($script_path), '/');
         $base_dir = preg_replace('#/(p|page)$#i', '', $base_dir);
@@ -1455,39 +1445,43 @@ class SLEA_Datastore {
             $base_dir = '/' . $base_dir;
         }
 
-        $attempted_slug = isset($_GET['slug']) ? trim((string)$_GET['slug']) : '';
-        if ($attempted_slug === '' && preg_match('#/(?:p|page)/([a-zA-Z0-9_-]+)#', $raw_req_uri, $sm)) {
-            $attempted_slug = $sm[1];
-        }
-        $attempted_slug_safe = htmlspecialchars($attempted_slug, ENT_QUOTES, 'UTF-8');
-
-        $safe_title = ($code_int === 404) ? 'Episode Link Not Found' : 'Service Temporarily Unavailable';
-        $safe_desc = $safe_public_msg ?: (
-            $code_int === 404
-                ? 'The episode link you followed does not exist, may have been moved or expired, or is currently set to private.'
-                : 'Something went wrong while loading this page. Please try again in a moment.'
-        );
+        $safe_title = "Something's wrong here...";
+        $safe_desc = 'It looks like nothing was found at this location. The page you were looking for does not exist or was loading incorrectly.';
 
         $display_title = $debug ? htmlspecialchars((string)$actual_title, ENT_QUOTES, 'UTF-8') : htmlspecialchars((string)$safe_title, ENT_QUOTES, 'UTF-8');
         $display_msg = htmlspecialchars((string)$safe_desc, ENT_QUOTES, 'UTF-8');
 
-        $status_kicker = ($code_int === 404) ? 'HTTP 404 · GATEWAY ROUTE NOT FOUND' : ('HTTP ' . $code_int . ' · GATEWAY RUNTIME ERROR');
-        $badge_color = ($code_int === 404) ? '#38bdf8' : '#fb7185';
+        // Determine Return to Home URL (use configured Home menu item if set, otherwise site root)
+        $home_href = ($base_dir === '' ? '/' : $base_dir . '/');
+        foreach ($menu_items as $m_item) {
+            $m_t = strtolower(trim($m_item['title'] ?? ''));
+            $m_u = trim($m_item['url'] ?? '');
+            if ($m_t === 'home' && $m_u !== '' && $m_u !== '#') {
+                $home_href = self::sanitize_safe_href($m_u);
+                break;
+            }
+        }
+        $home_href_safe = htmlspecialchars($home_href, ENT_QUOTES, 'UTF-8');
 
-        // Build Navigation Links HTML
-        $nav_links_html = '';
-        $quick_cats_html = '';
+        // Build Desktop & Mobile Navigation Links HTML matching view.php
+        $desktop_nav_html = '';
+        $mobile_nav_html = '';
         foreach ($menu_items as $item) {
             $m_title = htmlspecialchars($item['title'] ?? 'Link', ENT_QUOTES, 'UTF-8');
             $m_url = htmlspecialchars(self::sanitize_safe_href($item['url'] ?? '#'), ENT_QUOTES, 'UTF-8');
             $m_blank = (!empty($item['new_tab']) || !empty($item['target_blank'])) ? ' target="_blank" rel="noopener noreferrer"' : '';
-            $nav_links_html .= '<a href="' . $m_url . '"' . $m_blank . ' class="nav-link">' . $m_title . '</a>';
-            $quick_cats_html .= '<a href="' . $m_url . '"' . $m_blank . ' class="cat-link"><span>' . $m_title . '</span><span aria-hidden="true">→</span></a>';
+            $desktop_nav_html .= '<a href="' . $m_url . '"' . $m_blank . ' class="px-3.5 py-1.5 rounded-full text-xs font-semibold text-[#444746] hover:text-[#0b57d0] bg-[#f0f4f9] hover:bg-[#e8f0fe] border border-[#e1e7f0] hover:border-[#c2e7ff] shadow-2xs transition-all whitespace-nowrap">' . $m_title . '</a>';
+            $mobile_nav_html .= '<a href="' . $m_url . '"' . $m_blank . ' class="flex items-center justify-between px-4 py-3 rounded-2xl text-xs sm:text-sm font-semibold text-[#1f1f1f] hover:text-[#0b57d0] bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#e0e4eb] hover:border-[#c2e7ff] shadow-2xs transition-all"><span>' . $m_title . '</span><svg class="w-4 h-4 text-[#5f6368] opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></a>';
         }
 
-        $logo_html = $site_logo_url !== ''
-            ? '<img src="' . htmlspecialchars($site_logo_url, ENT_QUOTES, 'UTF-8') . '" alt="' . htmlspecialchars($site_name, ENT_QUOTES, 'UTF-8') . '" style="width:100%;height:100%;object-fit:contain;" />'
-            : '<span>' . htmlspecialchars(substr($site_logo_text ?: 'MHQ', 0, 3), ENT_QUOTES, 'UTF-8') . '</span>';
+        $site_name_safe = htmlspecialchars($site_name, ENT_QUOTES, 'UTF-8');
+        $header_logo_html = $site_logo_url !== ''
+            ? '<img src="' . htmlspecialchars($site_logo_url, ENT_QUOTES, 'UTF-8') . '" alt="' . $site_name_safe . '" class="h-8 max-w-[180px] object-contain">'
+            : '<span class="font-bold text-base sm:text-lg tracking-tight text-[#111827] group-hover:text-[#0b57d0] transition-colors">' . $site_name_safe . '</span>';
+
+        $drawer_logo_html = $site_logo_url !== ''
+            ? '<img src="' . htmlspecialchars($site_logo_url, ENT_QUOTES, 'UTF-8') . '" alt="' . $site_name_safe . '" class="h-7 max-w-[140px] object-contain">'
+            : '<span class="font-bold text-sm tracking-tight text-[#111827] truncate">' . $site_name_safe . '</span>';
 
         $debug_block = '';
         if ($debug) {
@@ -1503,217 +1497,293 @@ class SLEA_Datastore {
             $extra_rows = '';
             if (!empty($extra_context['file'])) {
                 $loc = htmlspecialchars($extra_context['file'] . (!empty($extra_context['line']) ? ':' . $extra_context['line'] : ''), ENT_QUOTES, 'UTF-8');
-                $extra_rows .= '<div class="dbg-row"><strong>Source Location:</strong> ' . $loc . '</div>';
+                $extra_rows .= '<div><strong class="text-[#111827]">Source Location:</strong> ' . $loc . '</div>';
             }
             if (!empty($extra_context['trace'])) {
                 $trace_safe = htmlspecialchars((string)$extra_context['trace'], ENT_QUOTES, 'UTF-8');
-                $extra_rows .= '<details style="margin-top:10px;"><summary style="cursor:pointer;font-weight:700;color:#fecdd3;">View Stack Trace</summary><pre style="margin:8px 0 0;padding:10px;background:#090d16;border:1px solid #334155;border-radius:8px;overflow-x:auto;font-size:11px;color:#fda4af;white-space:pre-wrap;word-break:break-word;">' . $trace_safe . '</pre></details>';
+                $extra_rows .= '<details class="mt-2"><summary class="cursor-pointer font-bold text-[#c5221f]">View Stack Trace</summary><pre class="mt-2 p-2.5 bg-white border border-[#fad2cf] rounded-xl overflow-x-auto text-[11px] text-[#c5221f] whitespace-pre-wrap break-words">' . $trace_safe . '</pre></details>';
             }
             if (!empty(self::$captured_debug_errors)) {
                 $warn_items = '';
                 foreach (self::$captured_debug_errors as $w) {
                     $warn_items .= '<li>' . htmlspecialchars((string)$w, ENT_QUOTES, 'UTF-8') . '</li>';
                 }
-                $extra_rows .= '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #475569;"><strong>Captured Runtime Warnings/Notices:</strong><ul style="margin:6px 0 0 18px;padding:0;">' . $warn_items . '</ul></div>';
+                $extra_rows .= '<div class="mt-2 pt-2 border-t border-dashed border-[#e0e4eb]"><strong class="text-[#111827]">Captured Runtime Warnings/Notices:</strong><ul class="mt-1 ml-4 list-disc">' . $warn_items . '</ul></div>';
             }
 
-            $debug_block = '<div class="dbg-panel">'
-                . '<div class="dbg-head">'
+            $debug_block = '<div class="mt-8 w-full bg-[#f8fafd] border border-[#e0e4eb] rounded-2xl p-4 text-[#1f1f1f] font-mono text-[11px] leading-relaxed text-left space-y-2">'
+                . '<div class="flex items-center justify-between gap-2 flex-wrap font-bold text-[#c5221f] uppercase tracking-wider">'
                 . '<span>Developer Diagnostics (Debug Mode: ON)</span>'
-                . '<span class="dbg-code">HTTP ' . $code_int . '</span>'
+                . '<span class="bg-[#fce8e6] text-[#c5221f] border border-[#fad2cf] px-2 py-0.5 rounded-full text-[10px]">HTTP ' . $code_int . '</span>'
                 . '</div>'
-                . '<div class="dbg-box"><strong>Actual Error:</strong> ' . htmlspecialchars((string)$actual_error_msg, ENT_QUOTES, 'UTF-8') . '</div>'
-                . '<div class="dbg-meta">'
-                . '<div><strong>Request:</strong> ' . $req_method . ' ' . $req_uri . '</div>'
-                . '<div><strong>Handler:</strong> ' . $script_name . ' · <strong>DB Driver:</strong> ' . htmlspecialchars((string)$db_driver, ENT_QUOTES, 'UTF-8') . ' · <strong>PHP:</strong> ' . $php_ver . '</div>'
-                . '<div><strong>Timestamp:</strong> ' . htmlspecialchars($time_str, ENT_QUOTES, 'UTF-8') . '</div>'
+                . '<div class="bg-[#fce8e6]/60 border border-[#fad2cf] rounded-xl px-3 py-2.5 text-[#c5221f] break-words"><strong>Actual Error:</strong> ' . htmlspecialchars((string)$actual_error_msg, ENT_QUOTES, 'UTF-8') . '</div>'
+                . '<div class="text-[#5f6368] space-y-1">'
+                . '<div><strong class="text-[#111827]">Request:</strong> ' . $req_method . ' ' . $req_uri . '</div>'
+                . '<div><strong class="text-[#111827]">Handler:</strong> ' . $script_name . ' · <strong class="text-[#111827]">DB Driver:</strong> ' . htmlspecialchars((string)$db_driver, ENT_QUOTES, 'UTF-8') . ' · <strong class="text-[#111827]">PHP:</strong> ' . $php_ver . '</div>'
+                . '<div><strong class="text-[#111827]">Timestamp:</strong> ' . htmlspecialchars($time_str, ENT_QUOTES, 'UTF-8') . '</div>'
                 . $extra_rows
                 . '</div>'
                 . '</div>';
         }
 
-        $admin_bar_html = '';
-        if ($is_admin_logged_in) {
-            $admin_bar_html = '<div style="background:#0f172a;color:#f8fafc;padding:8px 16px;font-size:12px;border-bottom:1px solid #1e293b;">'
-                . '<div style="max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
-                . '<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:#94a3b8;">Admin Session Active · HTTP ' . $code_int . ' Response</span>'
-                . '<div style="display:flex;align-items:center;gap:12px;">'
-                . '<a href="' . htmlspecialchars($base_dir . '/pages.php', ENT_QUOTES, 'UTF-8') . '" style="color:#38bdf8;text-decoration:none;font-weight:600;">Manage Pages</a>'
-                . '<a href="' . htmlspecialchars($base_dir . '/admin.php', ENT_QUOTES, 'UTF-8') . '" style="color:#f8fafc;text-decoration:none;font-weight:600;background:#1e293b;padding:4px 10px;border-radius:6px;border:1px solid #334155;">← Admin Dashboard</a>'
-                . '</div></div></div>';
-        }
-
-        $home_url_safe = htmlspecialchars($home_url, ENT_QUOTES, 'UTF-8');
-        $site_name_safe = htmlspecialchars($site_name, ENT_QUOTES, 'UTF-8');
-        $base_dir_js = json_encode($base_dir);
-
         die('<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex, nofollow, noarchive">
-<title>' . $code_int . ' - ' . $display_title . ' | ' . $site_name_safe . '</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:#f4f6fb;color:#0f172a;font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-.site-header{background:#ffffff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:30}
-.header-inner{max-width:980px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#0f172a;font-weight:800;font-size:15px}
-.brand-logo{width:36px;height:36px;border-radius:10px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;overflow:hidden;flex-shrink:0}
-.nav-bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.nav-link{color:#475569;text-decoration:none;font-size:13px;font-weight:600;transition:color .15s}
-.nav-link:hover{color:#0b57d0}
-.main-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:36px 20px}
-.shell{max-width:760px;width:100%;background:#ffffff;border:1px solid #dce3f0;border-radius:20px;overflow:hidden;box-shadow:0 12px 32px -12px rgba(15,23,42,0.08)}
-.hero-banner{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#f8fafc;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;border-bottom:1px solid #1e293b}
-.hero-left{flex:1;min-width:240px}
-.kicker{font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:700;letter-spacing:0.06em;color:' . $badge_color . ';margin-bottom:8px;display:flex;align-items:center;gap:8px}
-.kicker-dot{width:7px;height:7px;border-radius:50%;background:' . $badge_color . ';display:inline-block}
-.hero-title{font-size:24px;font-weight:800;margin:0 0 6px;line-height:1.25;color:#ffffff;letter-spacing:-0.02em}
-.hero-uri{font-family:"JetBrains Mono",monospace;font-size:12px;color:#94a3b8;word-break:break-all}
-.code-monument{font-family:"JetBrains Mono",monospace;font-size:54px;font-weight:800;line-height:1;letter-spacing:-0.04em;color:#38bdf8;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);padding:14px 22px;border-radius:16px;user-select:none}
-.body-area{padding:28px 32px}
-.lead-desc{font-size:14px;line-height:1.65;color:#475569;margin:0 0 24px}
-.lookup-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:24px}
-.lookup-label{display:block;font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px}
-.lookup-row{display:flex;gap:10px;flex-wrap:wrap}
-.lookup-input{flex:1;min-width:200px;padding:11px 14px;border-radius:10px;border:1px solid #cbd5e1;background:#ffffff;font-family:"JetBrains Mono",monospace;font-size:13px;color:#0f172a;outline:none;transition:border-color .15s}
-.lookup-input:focus{border-color:#0b57d0;box-shadow:0 0 0 3px rgba(11,87,208,0.12)}
-.lookup-btn{padding:11px 20px;border-radius:10px;border:0;background:#0b57d0;color:#ffffff;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s;white-space:nowrap}
-.lookup-btn:hover{background:#0842a0}
-.lookup-hint{font-size:11px;color:#64748b;margin-top:7px}
-.actions-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:22px;border-bottom:1px solid #f1f5f9}
-.btn-primary{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;background:#0f172a;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;transition:background .15s}
-.btn-primary:hover{background:#1e293b}
-.btn-secondary{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:10px;background:#f1f5f9;color:#334155;border:1px solid #e2e8f0;text-decoration:none;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
-.btn-secondary:hover{background:#e2e8f0;color:#0f172a}
-.cats-sec{margin-top:20px}
-.cats-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px}
-.cats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
-.cat-link{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;text-decoration:none;font-size:12px;font-weight:600;transition:all .15s}
-.cat-link:hover{border-color:#0b57d0;color:#0b57d0;background:#f0f6ff}
-.dbg-panel{margin-top:22px;background:#0f172a;border:1px solid #334155;border-radius:14px;padding:16px 18px;color:#e2e8f0;font-family:"JetBrains Mono",monospace;font-size:11px;line-height:1.6;text-align:left}
-.dbg-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-weight:700;color:#fda4af;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.04em}
-.dbg-code{background:#ef4444;color:#fff;padding:2px 8px;border-radius:6px;font-size:10px}
-.dbg-box{background:#1e293b;border:1px solid #475569;border-radius:8px;padding:10px 12px;color:#fecdd3;margin-bottom:10px;word-break:break-word}
-.dbg-meta{color:#94a3b8;display:grid;gap:4px}
-.dbg-meta strong{color:#cbd5e1}
-.site-footer{padding:20px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;background:#ffffff}
-.footer-links{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
-.footer-links a{color:#475569;text-decoration:none;font-weight:500}
-.footer-links a:hover{color:#0b57d0}
-@media(max-width:600px){
-  .hero-banner{padding:22px 20px}
-  .body-area{padding:22px 20px}
-  .code-monument{font-size:38px;padding:10px 16px}
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <title>' . $code_int . ' - ' . $display_title . ' - ' . $site_name_safe . '</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #ffffff;
+            color: #1f1f1f;
+        }
+        .font-mono { font-family: "JetBrains Mono", monospace; }
+        .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        @keyframes s404CloudLeft {
+            0%, 100% { transform: translate(0px, 0px); }
+            50% { transform: translate(-8px, -4px); }
+        }
+        @keyframes s404CloudRight {
+            0%, 100% { transform: translate(0px, 0px); }
+            50% { transform: translate(8px, -5px); }
+        }
+        @keyframes s404CharBounce {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-6px) rotate(2deg); }
+        }
+        @keyframes s404ArmLeft {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-14deg); }
+        }
+        @keyframes s404ArmRight {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(16deg); }
+        }
+        @keyframes s404LegRight {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-12deg); }
+        }
+        @keyframes s404Blink {
+            0%, 45%, 49%, 100% { transform: scaleY(1); }
+            47% { transform: scaleY(0.12); }
+        }
+        .s404-cloud-left { animation: s404CloudLeft 5s ease-in-out infinite; }
+        .s404-cloud-right { animation: s404CloudRight 6s ease-in-out infinite; }
+        .s404-char { animation: s404CharBounce 2.8s ease-in-out infinite; transform-origin: 196px 155px; }
+        .s404-arm-left { animation: s404ArmLeft 1.8s ease-in-out infinite; transform-origin: 176px 92px; }
+        .s404-arm-right { animation: s404ArmRight 1.8s ease-in-out infinite; transform-origin: 218px 78px; }
+        .s404-leg-right { animation: s404LegRight 2.8s ease-in-out infinite; transform-origin: 220px 121px; }
+        .s404-eye { animation: s404Blink 4s infinite; transform-box: fill-box; transform-origin: center; }
+    </style>
 </head>
-<body>
-' . $admin_bar_html . '
-<header class="site-header">
-    <div class="header-inner">
-        <a href="' . $home_url_safe . '" class="brand">
-            <div class="brand-logo">' . $logo_html . '</div>
-            <span>' . $site_name_safe . '</span>
-        </a>
-        <nav class="nav-bar">' . $nav_links_html . '</nav>
-    </div>
-</header>
-<main class="main-wrap">
-    <div class="shell">
-        <div class="hero-banner">
-            <div class="hero-left">
-                <div class="kicker"><span class="kicker-dot"></span><span>' . $status_kicker . '</span></div>
-                <h1 class="hero-title">' . $display_title . '</h1>
-                <div class="hero-uri">Requested Path: ' . $req_uri . '</div>
-            </div>
-            <div class="code-monument">' . $code_int . '</div>
-        </div>
-        <div class="body-area">
-            <p class="lead-desc">' . $display_msg . '</p>
+<body class="min-h-screen flex flex-col bg-white antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
+    <!-- Public Header Navigation Bar (Google Material M3 Light Theme) -->
+    <header class="w-full bg-white/95 border-b border-[#e1e7f0] sticky top-0 z-40 backdrop-blur-md shadow-2xs">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+            <!-- Left Header: Mobile 3-Line Hamburger Button + Site Logo/Name -->
+            <div class="flex items-center gap-3">
+                <button type="button" id="hamburgerBtn" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu"
+                    class="md:hidden p-2 rounded-xl bg-[#f0f4f9] border border-[#e1e7f0] text-[#1f1f1f] hover:bg-[#e8f0fe] hover:text-[#0b57d0] focus:outline-none cursor-pointer transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
 
-            <form class="lookup-box" onsubmit="return handleEpisodeJump(event)">
-                <label class="lookup-label" for="epCodeInput">Open Episode Page by Slug or Link</label>
-                <div class="lookup-row">
-                    <input
-                        id="epCodeInput"
-                        type="text"
-                        class="lookup-input"
-                        value="' . $attempted_slug_safe . '"
-                        placeholder="Enter episode slug (e.g. flp-120926) or paste /p/ link..."
-                        autocomplete="off"
-                    />
-                    <button type="submit" class="lookup-btn">Open Episode →</button>
-                </div>
-                <div class="lookup-hint">If you have a valid episode code or mistyped the URL, enter it above to jump directly to the download page.</div>
-            </form>
-
-            <div class="actions-row">
-                <a href="' . $home_url_safe . '" class="btn-primary">
-                    <span>Return to Main Website</span>
-                    <span aria-hidden="true">↗</span>
+                <a href="javascript:void(0)" class="flex items-center group text-decoration-none">
+                    ' . $header_logo_html . '
                 </a>
-                <button type="button" class="btn-secondary" onclick="if(window.history.length>1){window.history.back();}else{window.location.href=\'' . $home_url_safe . '\';}">
-                    <span>← Go Back</span>
-                </button>
-                <button type="button" class="btn-secondary" onclick="window.location.reload()">
-                    <span>↻ Try Again</span>
-                </button>
             </div>
 
-            <div class="cats-sec">
-                <div class="cats-title">Browse Website Sections</div>
-                <div class="cats-grid">' . $quick_cats_html . '</div>
-            </div>
-
-            ' . $debug_block . '
+            <!-- Right Header: Desktop Navigation Menu Buttons (Google Material M3 Chips) -->
+            <nav class="hidden md:flex flex-row items-center gap-2">
+                ' . $desktop_nav_html . '
+            </nav>
         </div>
-    </div>
-</main>
-<footer class="site-footer">
-    <div class="footer-links">
-        <a href="' . htmlspecialchars($base_dir . '/dmca', ENT_QUOTES, 'UTF-8') . '">DMCA</a>
-        <span>·</span>
-        <a href="' . htmlspecialchars($base_dir . '/disclaimer', ENT_QUOTES, 'UTF-8') . '">Disclaimer</a>
-        <span>·</span>
-        <a href="' . htmlspecialchars($base_dir . '/about-us', ENT_QUOTES, 'UTF-8') . '">About Us</a>
-        <span>·</span>
-        <a href="' . htmlspecialchars($base_dir . '/privacy-policy', ENT_QUOTES, 'UTF-8') . '">Privacy Policy</a>
-    </div>
-    <div>' . $footer_html . '</div>
-</footer>
-<script>
-function handleEpisodeJump(e) {
-    if (e) e.preventDefault();
-    var input = document.getElementById("epCodeInput");
-    if (!input) return false;
-    var raw = (input.value || "").trim();
-    if (!raw) {
-        input.focus();
-        return false;
-    }
-    var slug = raw;
-    var pMatch = raw.match(/\/(?:p|page)\/([a-zA-Z0-9_-]+)/i);
-    var qMatch = raw.match(/[?&](?:slug|p)=([a-zA-Z0-9_-]+)/i);
-    if (pMatch && pMatch[1]) {
-        slug = pMatch[1];
-    } else if (qMatch && qMatch[1]) {
-        slug = qMatch[1];
-    } else {
-        slug = raw.replace(/^https?:\/\/[^\/]+\/?/i, "").replace(/^\/+|\/+$/g, "").replace(/[^a-zA-Z0-9_-]/g, "");
-    }
-    if (!slug) {
-        input.focus();
-        return false;
-    }
-    var baseDir = ' . $base_dir_js . ';
-    window.location.href = (baseDir ? baseDir : "") + "/p/" + encodeURIComponent(slug);
-    return false;
-}
-</script>
+    </header>
+
+    <!-- Mobile Sidebar Drawer (Opens from Left Side, Occupies Half of the Page) -->
+    <div id="mobileSidebarBackdrop" onclick="closeMobileMenu()" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden opacity-0 transition-opacity duration-300 md:hidden" aria-hidden="true"></div>
+
+    <aside id="mobileSidebar" class="fixed inset-y-0 left-0 z-50 w-1/2 min-w-[250px] max-w-[340px] h-full bg-white border-r border-[#e1e7f0] shadow-2xl flex flex-col transform -translate-x-full transition-transform duration-300 ease-in-out md:hidden" aria-label="Mobile Navigation Drawer">
+        <div class="p-4 border-b border-[#f0f4f9] flex items-center justify-between shrink-0">
+            <div class="flex items-center min-w-0">
+                ' . $drawer_logo_html . '
+            </div>
+            <button type="button" onclick="closeMobileMenu()" class="p-1.5 rounded-xl text-[#5f6368] hover:text-[#111827] hover:bg-[#f0f4f9] transition-colors cursor-pointer" aria-label="Close menu">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto p-4 flex flex-col space-y-2">
+            ' . $mobile_nav_html . '
+        </nav>
+
+        <div class="p-4 border-t border-[#f0f4f9] text-[11px] text-[#747775] text-center shrink-0">
+            ' . $site_name_safe . '
+        </div>
+    </aside>
+
+    <!-- Main 404 Content Area matching screenshot -->
+    <main class="flex-1 w-full max-w-xl mx-auto px-6 py-12 sm:py-16 flex flex-col items-center justify-center text-center">
+        <!-- Animated 404 Icon Illustration -->
+        <div class="w-full max-w-[300px] sm:max-w-[340px] mx-auto select-none">
+            <svg viewBox="0 0 420 250" class="w-full h-auto overflow-visible" role="img" aria-label="404 Page Not Found Illustration">
+                <!-- Floating Left Cloud -->
+                <g class="s404-cloud-left">
+                    <path d="M 118 44 H 144 C 147.5 44 150 41.5 150 38.2 C 150 35.2 147.8 32.8 144.8 32.5 C 144.2 27.2 139.6 23 134 23 C 129.2 23 125.1 26.1 123.6 30.5 C 122.7 30.1 121.6 29.8 120.5 29.8 C 116.4 29.8 113 33.1 113 37.2 C 113 41 115.2 44 118 44 Z" fill="#ffffff" stroke="#737373" stroke-width="1.8" stroke-linejoin="round" />
+                </g>
+
+                <!-- Floating Right Cloud -->
+                <g class="s404-cloud-right">
+                    <path d="M 278 44 H 304 C 307.5 44 310 41.5 310 38.2 C 310 35.2 307.8 32.8 304.8 32.5 C 304.2 27.2 299.6 23 294 23 C 289.2 23 285.1 26.1 283.6 30.5 C 282.7 30.1 281.6 29.8 280.5 29.8 C 276.4 29.8 273 33.1 273 37.2 C 273 41 275.2 44 278 44 Z" fill="#ffffff" stroke="#737373" stroke-width="1.8" stroke-linejoin="round" />
+                </g>
+
+                <!-- Left "4" emerging from horizon -->
+                <polygon points="88,222 118,148 139,156 110,222" fill="#737373" />
+                <polygon points="131,222 129,189 151,187 153,222" fill="#737373" />
+
+                <!-- Center "0" Dome emerging from horizon -->
+                <path d="M 161 222 C 161 170 177 152 201 152 C 225 152 241 170 241 222 Z" fill="#ffffff" stroke="#737373" stroke-width="1.8" />
+                <ellipse cx="196" cy="159" rx="10" ry="3.6" fill="#d4d4d4" />
+                <ellipse cx="215" cy="164" rx="5.5" ry="2.2" fill="#d4d4d4" transform="rotate(14 215 164)" />
+                <ellipse cx="180" cy="166" rx="4" ry="1.6" fill="#e0e0e0" transform="rotate(-15 180 166)" />
+                <path d="M 183 222 C 183 186 190 175 201 175 C 212 175 219 186 219 222 Z" fill="#ffffff" stroke="#737373" stroke-width="1.8" />
+
+                <!-- Right "4" emerging from horizon -->
+                <polygon points="249,222 284,138 304,146 268,222" fill="#737373" />
+                <polygon points="258,210 293,207 291,176 314,174 316,205 327,204 329,222 258,222" fill="#737373" />
+
+                <!-- Animated Cute Page Character balancing on the "0" -->
+                <g class="s404-char">
+                    <!-- Left Leg -->
+                    <path d="M 189 131 L 194 156 L 188 158" fill="none" stroke="#737373" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+                    <!-- Right Kicking Leg -->
+                    <g class="s404-leg-right">
+                        <path d="M 220 121 L 226 133 C 227 136 225 139 221 140" fill="none" stroke="#737373" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+                    </g>
+                    <!-- Left Waving Arm -->
+                    <g class="s404-arm-left">
+                        <path d="M 176 92 L 152 88" fill="none" stroke="#737373" stroke-width="3.2" stroke-linecap="round" />
+                    </g>
+                    <!-- Right Raised Waving Arm -->
+                    <g class="s404-arm-right">
+                        <path d="M 218 78 L 231 53" fill="none" stroke="#737373" stroke-width="3.2" stroke-linecap="round" />
+                    </g>
+                    <!-- Tilted Document Sheet Body with Folded Corner -->
+                    <g transform="rotate(-17 199 98)">
+                        <polygon points="174,77 186,65 224,65 224,128 174,128" fill="#ffffff" stroke="#737373" stroke-width="2" stroke-linejoin="round" />
+                        <polygon points="174,77 186,77 186,65" fill="#ffffff" stroke="#737373" stroke-width="2" stroke-linejoin="round" />
+                        <circle class="s404-eye" cx="192" cy="89" r="2.3" fill="#555555" />
+                        <circle class="s404-eye" cx="207" cy="89" r="2.3" fill="#555555" />
+                        <path d="M 195 95 C 195 104 205 104 205 95 Z" fill="#555555" />
+                        <path d="M 197 100.5 Q 200 98.5 203 100.5" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" />
+                    </g>
+                </g>
+
+                <!-- Horizon Line & Ground Dashes -->
+                <line x1="68" y1="222" x2="76" y2="222" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+                <line x1="82" y1="222" x2="334" y2="222" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+                <line x1="340" y1="222" x2="348" y2="222" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+
+                <line x1="100" y1="232" x2="108" y2="232" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+                <line x1="118" y1="232" x2="134" y2="232" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+                <line x1="90" y1="240" x2="96" y2="240" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+
+                <line x1="286" y1="232" x2="292" y2="232" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+                <line x1="302" y1="232" x2="328" y2="232" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+                <line x1="332" y1="240" x2="338" y2="240" stroke="#737373" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+        </div>
+
+        <!-- Title & Description matching screenshot -->
+        <h1 class="mt-6 text-2xl sm:text-[28px] font-extrabold text-[#2b2b2b] tracking-tight leading-snug">
+            ' . $display_title . '
+        </h1>
+        <p class="mt-3 text-sm sm:text-[15px] text-[#757575] max-w-md mx-auto leading-relaxed">
+            ' . $display_msg . '
+        </p>
+
+        <!-- Return to Home Button matching screenshot -->
+        <div class="mt-12 sm:mt-16">
+            <a href="' . $home_href_safe . '" class="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-[#f4f4f5] hover:bg-[#e7e8ea] text-[#222222] font-bold text-xs sm:text-sm transition-all shadow-2xs active:scale-95 cursor-pointer">
+                Return to Home
+            </a>
+        </div>
+
+        ' . $debug_block . '
+    </main>
+
+    <!-- Public Footer (Google Material M3 Light Theme) -->
+    <footer class="w-full bg-white border-t border-[#e1e7f0] mt-auto py-6 px-4">
+        <div class="max-w-4xl mx-auto text-center text-xs text-[#5f6368]">
+            <div class="leading-relaxed">
+                ' . $footer_html . '
+            </div>
+            <div class="mt-2.5 pt-2.5 border-t border-[#f0f4f9] flex items-center justify-center flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-[#5f6368]">
+                <a href="' . htmlspecialchars(($base_dir === '' ? '' : $base_dir) . '/dmca', ENT_QUOTES, 'UTF-8') . '" class="hover:text-[#0b57d0] hover:underline transition-colors">DMCA</a>
+                <span class="text-[#c4c7c5] select-none">•</span>
+                <a href="' . htmlspecialchars(($base_dir === '' ? '' : $base_dir) . '/disclaimer', ENT_QUOTES, 'UTF-8') . '" class="hover:text-[#0b57d0] hover:underline transition-colors">Disclaimer</a>
+                <span class="text-[#c4c7c5] select-none">•</span>
+                <a href="' . htmlspecialchars(($base_dir === '' ? '' : $base_dir) . '/about-us', ENT_QUOTES, 'UTF-8') . '" class="hover:text-[#0b57d0] hover:underline transition-colors">About Us</a>
+                <span class="text-[#c4c7c5] select-none">•</span>
+                <a href="' . htmlspecialchars(($base_dir === '' ? '' : $base_dir) . '/privacy-policy', ENT_QUOTES, 'UTF-8') . '" class="hover:text-[#0b57d0] hover:underline transition-colors">Privacy Policy</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function openMobileMenu() {
+            var sidebar = document.getElementById("mobileSidebar");
+            var backdrop = document.getElementById("mobileSidebarBackdrop");
+            if (!sidebar || !backdrop) return;
+            backdrop.classList.remove("hidden");
+            void backdrop.offsetWidth;
+            backdrop.classList.remove("opacity-0");
+            backdrop.classList.add("opacity-100");
+            sidebar.classList.remove("-translate-x-full");
+            sidebar.classList.add("translate-x-0");
+            document.body.style.overflow = "hidden";
+        }
+
+        function closeMobileMenu() {
+            var sidebar = document.getElementById("mobileSidebar");
+            var backdrop = document.getElementById("mobileSidebarBackdrop");
+            if (!sidebar || !backdrop) return;
+            sidebar.classList.remove("translate-x-0");
+            sidebar.classList.add("-translate-x-full");
+            backdrop.classList.remove("opacity-100");
+            backdrop.classList.add("opacity-0");
+            setTimeout(function() {
+                backdrop.classList.add("hidden");
+                document.body.style.overflow = "";
+            }, 300);
+        }
+
+        function toggleMobileMenu() {
+            var sidebar = document.getElementById("mobileSidebar");
+            if (sidebar && sidebar.classList.contains("translate-x-0")) {
+                closeMobileMenu();
+            } else {
+                openMobileMenu();
+            }
+        }
+
+        document.addEventListener("keydown", function(e) {
+            if (e.key === "Escape") {
+                closeMobileMenu();
+            }
+        });
+    </script>
 </body>
 </html>');
     }

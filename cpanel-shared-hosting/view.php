@@ -98,6 +98,26 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
     $maintenance_img_url = $m_base_path . '/assets/images/maintenance_illustration.jpg';
     $maintenance_stream_url = $m_base_path . '/view.php?maintenance_asset=1';
     $maintenance_img_abs = $m_proto . $m_host . $maintenance_img_url;
+
+    $m_site_identity = SLEA_Datastore::get_site_identity();
+    $m_site_name = !empty($m_site_identity['site_name']) ? $m_site_identity['site_name'] : (defined('APP_NAME') ? APP_NAME : 'Movie Hub HQ Drive');
+    $m_site_logo_url = !empty($m_site_identity['site_logo_url']) ? trim((string)$m_site_identity['site_logo_url']) : '';
+    if ($m_site_logo_url !== '' && preg_match('/^\s*(?:javascript|data|vbscript):/i', $m_site_logo_url)) {
+        $m_site_logo_url = '';
+    }
+    $m_menu_items = array_values(array_filter(SLEA_Datastore::get_menu_items(), function($item) use ($configured_login_slug) {
+        $u = strtolower(trim($item['url'] ?? ''));
+        if (preg_match('/^\s*(?:javascript|data|vbscript):/i', $u)) return false;
+        if ($u === '' || $u === '#') return true;
+        $path = trim(parse_url($u, PHP_URL_PATH) ?: '', '/');
+        $base = preg_replace('/\.php$/i', '', basename($path));
+        $blocked = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'login', 'logout', 'setup', 'api', strtolower($configured_login_slug)];
+        if (in_array($base, $blocked, true)) {
+            return false;
+        }
+        return true;
+    }));
+    $m_footer_copyright = SLEA_Datastore::get_footer_copyright();
     ?>
     <!DOCTYPE html>
     <html lang="en">
@@ -105,24 +125,93 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta name="robots" content="noindex, nofollow, noarchive">
-        <title>Scheduled Maintenance - Back Soon</title>
+        <title>Scheduled Maintenance - <?= htmlspecialchars($m_site_name) ?></title>
         <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
+            * { -webkit-tap-highlight-color: transparent; }
             body { font-family: 'Plus Jakarta Sans', sans-serif; }
             .font-mono { font-family: 'JetBrains Mono', monospace; }
             .shadow-2xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
             .shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
-            @keyframes spin-slow {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
-            }
-            .spin-slow {
-                animation: spin-slow 16s infinite linear;
-            }
         </style>
     </head>
-    <body class="bg-[#f8fafd] text-[#1f1f1f] min-h-screen flex items-center justify-center p-4 sm:p-6 selection:bg-[#d3e3fd] select-none">
+    <body class="bg-[#f8fafd] text-[#1f1f1f] min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49] select-none">
+        <!-- Public Header Navigation Bar (Google Material M3 Light Theme) -->
+        <header class="w-full bg-white/95 border-b border-[#e1e7f0] sticky top-0 z-40 backdrop-blur-md shadow-2xs">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+                <div class="flex items-center gap-3">
+                    <button type="button" id="hamburgerBtn" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu"
+                        class="md:hidden p-2 rounded-xl bg-[#f0f4f9] border border-[#e1e7f0] text-[#1f1f1f] hover:bg-[#e8f0fe] hover:text-[#0b57d0] focus:outline-none cursor-pointer transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <a href="javascript:void(0)" class="flex items-center group text-decoration-none">
+                        <?php if (!empty($m_site_logo_url)): ?>
+                            <img src="<?= htmlspecialchars($m_site_logo_url) ?>" alt="<?= htmlspecialchars($m_site_name) ?>" class="h-8 max-w-[180px] object-contain">
+                        <?php else: ?>
+                            <span class="font-bold text-base sm:text-lg tracking-tight text-[#111827] group-hover:text-[#0b57d0] transition-colors">
+                                <?= htmlspecialchars($m_site_name) ?>
+                            </span>
+                        <?php endif; ?>
+                    </a>
+                </div>
+                <nav class="hidden md:flex flex-row items-center gap-2">
+                    <?php foreach ($m_menu_items as $item):
+                        $m_title = htmlspecialchars($item['title'] ?? '');
+                        $m_url = htmlspecialchars($item['url'] ?? '#');
+                        $m_target = !empty($item['new_tab']) ? 'target="_blank" rel="noopener"' : '';
+                    ?>
+                        <a href="<?= $m_url ?>" <?= $m_target ?>
+                            class="px-3.5 py-1.5 rounded-full text-xs font-semibold text-[#444746] hover:text-[#0b57d0] bg-[#f0f4f9] hover:bg-[#e8f0fe] border border-[#e1e7f0] hover:border-[#c2e7ff] shadow-2xs transition-all whitespace-nowrap">
+                            <?= $m_title ?>
+                        </a>
+                    <?php endforeach; ?>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Mobile Sidebar Drawer -->
+        <div id="mobileSidebarBackdrop" onclick="closeMobileMenu()" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden opacity-0 transition-opacity duration-300 md:hidden" aria-hidden="true"></div>
+        <aside id="mobileSidebar" class="fixed inset-y-0 left-0 z-50 w-1/2 min-w-[250px] max-w-[340px] h-full bg-white border-r border-[#e1e7f0] shadow-2xl flex flex-col transform -translate-x-full transition-transform duration-300 ease-in-out md:hidden" aria-label="Mobile Navigation Drawer">
+            <div class="p-4 border-b border-[#f0f4f9] flex items-center justify-between shrink-0">
+                <div class="flex items-center min-w-0">
+                    <?php if (!empty($m_site_logo_url)): ?>
+                        <img src="<?= htmlspecialchars($m_site_logo_url) ?>" alt="<?= htmlspecialchars($m_site_name) ?>" class="h-7 max-w-[140px] object-contain">
+                    <?php else: ?>
+                        <span class="font-bold text-sm tracking-tight text-[#111827] truncate">
+                            <?= htmlspecialchars($m_site_name) ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+                <button type="button" onclick="closeMobileMenu()" class="p-1.5 rounded-xl text-[#5f6368] hover:text-[#111827] hover:bg-[#f0f4f9] transition-colors cursor-pointer" aria-label="Close menu">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <nav class="flex-1 overflow-y-auto p-4 flex flex-col space-y-2">
+                <?php foreach ($m_menu_items as $item):
+                    $m_title = htmlspecialchars($item['title'] ?? '');
+                    $m_url = htmlspecialchars($item['url'] ?? '#');
+                    $m_target = !empty($item['new_tab']) ? 'target="_blank" rel="noopener"' : '';
+                ?>
+                    <a href="<?= $m_url ?>" <?= $m_target ?>
+                        class="flex items-center justify-between px-4 py-3 rounded-2xl text-xs sm:text-sm font-semibold text-[#1f1f1f] hover:text-[#0b57d0] bg-[#f8fafd] hover:bg-[#e8f0fe] border border-[#e0e4eb] hover:border-[#c2e7ff] shadow-2xs transition-all">
+                        <span><?= $m_title ?></span>
+                        <svg class="w-4 h-4 text-[#5f6368] opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+            <div class="p-4 border-t border-[#f0f4f9] text-[11px] text-[#747775] text-center shrink-0">
+                <?= htmlspecialchars($m_site_name) ?>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex items-center justify-center p-4 sm:p-6">
         <div class="max-w-lg w-full bg-white rounded-3xl border border-[#e0e4eb] p-6 sm:p-8 shadow-xs text-center space-y-6 relative overflow-hidden">
             <!-- Top Illustration Banner -->
             <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#fafbfc] border border-[#f0f4f9]">
@@ -281,8 +370,58 @@ if (!empty($maintenance['enabled']) && !$is_admin) {
                         window.location.reload();
                     }, 30000);
                 })();
+
+                const sidebar = document.getElementById('mobileSidebar');
+                const backdrop = document.getElementById('mobileSidebarBackdrop');
+                let isMenuOpen = false;
+                function openMobileMenu() {
+                    if (!sidebar || !backdrop) return;
+                    isMenuOpen = true;
+                    backdrop.classList.remove('hidden');
+                    setTimeout(() => {
+                        backdrop.classList.remove('opacity-0');
+                        backdrop.classList.add('opacity-100');
+                        sidebar.classList.remove('-translate-x-full');
+                        sidebar.classList.add('translate-x-0');
+                    }, 10);
+                    document.body.style.overflow = 'hidden';
+                }
+                function closeMobileMenu() {
+                    if (!sidebar || !backdrop) return;
+                    isMenuOpen = false;
+                    backdrop.classList.remove('opacity-100');
+                    backdrop.classList.add('opacity-0');
+                    sidebar.classList.remove('translate-x-0');
+                    sidebar.classList.add('-translate-x-full');
+                    setTimeout(() => {
+                        backdrop.classList.add('hidden');
+                    }, 300);
+                    document.body.style.overflow = '';
+                }
+                function toggleMobileMenu() {
+                    if (isMenuOpen) closeMobileMenu(); else openMobileMenu();
+                }
             </script>
         </div>
+        </main>
+
+        <!-- Footer Bar (Google Material M3 Light Theme) -->
+        <footer class="w-full bg-white border-t border-[#e0e4eb] mt-auto py-5 px-4">
+            <div class="max-w-4xl mx-auto flex flex-col items-center justify-center gap-2.5 text-center">
+                <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs font-semibold text-[#5f6368]">
+                    <a href="<?= htmlspecialchars($m_base_path . '/p/dmca') ?>" class="hover:text-[#0b57d0] transition-colors">DMCA</a>
+                    <span class="text-[#dadce0]">•</span>
+                    <a href="<?= htmlspecialchars($m_base_path . '/p/disclaimer') ?>" class="hover:text-[#0b57d0] transition-colors">Disclaimer</a>
+                    <span class="text-[#dadce0]">•</span>
+                    <a href="<?= htmlspecialchars($m_base_path . '/p/about-us') ?>" class="hover:text-[#0b57d0] transition-colors">About Us</a>
+                    <span class="text-[#dadce0]">•</span>
+                    <a href="<?= htmlspecialchars($m_base_path . '/p/privacy-policy') ?>" class="hover:text-[#0b57d0] transition-colors">Privacy</a>
+                </div>
+                <p class="text-xs text-[#5f6368] font-medium">
+                    <?= htmlspecialchars($m_footer_copyright) ?>
+                </p>
+            </div>
+        </footer>
     </body>
     </html>
     <?php
@@ -522,55 +661,6 @@ function resolve_server_info($provider, $url, $btn_text) {
     </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-[#d3e3fd] selection:text-[#041e49]">
-        <?php if ($is_admin && !$legal_slug): ?>
-        <!-- Admin Quick Controls Bar (Only shown when active admin account logged-in state is found) -->
-        <div class="w-full bg-white text-[#1f1f1f] border-b border-[#e0e4eb] px-3 sm:px-4 py-2 text-xs z-50 shadow-xs">
-            <div class="max-w-4xl mx-auto flex flex-row flex-nowrap items-center justify-between gap-3 overflow-x-auto whitespace-nowrap">
-                <div class="flex flex-row flex-nowrap items-center gap-2.5 sm:gap-3 shrink-0">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#e8f0fe] text-[#0b57d0] border border-[#c2e7ff] uppercase tracking-wider shrink-0">
-                        <span class="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse"></span>
-                        Admin View
-                    </span>
-                    <div class="flex items-center gap-1.5 sm:gap-2 bg-[#f8fafd] px-2.5 py-1 rounded-xl border border-[#e0e4eb] shrink-0">
-                        <span class="text-[11px] text-[#444746] font-semibold">Visibility:</span>
-                        <button
-                            type="button"
-                            id="adminViewToggleBtn"
-                            onclick="toggleAdminStatus(<?= $page_id ?>)"
-                            role="switch"
-                            aria-checked="<?= $is_public ? 'true' : 'false' ?>"
-                            title="Click to toggle Public / Private visibility"
-                            class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none <?= $is_public ? 'bg-[#137333]' : 'bg-slate-300' ?>"
-                        >
-                            <span
-                                id="adminViewToggleThumb"
-                                class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out <?= $is_public ? 'translate-x-4' : 'translate-x-0' ?>"
-                            ></span>
-                        </button>
-                        <span
-                            id="adminViewStatusBadge"
-                            class="px-2 py-0.5 rounded text-[10px] font-bold <?= $is_public ? 'bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]' : 'bg-[#fff0d4] text-[#b06000] border border-[#ffd599]' ?>"
-                        >
-                            <?= $is_public ? 'Public' : 'Private' ?>
-                        </span>
-                    </div>
-                    <span class="text-[#c4c7c5]">•</span>
-                    <span class="text-[#444746] font-mono text-[11px] font-medium shrink-0">
-                        👁️ <?= number_format(intval($page['views'] ?? 0)) ?> views
-                    </span>
-                </div>
-                <div class="flex flex-row flex-nowrap items-center gap-2 shrink-0">
-                    <a href="<?= htmlspecialchars($app_base_path . '/pages.php?edit=' . $page_id) ?>" class="px-3 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold text-xs transition-colors flex items-center gap-1 shadow-2xs">
-                        <span>✏️ Edit Page</span>
-                    </a>
-                    <a href="<?= htmlspecialchars($app_base_path . '/pages.php') ?>" class="px-3 py-1.5 rounded-xl bg-[#f0f4f9] hover:bg-[#e8f0fe] text-[#1f1f1f] hover:text-[#0b57d0] font-semibold text-xs transition-colors border border-[#e0e4eb] shadow-2xs">
-                        Pages Manager
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
-
         <!-- Public Header Navigation Bar (Google Material M3 Light Theme) -->
         <header class="w-full bg-white/95 border-b border-[#e1e7f0] sticky top-0 z-40 backdrop-blur-md shadow-2xs">
             <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
@@ -904,18 +994,6 @@ function resolve_server_info($provider, $url, $btn_text) {
                     </div>
                 </article>
             <?php else: ?>
-            <?php if ($is_admin): ?>
-            <!-- Private Page Notice Banner for Admin (Only rendered when admin is logged in) -->
-            <div id="privateNoticeBanner" class="<?= $is_public ? 'hidden' : '' ?> rounded-2xl bg-[#fff8e6] border border-[#ffe082] p-3.5 flex items-center justify-between gap-3 text-xs text-[#7c5e10] shadow-2xs">
-                <div class="flex items-center gap-2">
-                    <span class="text-base">🔒</span>
-                    <div>
-                        <span class="font-bold text-[#b06000]">Private Page Mode:</span>
-                        <span>Only logged-in administrators can view this page. Public visitors see a 404 screen.</span>
-                    </div>
-                </div>
-            </div>
-            <?php endif; ?>
 
             <?php if (!empty($ad_settings['banner_ads_enabled']) && !empty($ad_settings['ad_top_enabled']) && !empty($ad_settings['ad_top_code'])): ?>
                 <!-- Top Banner Ad Placement (Hidden if not configured; shows - Advertisement - header when configured) -->
@@ -1512,48 +1590,6 @@ function resolve_server_info($provider, $url, $btn_text) {
                 }
             }, 4500);
         }
-
-        <?php if ($is_admin): ?>
-        async function toggleAdminStatus(id) {
-            const btn = document.getElementById('adminViewToggleBtn');
-            const thumb = document.getElementById('adminViewToggleThumb');
-            const badge = document.getElementById('adminViewStatusBadge');
-            const banner = document.getElementById('privateNoticeBanner');
-            const apiUrl = <?= json_encode($app_base_path . '/api.php?action=toggle_page_status') ?>;
-
-            try {
-                const res = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id })
-                });
-                const data = await res.json();
-                if (data.success && data.page) {
-                    const isPub = Number(data.page.is_public) === 1;
-                    btn.setAttribute('aria-checked', isPub ? 'true' : 'false');
-                    if (isPub) {
-                        btn.className = 'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-[#137333]';
-                        thumb.className = 'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-4';
-                        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-[#e6f4ea] text-[#137333] border border-[#a8dab5]';
-                        badge.innerText = 'Public';
-                        if (banner) banner.classList.add('hidden');
-                        showToast('Page visibility changed to Public', 'success');
-                    } else {
-                        btn.className = 'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-slate-300';
-                        thumb.className = 'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0';
-                        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-[#fff0d4] text-[#b06000] border border-[#ffd599]';
-                        badge.innerText = 'Private';
-                        if (banner) banner.classList.remove('hidden');
-                        showToast('Page visibility changed to Private', 'info');
-                    }
-                } else {
-                    showToast('Could not update status: ' + (data.error || 'Unknown error'), 'error');
-                }
-            } catch (err) {
-                showToast('Request failed: ' + err.message, 'error');
-            }
-        }
-        <?php endif; ?>
 
         // -------------------------------------------------------------
         // Universal AdBlocker & Private DNS Detection
