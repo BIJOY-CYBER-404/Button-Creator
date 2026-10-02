@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Settings, CheckCircle2, Sliders, Menu, ShieldAlert, Plus, Trash2, Code, Globe, Save, Sparkles, Image as ImageIcon } from "lucide-react";
 import { SiteIdentity } from "../types";
+import { getValidAdminToken } from "../utils/authCookie";
 
 interface MenuItem {
   title: string;
@@ -286,9 +287,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify, onPr
 
   const syncSettingsToServer = async (partial: Record<string, any>) => {
     try {
-      const token = localStorage.getItem("slea_admin_token") || "admin_token_default_session";
+      const token = getValidAdminToken() || "admin_token_default_session";
       await fetch("/api/settings/save", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -386,9 +388,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify, onPr
 
   const handleExportBackup = async (scope: "all" | "settings" | "pages" | "others") => {
     try {
-      const token = localStorage.getItem("slea_admin_token") || "admin_token_default_session";
+      const token = getValidAdminToken() || "admin_token_default_session";
       const res = await fetch("/api/backup/export", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -472,9 +475,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify, onPr
     mode: "merge" | "overwrite" = "merge",
     detectedLabel?: string
   ) => {
-    const token = localStorage.getItem("slea_admin_token") || "admin_token_default_session";
+    const token = getValidAdminToken() || "admin_token_default_session";
     const res = await fetch("/api/backup/restore", {
       method: "POST",
+      credentials: "same-origin",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -500,9 +504,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onNotify, onPr
 
   const handleCreateSnapshot = async () => {
     try {
-      const token = localStorage.getItem("slea_admin_token") || "admin_token_default_session";
+      const token = getValidAdminToken() || "admin_token_default_session";
       const res = await fetch("/api/backup/export", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,

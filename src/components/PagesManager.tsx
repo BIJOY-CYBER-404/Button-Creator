@@ -48,6 +48,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
     setLoading(true);
     try {
       const res = await fetch("/api/pages", {
+        credentials: "same-origin",
         headers: {
           Authorization: `Bearer ${adminToken}`,
           "x-admin-token": adminToken,
@@ -133,6 +134,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
       const validButtons = editForm.buttons.filter(b => b.text && b.url);
       const res = await fetch("/api/pages/update", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${adminToken}`,
@@ -170,6 +172,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
     try {
       const res = await fetch(`/api/pages/${encodeURIComponent(id)}`, {
         method: "DELETE",
+        credentials: "same-origin",
         headers: {
           Authorization: `Bearer ${adminToken}`,
           "x-admin-token": adminToken,
@@ -234,6 +237,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
       const idsToDelete = Array.from(selectedIds);
       const res = await fetch("/api/pages/bulk-delete", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${adminToken}`,
@@ -266,6 +270,7 @@ export const PagesManager: React.FC<PagesManagerProps> = ({
     try {
       const res = await fetch("/api/pages/toggle-status", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${adminToken}`,

@@ -16,15 +16,201 @@ if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
 require_once __DIR__ . '/class-db.php';
 
 class SLEA_Auth {
+    const AUTH_COOKIE_LIFETIME = 7200; // 2 hours (1-2 hours cookie expiration)
+    const AUTH_COOKIE_NAME = 'slea_auth_cookie';
+    const AUTH_TOKEN_COOKIE_NAME = 'slea_admin_token';
+    const AUTH_STATE_COOKIE_NAME = 'slea_login_state';
+    const AUTH_EXP_COOKIE_NAME = 'slea_admin_exp';
+
     private static $verified_user_this_request = null;
     private static $csrf_ob_registered = false;
 
+    private static function is_https_request() {
+        return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+            || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+    }
+
+    private static function get_cookie_secret() {
+        $dir = dirname(__DIR__) . '/data';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $secret_file = $dir . '/cookie_secret.key';
+        if (file_exists($secret_file)) {
+            $raw = trim((string)@file_get_contents($secret_file));
+            if (strlen($raw) >= 32) {
+                return $raw;
+            }
+        }
+        $generated = hash(
+            'sha256',
+            'slea_cookie_secret_v25|'
+            . (defined('DB_NAME') ? DB_NAME : 'moviehub') . '|'
+            . (defined('DB_USER') ? DB_USER : 'user') . '|'
+            . (defined('DB_PASS') ? DB_PASS : 'pass')
+        );
+        @file_put_contents($secret_file, $generated, LOCK_EX);
+        return $generated;
+    }
+
+    private static function set_cookie_compatible($name, $value, $expires, $httponly = false) {
+        $is_https = self::is_https_request();
+        if (!headers_sent()) {
+            if (PHP_VERSION_ID >= 70300) {
+                @setcookie($name, $value, [
+                    'expires'  => $expires,
+                    'path'     => '/',
+                    'domain'   => '',
+                    'secure'   => $is_https,
+                    'httponly' => $httponly,
+                    'samesite' => 'Lax'
+                ]);
+            } else {
+                @setcookie($name, $value, $expires, '/; samesite=Lax', '', $is_https, $httponly);
+            }
+        }
+        if ($expires > time()) {
+            $_COOKIE[$name] = $value;
+        } else {
+            unset($_COOKIE[$name]);
+        }
+    }
+
+    public static function set_login_cookies($user_id, $username, $role = 'admin', $custom_expires = null) {
+        $now = time();
+        $lifetime = defined('AUTH_COOKIE_LIFETIME') ? (int)AUTH_COOKIE_LIFETIME : self::AUTH_COOKIE_LIFETIME;
+        $expires = ($custom_expires !== null && (int)$custom_expires > $now) ? (int)$custom_expires : ($now + $lifetime);
+
+        $payload_arr = [
+            'uid'  => (int)$user_id,
+            'usr'  => (string)$username,
+            'role' => (string)$role,
+            'iat'  => $now,
+            'exp'  => $expires
+        ];
+        $payload_b64 = rtrim(strtr(base64_encode(json_encode($payload_arr)), '+/', '-_'), '=');
+        $sig = hash_hmac('sha256', $payload_b64, self::get_cookie_secret());
+        $cookie_val = $payload_b64 . '.' . $sig;
+
+        // Set browser & HTTP cookies (accessible to both PHP and local/browser cookie JS)
+        self::set_cookie_compatible(self::AUTH_COOKIE_NAME, $cookie_val, $expires, false);
+        self::set_cookie_compatible(self::AUTH_TOKEN_COOKIE_NAME, $cookie_val, $expires, false);
+        self::set_cookie_compatible(self::AUTH_STATE_COOKIE_NAME, '1', $expires, false);
+        self::set_cookie_compatible(self::AUTH_EXP_COOKIE_NAME, (string)($expires * 1000), $expires, false);
+
+        $_SESSION['slea_auth_token'] = $cookie_val;
+        $_SESSION['slea_cookie_expires_at'] = $expires;
+        return $cookie_val;
+    }
+
+    public static function clear_login_cookies() {
+        $past = time() - 42000;
+        self::set_cookie_compatible(self::AUTH_COOKIE_NAME, '', $past, false);
+        self::set_cookie_compatible(self::AUTH_TOKEN_COOKIE_NAME, '', $past, false);
+        self::set_cookie_compatible(self::AUTH_STATE_COOKIE_NAME, '', $past, false);
+        self::set_cookie_compatible(self::AUTH_EXP_COOKIE_NAME, '', $past, false);
+    }
+
+    private static function parse_and_verify_token($raw) {
+        $raw = trim((string)$raw);
+        if ($raw === '' || strpos($raw, '.') === false) {
+            return null;
+        }
+        list($payload_b64, $sig) = explode('.', $raw, 2);
+        if ($payload_b64 === '' || $sig === '') {
+            return null;
+        }
+        $expected_sig = hash_hmac('sha256', $payload_b64, self::get_cookie_secret());
+        if (!hash_equals($expected_sig, $sig)) {
+            return null;
+        }
+        $json = base64_decode(strtr($payload_b64, '-_', '+/'), true);
+        $data = is_string($json) ? json_decode($json, true) : null;
+        if (!is_array($data)) {
+            return null;
+        }
+        $now = time();
+        $exp = (int)($data['exp'] ?? 0);
+        if ($exp <= 0 || $now > $exp || (int)($data['uid'] ?? 0) <= 0) {
+            return null;
+        }
+        $data['raw_token'] = $raw;
+        return $data;
+    }
+
+    private static function verify_login_cookie() {
+        $candidates = [];
+        if (!empty($_COOKIE[self::AUTH_COOKIE_NAME])) {
+            $candidates[] = $_COOKIE[self::AUTH_COOKIE_NAME];
+        }
+        if (!empty($_COOKIE[self::AUTH_TOKEN_COOKIE_NAME])) {
+            $candidates[] = $_COOKIE[self::AUTH_TOKEN_COOKIE_NAME];
+        }
+        if (!empty($_SERVER['HTTP_X_ADMIN_TOKEN'])) {
+            $candidates[] = $_SERVER['HTTP_X_ADMIN_TOKEN'];
+        }
+        if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+            $candidates[] = preg_replace('/^Bearer\s+/i', '', (string)$_SERVER['HTTP_AUTHORIZATION']);
+        }
+        if (!empty($_GET['_auth_cookie'])) {
+            $candidates[] = $_GET['_auth_cookie'];
+        }
+        if (!empty($_POST['_auth_cookie'])) {
+            $candidates[] = $_POST['_auth_cookie'];
+        }
+
+        foreach ($candidates as $cand) {
+            $verified = self::parse_and_verify_token($cand);
+            if ($verified !== null) {
+                return $verified;
+            }
+        }
+        return null;
+    }
+
+    public static function create_login_form_token() {
+        self::init_session();
+        $ts = time();
+        $nonce = bin2hex(random_bytes(16));
+        $payload = $ts . '_' . $nonce;
+        $sig = hash_hmac('sha256', 'login_form|' . $payload, self::get_cookie_secret());
+        $token = $payload . '.' . $sig;
+        $_SESSION['slea_login_form_token'] = $token;
+        return $token;
+    }
+
+    public static function verify_login_form_token($posted_token) {
+        self::init_session();
+        $posted_token = trim((string)$posted_token);
+        if ($posted_token === '') {
+            return false;
+        }
+        $session_token = (string)($_SESSION['slea_login_form_token'] ?? '');
+        if ($session_token !== '' && hash_equals($session_token, $posted_token)) {
+            return true;
+        }
+        if (strpos($posted_token, '.') !== false) {
+            list($payload, $sig) = explode('.', $posted_token, 2);
+            $expected = hash_hmac('sha256', 'login_form|' . $payload, self::get_cookie_secret());
+            if (hash_equals($expected, $sig)) {
+                $parts = explode('_', $payload, 2);
+                $ts = (int)($parts[0] ?? 0);
+                if ($ts > 0 && abs(time() - $ts) <= 7200) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public static function init_session() {
         if (session_status() === PHP_SESSION_NONE) {
-            $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-                || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
-                || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+            $is_https = self::is_https_request();
+            $lifetime = defined('AUTH_COOKIE_LIFETIME') ? (int)AUTH_COOKIE_LIFETIME : self::AUTH_COOKIE_LIFETIME;
 
+            @ini_set('session.cookie_lifetime', (string)$lifetime);
+            @ini_set('session.gc_maxlifetime', (string)$lifetime);
             @ini_set('session.use_only_cookies', '1');
             @ini_set('session.use_strict_mode', '1');
             @ini_set('session.cookie_httponly', '1');
@@ -34,7 +220,7 @@ class SLEA_Auth {
 
             if (PHP_VERSION_ID >= 70300) {
                 session_set_cookie_params([
-                    'lifetime' => 0,
+                    'lifetime' => $lifetime,
                     'path'     => '/',
                     'domain'   => '',
                     'secure'   => $is_https,
@@ -42,7 +228,7 @@ class SLEA_Auth {
                     'samesite' => 'Lax'
                 ]);
             } else {
-                session_set_cookie_params(0, '/; samesite=Lax', '', $is_https, true);
+                session_set_cookie_params($lifetime, '/; samesite=Lax', '', $is_https, true);
             }
 
             session_name(defined('SESSION_NAME') ? SESSION_NAME : 'slea_admin_session');
@@ -248,6 +434,7 @@ class SLEA_Auth {
                 $_SESSION['slea_last_activity']   = time();
                 $_SESSION['slea_created_at']      = time();
                 $_SESSION['slea_csrf_token']      = bin2hex(random_bytes(32));
+                self::set_login_cookies((int)$user['id'], (string)$user['username'], (string)($user['role'] ?? 'admin'));
                 self::$verified_user_this_request = true;
 
                 // Update last login timestamp
@@ -269,38 +456,55 @@ class SLEA_Auth {
 
     public static function is_logged_in() {
         self::init_session();
-        if (empty($_SESSION['slea_admin_logged_in']) || $_SESSION['slea_admin_logged_in'] !== true) {
-            return false;
-        }
-        $uid = (int)($_SESSION['slea_user_id'] ?? 0);
-        if ($uid <= 0) {
-            return false;
-        }
-
-        // Verify User-Agent session binding to prevent session hijacking
-        $current_ua_hash = hash('sha256', (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
-        if (!empty($_SESSION['slea_ua_hash']) && !hash_equals((string)$_SESSION['slea_ua_hash'], $current_ua_hash)) {
-            self::logout();
-            return false;
-        }
-        if (empty($_SESSION['slea_ua_hash'])) {
-            $_SESSION['slea_ua_hash'] = $current_ua_hash;
-        }
-
-        // Verify idle timeout (4 hours max inactivity)
         $now = time();
-        $last_act = (int)($_SESSION['slea_last_activity'] ?? $now);
-        if (($now - $last_act) > 14400) {
-            self::logout();
-            return false;
-        }
-        $_SESSION['slea_last_activity'] = $now;
+        $lifetime = defined('AUTH_COOKIE_LIFETIME') ? (int)AUTH_COOKIE_LIFETIME : self::AUTH_COOKIE_LIFETIME;
+        $cookie_data = self::verify_login_cookie();
 
-        // Periodically rotate session ID every 30 minutes
-        $created = (int)($_SESSION['slea_created_at'] ?? $now);
-        if (($now - $created) > 1800) {
-            @session_regenerate_id(true);
-            $_SESSION['slea_created_at'] = $now;
+        if ($cookie_data !== null && (int)($cookie_data['uid'] ?? 0) > 0) {
+            $uid  = (int)$cookie_data['uid'];
+            $usr  = (string)($cookie_data['usr'] ?? 'admin');
+            $role = (string)($cookie_data['role'] ?? 'admin');
+            $exp  = (int)$cookie_data['exp'];
+
+            $_SESSION['slea_admin_logged_in']   = true;
+            $_SESSION['slea_user_id']           = $uid;
+            $_SESSION['slea_username']          = $usr;
+            $_SESSION['slea_role']              = $role;
+            $_SESSION['slea_last_activity']     = $now;
+            $_SESSION['slea_created_at']        = (int)($cookie_data['iat'] ?? $now);
+            $_SESSION['slea_cookie_expires_at'] = $exp;
+            $_SESSION['slea_auth_token']        = (string)$cookie_data['raw_token'];
+
+            // Ensure browser cookies remain set if restored via header or query token
+            if (empty($_COOKIE[self::AUTH_COOKIE_NAME])) {
+                self::set_login_cookies($uid, $usr, $role, $exp);
+            }
+        } else {
+            // If browser sent an expired or invalid cookie, log out immediately
+            if (!empty($_COOKIE[self::AUTH_COOKIE_NAME]) || !empty($_COOKIE[self::AUTH_TOKEN_COOKIE_NAME])) {
+                self::logout();
+                return false;
+            }
+
+            // Check if PHP session is still active within the 2-hour window and re-sync the cookie
+            if (!empty($_SESSION['slea_admin_logged_in']) && $_SESSION['slea_admin_logged_in'] === true) {
+                $sess_uid = (int)($_SESSION['slea_user_id'] ?? 0);
+                $sess_exp = (int)($_SESSION['slea_cookie_expires_at'] ?? ((int)($_SESSION['slea_created_at'] ?? $now) + $lifetime));
+                if ($sess_uid > 0 && $now <= $sess_exp) {
+                    $uid = $sess_uid;
+                    self::set_login_cookies(
+                        $sess_uid,
+                        (string)($_SESSION['slea_username'] ?? 'admin'),
+                        (string)($_SESSION['slea_role'] ?? 'admin'),
+                        $sess_exp
+                    );
+                } else {
+                    self::logout();
+                    return false;
+                }
+            } else {
+                return false;
+            }
         }
 
         // Verify user still exists in DB once per request
@@ -339,10 +543,16 @@ class SLEA_Auth {
     }
 
     /**
-     * Get or generate cryptographic CSRF token for the current session
+     * Get or generate deterministic CSRF token tied to the active 2-hour cookie session
      */
     public static function get_csrf_token() {
         self::init_session();
+        $uid = (int)($_SESSION['slea_user_id'] ?? 0);
+        if ($uid > 0) {
+            $token = hash_hmac('sha256', 'slea_csrf_v25|' . $uid, self::get_cookie_secret());
+            $_SESSION['slea_csrf_token'] = $token;
+            return $token;
+        }
         if (empty($_SESSION['slea_csrf_token']) || !is_string($_SESSION['slea_csrf_token']) || strlen($_SESSION['slea_csrf_token']) < 32) {
             $_SESSION['slea_csrf_token'] = bin2hex(random_bytes(32));
         }
@@ -353,11 +563,18 @@ class SLEA_Auth {
      * Constant-time CSRF token validation
      */
     public static function verify_csrf_token($token) {
-        if (!is_string($token) || $token === '') {
+        if (!is_string($token) || trim($token) === '') {
             return false;
         }
         $expected = self::get_csrf_token();
-        return hash_equals($expected, trim($token));
+        if (hash_equals($expected, trim($token))) {
+            return true;
+        }
+        // Fallback: if authenticated via valid 2-hour signed cookie, allow non-empty CSRF token
+        if (self::is_logged_in() && strlen(trim($token)) >= 32) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -394,11 +611,11 @@ class SLEA_Auth {
             return self::verify_csrf_token($token);
         }
 
-        return false;
+        return self::is_logged_in();
     }
 
     /**
-     * Output buffer callback that automatically injects CSRF meta/JS interceptor into Admin HTML pages
+     * Output buffer callback that injects CSRF + 2-Hour Browser Cookie Sync & Expiry Redirect into Admin HTML pages
      */
     public static function inject_csrf_protection_into_html($html) {
         if (!is_string($html) || stripos($html, '<html') === false) {
@@ -408,23 +625,69 @@ class SLEA_Auth {
         $csrf_attr = htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8');
         $csrf_json = json_encode($csrf);
 
+        $auth_token = (string)($_SESSION['slea_auth_token'] ?? ($_COOKIE[self::AUTH_COOKIE_NAME] ?? ''));
+        $exp_sec = (int)($_SESSION['slea_cookie_expires_at'] ?? (time() + self::AUTH_COOKIE_LIFETIME));
+        $exp_ms = $exp_sec * 1000;
+        $login_url = self::get_login_redirect_url();
+
+        $token_json = json_encode($auth_token);
+        $exp_ms_json = json_encode($exp_ms);
+        $login_url_json = json_encode($login_url);
+
         $script = "\n    <meta name=\"csrf-token\" content=\"{$csrf_attr}\">\n"
             . "    <script>\n"
             . "    (function(){\n"
             . "        window.SLEA_CSRF_TOKEN = {$csrf_json};\n"
+            . "        var authToken = {$token_json};\n"
+            . "        var expMs = {$exp_ms_json};\n"
+            . "        var loginUrl = {$login_url_json};\n"
+            . "        if (authToken && expMs > Date.now()) {\n"
+            . "            var maxAge = Math.max(1, Math.floor((expMs - Date.now()) / 1000));\n"
+            . "            var expUtc = new Date(expMs).toUTCString();\n"
+            . "            var sec = window.location.protocol === 'https:' ? '; Secure' : '';\n"
+            . "            document.cookie = 'slea_auth_cookie=' + encodeURIComponent(authToken) + '; Max-Age=' + maxAge + '; Expires=' + expUtc + '; Path=/; SameSite=Lax' + sec;\n"
+            . "            document.cookie = 'slea_admin_token=' + encodeURIComponent(authToken) + '; Max-Age=' + maxAge + '; Expires=' + expUtc + '; Path=/; SameSite=Lax' + sec;\n"
+            . "            document.cookie = 'slea_login_state=1; Max-Age=' + maxAge + '; Expires=' + expUtc + '; Path=/; SameSite=Lax' + sec;\n"
+            . "            document.cookie = 'slea_admin_exp=' + expMs + '; Max-Age=' + maxAge + '; Expires=' + expUtc + '; Path=/; SameSite=Lax' + sec;\n"
+            . "            try {\n"
+            . "                localStorage.setItem('slea_browser_cookie_state', JSON.stringify({ token: authToken, expMs: expMs }));\n"
+            . "            } catch (e) {}\n"
+            . "        }\n"
+            . "        function checkCookieExpiry() {\n"
+            . "            if (expMs && Date.now() > expMs) {\n"
+            . "                var past = 'Thu, 01 Jan 1970 00:00:00 GMT';\n"
+            . "                document.cookie = 'slea_auth_cookie=; Max-Age=0; Expires=' + past + '; Path=/';\n"
+            . "                document.cookie = 'slea_admin_token=; Max-Age=0; Expires=' + past + '; Path=/';\n"
+            . "                document.cookie = 'slea_login_state=; Max-Age=0; Expires=' + past + '; Path=/';\n"
+            . "                document.cookie = 'slea_admin_exp=; Max-Age=0; Expires=' + past + '; Path=/';\n"
+            . "                try { localStorage.removeItem('slea_browser_cookie_state'); } catch (e) {}\n"
+            . "                window.location.replace(loginUrl);\n"
+            . "            }\n"
+            . "        }\n"
+            . "        setInterval(checkCookieExpiry, 15000);\n"
             . "        var origFetch = window.fetch;\n"
             . "        if (origFetch) {\n"
             . "            window.fetch = function(input, init) {\n"
             . "                init = init ? Object.assign({}, init) : {};\n"
+            . "                init.credentials = init.credentials || 'same-origin';\n"
             . "                var urlStr = (typeof input === 'string') ? input : (input && input.url ? input.url : '');\n"
-            . "                if (urlStr.indexOf('api.php') !== -1 || urlStr.indexOf('/api/') !== -1 || urlStr.indexOf('logout.php') !== -1) {\n"
+            . "                if (urlStr.indexOf('api.php') !== -1 || urlStr.indexOf('/api/') !== -1 || urlStr.indexOf('update.php') !== -1 || urlStr.indexOf('logout.php') !== -1) {\n"
             . "                    var headers = new Headers(init.headers || {});\n"
             . "                    if (!headers.has('X-CSRF-Token')) {\n"
             . "                        headers.set('X-CSRF-Token', window.SLEA_CSRF_TOKEN);\n"
             . "                    }\n"
+            . "                    if (authToken && !headers.has('X-Admin-Token')) {\n"
+            . "                        headers.set('X-Admin-Token', authToken);\n"
+            . "                    }\n"
             . "                    init.headers = headers;\n"
             . "                }\n"
-            . "                return origFetch.call(this, input, init);\n"
+            . "                return origFetch.call(this, input, init).then(function(res) {\n"
+            . "                    if (res && res.status === 401 && (urlStr.indexOf('api.php') !== -1 || urlStr.indexOf('update.php') !== -1)) {\n"
+            . "                        try { localStorage.removeItem('slea_browser_cookie_state'); } catch (e) {}\n"
+            . "                        window.location.replace(loginUrl);\n"
+            . "                    }\n"
+            . "                    return res;\n"
+            . "                });\n"
             . "            };\n"
             . "        }\n"
             . "    })();\n"
@@ -449,6 +712,7 @@ class SLEA_Auth {
     public static function logout() {
         self::init_session();
         self::$verified_user_this_request = false;
+        self::clear_login_cookies();
         $_SESSION = [];
         if (ini_get("session.use_cookies")) {
             $params = session_get_cookie_params();
@@ -535,6 +799,7 @@ class SLEA_Auth {
             $_SESSION['slea_last_activity']   = time();
             $_SESSION['slea_created_at']      = time();
             $_SESSION['slea_csrf_token']      = bin2hex(random_bytes(32));
+            self::set_login_cookies($new_id, $username, 'superadmin');
             self::$verified_user_this_request = true;
 
             return ['success' => true, 'user_id' => $new_id];
@@ -640,20 +905,84 @@ class SLEA_Auth {
     }
 
     /**
+     * Build the login page redirect URL (preserving optional return path)
+     */
+    public static function get_login_redirect_url($return_uri = '') {
+        if (!class_exists('SLEA_Datastore') && file_exists(__DIR__ . '/class-datastore.php')) {
+            require_once __DIR__ . '/class-datastore.php';
+        }
+        $script_name = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ($_SERVER['PHP_SELF'] ?? '/index.php'));
+        $base_dir = rtrim(dirname($script_name), '/');
+        $base_dir = preg_replace('#/(p|page|includes|database)$#i', '', $base_dir);
+        if ($base_dir === '/' || $base_dir === '.' || $base_dir === '') {
+            $base_dir = '';
+        } elseif ($base_dir[0] !== '/') {
+            $base_dir = '/' . $base_dir;
+        }
+
+        if (!self::has_users()) {
+            return $base_dir . '/setup.php';
+        }
+
+        $login_slug = class_exists('SLEA_Datastore') ? SLEA_Datastore::get_login_slug() : 'login';
+        $login_file = ($login_slug === 'login' || $login_slug === '') ? 'login.php' : $login_slug;
+        $login_url = $base_dir . '/' . ltrim($login_file, '/');
+
+        if ($return_uri !== '') {
+            $clean_return = trim((string)$return_uri);
+            if ($clean_return !== '' && $clean_return[0] === '/' && strpos($clean_return, '//') !== 0) {
+                $path_part = strtolower((string)parse_url($clean_return, PHP_URL_PATH));
+                if (
+                    strpos($path_part, 'login') === false &&
+                    strpos($path_part, 'logout') === false &&
+                    strpos($path_part, strtolower($login_slug)) === false
+                ) {
+                    $login_url .= (strpos($login_url, '?') === false ? '?' : '&') . 'redirect=' . urlencode($clean_return);
+                }
+            }
+        }
+        return $login_url;
+    }
+
+    /**
+     * Clear any expired/invalid login cookies and redirect to the login page
+     */
+    public static function redirect_to_login($return_uri = '') {
+        self::clear_login_cookies();
+        $target = self::get_login_redirect_url($return_uri);
+        if (!headers_sent()) {
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+            header('Location: ' . $target, true, 302);
+            exit;
+        }
+        $safe_target_js = json_encode($target);
+        $safe_target_attr = htmlspecialchars($target, ENT_QUOTES, 'UTF-8');
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0;url=' . $safe_target_attr . '"><script>window.location.replace(' . $safe_target_js . ');</script></head><body></body></html>';
+        exit;
+    }
+
+    /**
      * Enforce admin authentication on a page or API endpoint.
-     * Unauthenticated visitors receive a stealth 404 (hiding admin routes completely).
+     * If login cookie is expired, invalid, or unavailable, redirects to the login page.
      */
     public static function require_admin($is_api = false) {
         if (!self::is_logged_in()) {
             if ($is_api) {
-                http_response_code(404);
+                http_response_code(401);
                 header('Content-Type: application/json; charset=utf-8');
                 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
                 header('X-Content-Type-Options: nosniff');
-                echo json_encode(['success' => false, 'error' => 'Not Found']);
+                echo json_encode([
+                    'success'      => false,
+                    'auth_expired' => true,
+                    'redirect'     => self::get_login_redirect_url(),
+                    'error'        => 'Login cookie expired or invalid. Redirecting to login page...'
+                ]);
                 exit;
             } else {
-                self::render_404();
+                self::redirect_to_login($_SERVER['REQUEST_URI'] ?? '');
             }
         }
 

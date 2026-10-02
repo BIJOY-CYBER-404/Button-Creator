@@ -522,17 +522,64 @@ async function startServer() {
     }
   });
 
-  // In-memory admin tokens for session validation
-  const validAdminTokens = new Set<string>(["admin_token_default_session"]);
+  // In-memory admin tokens mapped to their 2-hour expiration timestamp (ms)
+  const AUTH_COOKIE_MAX_AGE_SEC = 7200; // 2 hours (1-2 hours expiry)
+  const validAdminTokens = new Map<string, number>([
+    ["admin_token_default_session", Date.now() + AUTH_COOKIE_MAX_AGE_SEC * 1000],
+  ]);
   const revokedAdminTokens = new Set<string>();
 
-  const isAdminRequest = (req: express.Request): boolean => {
+  const parseCookieValue = (cookieHeader: string | undefined, name: string): string => {
+    if (!cookieHeader) return "";
+    const parts = cookieHeader.split(";");
+    const prefix = `${encodeURIComponent(name)}=`;
+    for (const raw of parts) {
+      const c = raw.trim();
+      if (c.startsWith(prefix)) {
+        try {
+          return decodeURIComponent(c.substring(prefix.length));
+        } catch {
+          return c.substring(prefix.length);
+        }
+      }
+    }
+    return "";
+  };
+
+  const extractAdminTokenFromReq = (req: express.Request): string => {
+    const cookieToken = parseCookieValue(req.headers.cookie, "slea_admin_token").trim();
+    if (cookieToken) return cookieToken;
     const authHeader = req.headers.authorization;
-    const token = ((req.headers["x-admin-token"] as string) || (authHeader ? authHeader.replace(/^Bearer\s+/i, "") : "")).trim();
+    return (
+      (req.headers["x-admin-token"] as string) ||
+      (authHeader ? authHeader.replace(/^Bearer\s+/i, "") : "")
+    ).trim();
+  };
+
+  const isAdminRequest = (req: express.Request): boolean => {
+    const token = extractAdminTokenFromReq(req);
     if (!token) return false;
     if (revokedAdminTokens.has(token)) return false;
-    if (validAdminTokens.has(token)) return true;
-    if (/^adm_[a-z0-9]{8,12}_\d{13}$/.test(token)) return true;
+
+    const now = Date.now();
+    if (validAdminTokens.has(token)) {
+      const expiresAt = validAdminTokens.get(token) || 0;
+      if (now > expiresAt) {
+        validAdminTokens.delete(token);
+        revokedAdminTokens.add(token);
+        return false;
+      }
+      return true;
+    }
+
+    const match = token.match(/^adm_[a-z0-9]{4,16}_(\d{13})$/);
+    if (match) {
+      const issuedAt = Number(match[1]);
+      if (!isNaN(issuedAt) && now - issuedAt <= AUTH_COOKIE_MAX_AGE_SEC * 1000) {
+        return true;
+      }
+      return false;
+    }
     return false;
   };
 
@@ -540,7 +587,7 @@ async function startServer() {
     if (!isAdminRequest(req)) {
       return res.status(401).json({
         success: false,
-        error: "Unauthorized: Admin access required to access private functions."
+        error: "Unauthorized: Login session expired or invalid."
       });
     }
     next();
@@ -567,7 +614,7 @@ async function startServer() {
   // Brute-force login rate limiter (max 5 failed attempts per 10 mins per IP)
   const loginAttemptsByIp = new Map<string, { count: number; lockUntil: number }>();
 
-  // Admin Auth: Login
+  // Admin Auth: Login (sets 2-hour cookies)
   app.post("/api/auth/login", (req, res) => {
     const clientIp = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "local");
     const entry = loginAttemptsByIp.get(clientIp) || { count: 0, lockUntil: 0 };
@@ -585,13 +632,27 @@ async function startServer() {
     const { username, password } = req.body;
     if ((username === "admin" || !username) && password === "admin123") {
       loginAttemptsByIp.delete(clientIp);
-      const token = `adm_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
-      validAdminTokens.add(token);
+      const now = Date.now();
+      const expiresAt = now + AUTH_COOKIE_MAX_AGE_SEC * 1000;
+      const expiresUtc = new Date(expiresAt).toUTCString();
+      const token = `adm_${Math.random().toString(36).substring(2, 12)}_${now}`;
+      validAdminTokens.set(token, expiresAt);
+
+      res.setHeader("Set-Cookie", [
+        `slea_admin_token=${encodeURIComponent(token)}; Max-Age=${AUTH_COOKIE_MAX_AGE_SEC}; Expires=${expiresUtc}; Path=/; SameSite=Lax`,
+        `slea_auth_cookie=${encodeURIComponent(token)}; Max-Age=${AUTH_COOKIE_MAX_AGE_SEC}; Expires=${expiresUtc}; Path=/; SameSite=Lax`,
+        `slea_login_state=1; Max-Age=${AUTH_COOKIE_MAX_AGE_SEC}; Expires=${expiresUtc}; Path=/; SameSite=Lax`,
+        `slea_admin_user=admin; Max-Age=${AUTH_COOKIE_MAX_AGE_SEC}; Expires=${expiresUtc}; Path=/; SameSite=Lax`,
+        `slea_admin_exp=${expiresAt}; Max-Age=${AUTH_COOKIE_MAX_AGE_SEC}; Expires=${expiresUtc}; Path=/; SameSite=Lax`,
+      ]);
+
       return res.json({
         success: true,
         token,
         username: "admin",
-        message: "Admin authentication successful"
+        expires_in: AUTH_COOKIE_MAX_AGE_SEC,
+        expires_at: expiresAt,
+        message: "Signed in successfully"
       });
     }
 
@@ -603,7 +664,7 @@ async function startServer() {
 
     return res.status(401).json({
       success: false,
-      error: "Invalid administrator credentials."
+      error: "Invalid username or password."
     });
   });
 
@@ -648,13 +709,21 @@ async function startServer() {
     res.json({ success: true, settings: saved });
   });
 
-  // Admin Auth: Logout
+  // Admin Auth: Logout (clears 2-hour cookies)
   app.post("/api/auth/logout", (req, res) => {
-    const token = req.headers["x-admin-token"] as string || (req.headers.authorization ? req.headers.authorization.replace("Bearer ", "") : "");
+    const token = extractAdminTokenFromReq(req);
     if (token) {
       validAdminTokens.delete(token);
       revokedAdminTokens.add(token);
     }
+    const pastUtc = "Thu, 01 Jan 1970 00:00:00 GMT";
+    res.setHeader("Set-Cookie", [
+      `slea_admin_token=; Max-Age=0; Expires=${pastUtc}; Path=/; SameSite=Lax`,
+      `slea_auth_cookie=; Max-Age=0; Expires=${pastUtc}; Path=/; SameSite=Lax`,
+      `slea_login_state=; Max-Age=0; Expires=${pastUtc}; Path=/; SameSite=Lax`,
+      `slea_admin_user=; Max-Age=0; Expires=${pastUtc}; Path=/; SameSite=Lax`,
+      `slea_admin_exp=; Max-Age=0; Expires=${pastUtc}; Path=/; SameSite=Lax`,
+    ]);
     res.json({ success: true, message: "Logged out" });
   });
 
@@ -689,16 +758,14 @@ async function startServer() {
     }
     const isPublic = page.is_public === undefined ? true : Boolean(Number(page.is_public));
     if (!isPublic && !hasExplicitAdmin) {
-      const actualError = `Actual Error [Private Page]: Episode page '${slug}' (ID #${page.id}) exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`;
-      const safeError = "The episode link you followed does not exist, may have been moved or expired, or is currently set to private.";
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
         debug_mode: debugMode,
-        http_code: 404,
-        error_title: debugMode ? "403 / 404 - Private Episode Page Restricted" : "Episode Link Not Found",
-        error: debugMode ? actualError : safeError,
-        actual_error: actualError,
-        safe_error: safeError,
+        http_code: 401,
+        is_private: true,
+        redirect_to_login: true,
+        login_slug: settings.login_slug || "login",
+        error: "Login cookie expired, invalid, or unavailable. Redirecting to login page...",
       });
     }
     // Increment views & record real visitor telemetry
@@ -1165,11 +1232,11 @@ async function startServer() {
       return res.sendFile(updatePath);
     }
     return res.json({
-      version: "24.0",
+      version: "25.0",
       release_date: "2026-10-02",
       download_url: "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-      checksum: "3cafc4abac1cee66df5762e55557735e95891aa424db4f18b26f71c9a0b5d20f",
-      sha256: "3cafc4abac1cee66df5762e55557735e95891aa424db4f18b26f71c9a0b5d20f",
+      checksum: "507ccb46a5cc3a659216f843bcc272a414e0de3c2cc0b6eb4e58bc8e47f0f270",
+      sha256: "507ccb46a5cc3a659216f843bcc272a414e0de3c2cc0b6eb4e58bc8e47f0f270",
       minimum_php: "7.4",
       release_notes: [
         "Removed Admin Login text, links, and buttons from all public pages and sign-in pages to keep the system protected and private.",

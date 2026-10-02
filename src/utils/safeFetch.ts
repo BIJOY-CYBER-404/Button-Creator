@@ -18,7 +18,10 @@ export async function safeFetchJson<T = any>(
   init?: RequestInit
 ): Promise<SafeFetchResult<T>> {
   try {
-    const res = await fetch(input, init);
+    const res = await fetch(input, {
+      credentials: "same-origin",
+      ...init,
+    });
     const rawText = await res.text();
 
     if (!rawText || !rawText.trim()) {

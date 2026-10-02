@@ -1,15 +1,14 @@
 {
-  "version": "24.0",
+  "version": "25.0",
   "release_date": "2026-10-02",
   "download_url": "https://raw.githubusercontent.com/BIJOY-CYBER-404/Button-Creator/main/public/cpanel-app-package.zip",
-  "checksum": "3cafc4abac1cee66df5762e55557735e95891aa424db4f18b26f71c9a0b5d20f",
-  "sha256": "3cafc4abac1cee66df5762e55557735e95891aa424db4f18b26f71c9a0b5d20f",
+  "checksum": "507ccb46a5cc3a659216f843bcc272a414e0de3c2cc0b6eb4e58bc8e47f0f270",
+  "sha256": "507ccb46a5cc3a659216f843bcc272a414e0de3c2cc0b6eb4e58bc8e47f0f270",
   "minimum_php": "7.4",
   "release_notes": [
-    "Removed Admin Login text, links, and buttons from all public pages and sign-in pages to keep the system protected and private.",
-    "Redesigned the 404 Page Not Found view with Google Material M3 design matching the website theme, removing unwanted buttons and links.",
-    "Unified the Google Material M3 header, mobile hamburger navigation drawer, and footer across all public pages (Episode Pages, Legal Pages, 404 Error Page, Maintenance Screen, and Sign In Page).",
-    "Removed Built-in Live Error Test Buttons from Settings and Quick Samples from the Generator.",
-    "Comprehensive cPanel security hardening: brute-force rate limiting, session fingerprinting, CSRF token enforcement, and directory guards."
+    "Implemented 2-hour persistent browser & signed HTTP cookie login state so admin and private pages work seamlessly across visits without re-logging in every time.",
+    "Added automatic redirect to the login page when the login cookie is expired, invalid, or unavailable, regenerating a fresh 2-hour cookie upon successful sign-in.",
+    "Updated the 404 Page Not Found view with an animated 404 character illustration, matching the site header, mobile hamburger drawer, and footer.",
+    "Removed Admin Login text, links, and buttons from all public pages and sign-in pages to keep the system protected and private."
   ]
 }

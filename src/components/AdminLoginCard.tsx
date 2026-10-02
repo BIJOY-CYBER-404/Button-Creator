@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Lock, ShieldAlert, ArrowRight } from "lucide-react";
+import { setLoginCookies } from "../utils/authCookie";
 
 interface AdminLoginCardProps {
   onLoginSuccess: (token: string, username: string) => void;
@@ -23,14 +24,14 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: username.trim(), password }),
       });
 
       const data = await res.json();
       if (data.success && data.token) {
-        localStorage.setItem("slea_admin_token", data.token);
-        localStorage.setItem("slea_admin_user", data.username || "admin");
+        setLoginCookies(data.token, data.username || "admin", data.expires_in || 7200);
         onNotify?.("Signed in successfully", "success");
         onLoginSuccess(data.token, data.username || "admin");
       } else {

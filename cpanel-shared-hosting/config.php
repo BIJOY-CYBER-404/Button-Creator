@@ -69,7 +69,7 @@ if (!defined('DB_CHARSET')) {
 // Application & Security Configuration
 // -------------------------------------------------------------
 define('APP_NAME', 'Movie Hub HQ Drive');
-define('APP_VERSION', 'v-24.0');
+define('APP_VERSION', 'v-25.0');
 define('DEFAULT_PAGE_THEME', 'indigo');
 define('AUTO_INCREMENT_VIEWS', true);
 define('ROBOTS_NOINDEX', true); // Enforce noindex, nofollow on all button pages
@@ -84,8 +84,13 @@ if (!headers_sent()) {
     @header('Referrer-Policy: strict-origin-when-cross-origin');
 }
 
-// Session Security Configuration
+// Session & Cookie Security Configuration (1-2 Hours Login Cookie Lifetime: 7200s = 2 Hours)
+if (!defined('AUTH_COOKIE_LIFETIME')) {
+    define('AUTH_COOKIE_LIFETIME', 7200);
+}
 if (session_status() === PHP_SESSION_NONE) {
+    @ini_set('session.cookie_lifetime', (string)AUTH_COOKIE_LIFETIME);
+    @ini_set('session.gc_maxlifetime', (string)AUTH_COOKIE_LIFETIME);
     @ini_set('session.cookie_httponly', '1');
     @ini_set('session.use_only_cookies', '1');
     @ini_set('session.use_strict_mode', '1');

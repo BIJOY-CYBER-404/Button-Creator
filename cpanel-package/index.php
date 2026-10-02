@@ -70,9 +70,33 @@ if (empty($slug)) {
     }
 }
 
+// Route clean admin paths (/admin, /pages, /settings, /analytics, /update, /logout) using cookie login state
+$admin_route_map = [
+    'admin'     => 'admin.php',
+    'pages'     => 'pages.php',
+    'settings'  => 'settings.php',
+    'analytics' => 'analytics.php',
+    'update'    => 'update.php',
+    'updater'   => 'update.php',
+    'logout'    => 'logout.php'
+];
+if (!empty($slug) && isset($admin_route_map[strtolower($slug)]) && !$is_explicit_episode_route) {
+    $target_php = $admin_route_map[strtolower($slug)];
+    if ($target_php === 'logout.php') {
+        require __DIR__ . '/logout.php';
+        exit;
+    }
+    if (SLEA_Auth::is_logged_in()) {
+        header('Location: ' . $target_php);
+        exit;
+    } else {
+        SLEA_Auth::redirect_to_login('/' . $target_php);
+    }
+}
+
 // Block reserved system names from being resolved as episode slugs unless they are legal pages
 $legal_slugs = ['dmca', 'disclaimer', 'about-us', 'about', 'privacy-policy', 'privacy'];
-$reserved_system_slugs = ['admin', 'pages', 'settings', 'analytics', 'update', 'updater', 'api', 'logout', 'setup', 'view', 'index', 'config', 'data', 'includes', 'backups', 'temp', 'database'];
+$reserved_system_slugs = ['api', 'setup', 'view', 'index', 'config', 'data', 'includes', 'backups', 'temp', 'database'];
 if (!empty($slug) && !in_array(strtolower($slug), $legal_slugs, true)) {
     $lower_slug = strtolower($slug);
     if (in_array($lower_slug, $reserved_system_slugs, true) || ($configured_login_slug !== '' && $lower_slug === strtolower($configured_login_slug))) {

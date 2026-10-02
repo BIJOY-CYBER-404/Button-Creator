@@ -18,45 +18,76 @@ import { WordPressPluginHub } from "./components/WordPressPluginHub";
 import { AnalyticsDashboard } from "./components/AnalyticsDashboard";
 import { PublicButtonPageView } from "./components/PublicButtonPageView";
 import { ButtonPage, ViewTab } from "./types";
+import { getValidAdminToken, setLoginCookies, clearLoginCookies } from "./utils/authCookie";
 
 export default function App() {
-  const isInitialPublicUrl = () => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("slug") || params.get("p")) return true;
-    const path = window.location.pathname;
-    const cleanPath = path.replace(/\/$/, "").toLowerCase();
-    if (["/dmca", "/disclaimer", "/about-us", "/about", "/privacy-policy", "/privacy"].includes(cleanPath)) return true;
-    return path.startsWith("/p/") || path.startsWith("/page/");
+  const getConfiguredLoginSlug = () => {
+    return (
+      (localStorage.getItem("slea_login_slug") || "login")
+        .trim()
+        .toLowerCase()
+        .replace(/^[/\\]+|[/\\]+$/g, "")
+        .replace(/\.php$/i, "") || "login"
+    );
   };
 
   const [adminToken, setAdminToken] = useState<string>(() => {
-    const saved = localStorage.getItem("slea_admin_token");
-    if (saved) return saved;
-    if (!isInitialPublicUrl()) {
-      localStorage.setItem("slea_admin_token", "admin_token_default_session");
-      return "admin_token_default_session";
-    }
-    return "";
+    return getValidAdminToken();
   });
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    const saved = localStorage.getItem("slea_admin_token");
-    if (saved) return true;
-    return !isInitialPublicUrl();
+    return Boolean(getValidAdminToken());
   });
   const [currentTab, setCurrentTab] = useState<ViewTab>("admin_flow");
   const [activeSlugView, setActiveSlugView] = useState<string | null>(null);
+  const [pendingRedirectSlug, setPendingRedirectSlug] = useState<string | null>(null);
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [pages, setPages] = useState<ButtonPage[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  const redirectToLoginPage = (returnSlug?: string) => {
+    clearLoginCookies();
+    setAdminToken("");
+    setIsAdmin(false);
+    setActiveSlugView(null);
+    if (returnSlug) {
+      setPendingRedirectSlug(returnSlug);
+    }
+    const loginSlug = getConfiguredLoginSlug();
+    if (window.history.replaceState) {
+      window.history.replaceState({}, "", `/${loginSlug}`);
+    }
+  };
+
+  // Automatically check cookie expiration every 15s and redirect to login page if the 2-hour cookie expired
+  useEffect(() => {
+    if (!isAdmin) return;
+    const interval = setInterval(() => {
+      const validTok = getValidAdminToken();
+      if (!validTok) {
+        redirectToLoginPage();
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [isAdmin]);
+
   const fetchPages = async () => {
     try {
+      const currentValidToken = getValidAdminToken() || adminToken;
+      if (!currentValidToken) {
+        redirectToLoginPage();
+        return;
+      }
       const res = await fetch("/api/pages", {
+        credentials: "same-origin",
         headers: {
-          Authorization: `Bearer ${adminToken || "admin_token_default_session"}`,
-          "x-admin-token": adminToken || "admin_token_default_session",
+          Authorization: `Bearer ${currentValidToken}`,
+          "x-admin-token": currentValidToken,
         },
       });
+      if (res.status === 401) {
+        redirectToLoginPage();
+        return;
+      }
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
         setPages(data.data);
@@ -72,27 +103,23 @@ export default function App() {
     }
   }, [adminToken, isAdmin, currentTab]);
 
-  // Detect URL slug for public viewing (/p/{slug} or ?slug={slug}) or block login page when already logged in
+  // Detect URL slug for public viewing (/p/{slug} or ?slug={slug}) or redirect to login page when cookie is expired/unavailable
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const qSlug = params.get("slug") || params.get("p");
-    const configuredLoginSlug = (localStorage.getItem("slea_login_slug") || "login")
-      .trim()
-      .toLowerCase()
-      .replace(/^[/\\]+|[/\\]+$/g, "")
-      .replace(/\.php$/i, "");
+    const configuredLoginSlug = getConfiguredLoginSlug();
 
     if (qSlug) {
       const qClean = qSlug.trim().toLowerCase().replace(/\.php$/i, "");
       if (qClean === "login" || qClean === configuredLoginSlug) {
+        setActiveSlugView(null);
         if (isAdmin) {
-          setActiveSlugView(null);
           setCurrentTab("admin_flow");
           if (window.history.replaceState) {
             window.history.replaceState({}, "", "/admin.php");
           }
-          return;
         }
+        return;
       }
       setActiveSlugView(qSlug);
       return;
@@ -102,16 +129,16 @@ export default function App() {
     const cleanPath = path.replace(/\/$/, "").toLowerCase();
     const pathSlug = cleanPath.replace(/^\/+/, "").replace(/\.php$/i, "");
 
-    // When admin account is logged in, login page cannot be viewed and redirects directly to admin.php
+    // Login route handling: if already logged in via valid cookie -> go to admin.php; if not -> show login screen
     if (pathSlug === "login" || (configuredLoginSlug && pathSlug === configuredLoginSlug)) {
+      setActiveSlugView(null);
       if (isAdmin) {
-        setActiveSlugView(null);
         setCurrentTab("admin_flow");
         if (window.history.replaceState) {
           window.history.replaceState({}, "", "/admin.php");
         }
-        return;
       }
+      return;
     }
 
     if (["/dmca", "/disclaimer", "/about-us", "/about", "/privacy-policy", "/privacy"].includes(cleanPath)) {
@@ -129,6 +156,18 @@ export default function App() {
       const slugFromPath = path.substring(prefixLen).replace(/\/$/, "");
       if (slugFromPath) {
         setActiveSlugView(slugFromPath);
+        return;
+      }
+    }
+
+    // Admin routes: if cookie is expired, not valid, or not available -> redirect to login page
+    if (!isAdmin) {
+      if (window.history.replaceState) {
+        window.history.replaceState({}, "", `/${configuredLoginSlug}`);
+      }
+    } else if (cleanPath === "" || cleanPath === "/") {
+      if (window.history.replaceState) {
+        window.history.replaceState({}, "", "/admin.php");
       }
     }
   }, [isAdmin]);
@@ -145,18 +184,35 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const handleLoginSuccess = (token: string, _username: string) => {
+  const handleLoginSuccess = (token: string, username: string) => {
+    // Regenerate 2-hour (7200s) login state cookie
+    setLoginCookies(token, username || "admin", 7200);
     setAdminToken(token);
     setIsAdmin(true);
-    setCurrentTab("admin_flow");
+    if (pendingRedirectSlug) {
+      const targetSlug = pendingRedirectSlug;
+      setPendingRedirectSlug(null);
+      setActiveSlugView(targetSlug);
+      if (window.history.replaceState) {
+        window.history.replaceState({}, "", `/p/${targetSlug}`);
+      }
+    } else {
+      setActiveSlugView(null);
+      setCurrentTab("admin_flow");
+      if (window.history.replaceState) {
+        window.history.replaceState({}, "", "/admin.php");
+      }
+    }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("slea_admin_token");
-    localStorage.removeItem("slea_admin_user");
-    setAdminToken("");
-    setIsAdmin(false);
-    addToast("Logged out of Admin dashboard", "info");
+    fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: adminToken ? { "x-admin-token": adminToken } : {},
+    }).catch(() => {});
+    redirectToLoginPage();
+    addToast("Signed out successfully", "info");
   };
 
   const [loginMobileMenuOpen, setLoginMobileMenuOpen] = useState<boolean>(false);
@@ -214,6 +270,9 @@ export default function App() {
           slug={activeSlugView}
           adminToken={adminToken}
           isAdmin={isAdmin}
+          onRequireLogin={(returnSlug) => {
+            redirectToLoginPage(returnSlug);
+          }}
           onEditPage={(pageId) => {
             setActiveSlugView(null);
             setEditingPageId(pageId);

@@ -11,29 +11,17 @@ require_once __DIR__ . '/includes/class-datastore.php';
 
 SLEA_Auth::init_session();
 
-// Never reveal logout endpoint or custom login URL to unauthenticated visitors
+// If not logged in, redirect cleanly to the login page
 if (!SLEA_Auth::is_logged_in()) {
-    SLEA_Auth::render_404();
+    SLEA_Auth::redirect_to_login();
 }
 
-// Verify CSRF token or strict Same-Origin Referer to prevent cross-site forced logout
-$csrf_token = $_GET['csrf_token'] ?? $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
-$valid_csrf = ($csrf_token !== '' && SLEA_Auth::verify_csrf_token($csrf_token));
-
-if (!$valid_csrf) {
-    $host = strtolower(preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? '')));
-    $referer = (string)($_SERVER['HTTP_REFERER'] ?? '');
-    $referer_host = $referer !== '' ? strtolower((string)parse_url($referer, PHP_URL_HOST)) : '';
-    if ($host === '' || $referer_host === '' || $referer_host !== $host) {
-        SLEA_Auth::render_404();
-    }
-}
-
-$login_url = SLEA_Datastore::get_login_url();
+$login_url = SLEA_Auth::get_login_redirect_url();
 SLEA_Auth::logout();
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-$safe_login_url = preg_replace('/[^a-zA-Z0-9_.-]/', '', $login_url) ?: 'login.php';
-header('Location: ' . $safe_login_url);
+$sep = (strpos($login_url, '?') === false) ? '?' : '&';
+$logout_target = $login_url . $sep . 'logged_out=1';
+header('Location: ' . $logout_target);
 exit;

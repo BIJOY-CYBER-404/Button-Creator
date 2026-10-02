@@ -482,12 +482,7 @@ if ($legal_slug) {
     }
 
     if (!$is_admin && isset($page['is_public']) && intval($page['is_public']) === 0) {
-        SLEA_Datastore::render_public_error(
-            '403 / 404 - Private Episode Page Restricted',
-            "Actual Error [Private Page]: Episode page '{$slug}' (ID #{$page['id']}) exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.",
-            404,
-            'We could not load this page right now. The link you followed may be unavailable, moved, or expired.'
-        );
+        SLEA_Auth::redirect_to_login($_SERVER['REQUEST_URI'] ?? ('/p/' . $slug));
     }
 
     // Seamless 301 redirect if valid page was accessed via direct view.php?slug=... to modern /p/{slug} clean structure

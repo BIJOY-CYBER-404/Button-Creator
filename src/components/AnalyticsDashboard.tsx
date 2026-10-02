@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { BarChart3, TrendingUp, Users, Clock, Globe, ArrowUpRight, Download, RefreshCw, Smartphone, Monitor, ShieldCheck, Calendar, MapPin } from "lucide-react";
 import { ButtonPage } from "../types";
+import { getValidAdminToken } from "../utils/authCookie";
 
 interface AnalyticsDashboardProps {
   pages: ButtonPage[];
@@ -39,9 +40,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
 
   const fetchTelemetry = async () => {
     try {
-      const token = localStorage.getItem("slea_admin_token") || "admin_token_default_session";
+      const token = getValidAdminToken() || "admin_token_default_session";
       const res = await fetch("/api/analytics/telemetry", {
         cache: "no-store",
+        credentials: "same-origin",
         headers: token ? { "X-Admin-Token": token } : {},
       });
       if (res.ok) {
@@ -69,9 +71,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ pages, o
     const sendHeartbeat = async () => {
       const elapsedSec = Math.max(1, Math.round((Date.now() - startTs) / 1000));
       try {
-        const token = localStorage.getItem("slea_admin_token") || "";
+        const token = getValidAdminToken() || "";
         const res = await fetch("/api/analytics/heartbeat", {
           method: "POST",
+          credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
             ...(token ? { "X-Admin-Token": token } : {}),

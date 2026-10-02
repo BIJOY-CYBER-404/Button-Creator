@@ -77,6 +77,7 @@ export const AdminFlowGenerator: React.FC<AdminFlowGeneratorProps> = ({
       // Step 1: Trigger Resolve & Page Generation via server API
       const res = await fetch("/api/pages/create-from-shortlink", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${adminToken}`,

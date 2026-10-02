@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { ButtonPage, SiteIdentity } from "../types";
+import { getValidAdminToken } from "../utils/authCookie";
 
 interface PublicButtonPageViewProps {
   slug: string;
   adminToken?: string;
   isAdmin?: boolean;
+  onRequireLogin?: (returnSlug: string) => void;
   onBackToAdmin?: () => void;
   onEditPage?: (pageId: string) => void;
   onNavigateSlug?: (slug: string) => void;
@@ -23,6 +25,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   slug,
   adminToken: propAdminToken,
   isAdmin: propIsAdmin,
+  onRequireLogin,
   onBackToAdmin,
   onEditPage,
   onNavigateSlug,
@@ -54,7 +57,7 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
   const [mobileShareSheetOpen, setMobileShareSheetOpen] = useState<boolean>(false);
   const [adBlocked, setAdBlocked] = useState<boolean>(false);
 
-  const effectiveToken = propAdminToken !== undefined ? propAdminToken : localStorage.getItem("slea_admin_token") || "";
+  const effectiveToken = propAdminToken !== undefined ? propAdminToken : getValidAdminToken();
   const isPreviewVisitor =
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("preview_visitor") === "1";
   const isAdmin = isPreviewVisitor ? false : propIsAdmin !== undefined ? propIsAdmin : Boolean(effectiveToken);
@@ -331,15 +334,19 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
       setLoading(true);
       setError(null);
       try {
+        const activeCookieTok = effectiveToken || getValidAdminToken();
         const headers: Record<string, string> = {};
-        if (effectiveToken) {
-          headers["Authorization"] = `Bearer ${effectiveToken}`;
-          headers["x-admin-token"] = effectiveToken;
+        if (activeCookieTok) {
+          headers["Authorization"] = `Bearer ${activeCookieTok}`;
+          headers["x-admin-token"] = activeCookieTok;
         }
         const searchParams = new URLSearchParams(window.location.search);
         const previewParam = searchParams.get("preview_visitor") === "1";
         const querySuffix = previewParam ? "?preview_visitor=1" : "";
-        const res = await fetch(`/api/public/pages/${encodeURIComponent(slug)}${querySuffix}`, { headers });
+        const res = await fetch(`/api/public/pages/${encodeURIComponent(slug)}${querySuffix}`, {
+          credentials: "same-origin",
+          headers,
+        });
         const data = await res.json();
 
         if (typeof data.debug_mode === "boolean") {
@@ -347,15 +354,24 @@ export const PublicButtonPageView: React.FC<PublicButtonPageViewProps> = ({
           localStorage.setItem("slea_debug_settings", JSON.stringify({ enabled: data.debug_mode }));
         }
 
+        if (res.status === 401 || data.redirect_to_login) {
+          if (onRequireLogin) {
+            onRequireLogin(slug);
+            return;
+          }
+          window.location.replace(`/${data.login_slug || "login"}`);
+          return;
+        }
+
         if (res.ok && data.success && data.page) {
           const isPub = data.page.is_public === undefined ? true : Boolean(Number(data.page.is_public));
           if (!isPub && !isAdmin) {
-            setErrorTitle("403 / 404 - Private Episode Page Restricted");
-            setErrorHttpCode(404);
-            setError(
-              `Actual Error [Private Page]: Episode page '${slug}' (ID #${data.page.id}) exists in the database, but its visibility is set to Private (is_public = 0) and visitor is not logged in as administrator.`
-            );
-            setPage(null);
+            if (onRequireLogin) {
+              onRequireLogin(slug);
+              return;
+            }
+            window.location.replace("/login");
+            return;
           } else {
             setPage(data.page);
           }
